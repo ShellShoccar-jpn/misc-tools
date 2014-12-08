@@ -1,0 +1,182 @@
+#! /bin/sh
+
+######################################################################
+#
+# UTCONV - UNIX time and Real DateTime Converter
+#
+# USAGE: utconv [datetime_text_or_file]    # for Real-datetime -> Unixtime
+#        utconv -r [unixtime_text_or_file] # for Unixtime      -> Real-datetime
+#
+# * utconv reads stdin when <datetime_text_or_file> is not given.
+# * datetime text must be one of the following format
+#   - YYMMDD ........... Real Date (2digits-year)
+#   - YYYYMMDD ......... Real Date (4digits-year)
+#   - YYMMDDhhmmss ..... Real DateTime (2digits-year)
+#   - YYYYMMDDhhmmss ... Real DateTime (4digits-year)
+#   - n ................ UNIX time
+# * utconv treats the Real DateTime as a localtime. When you want to be
+#   treated as a UTC. You can use the TZ environment variable, like this
+#     > TZ=UTC+0 utconv -r 1
+#     19700101000001
+#
+# Return: 0 (always except helpmessage)
+#
+# * Any invalid time make me return the text "-1" with the return code 0.
+#
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2014/01/30
+#
+######################################################################
+
+# --- initalization --------------------------------------------------
+PATH=/usr/bin:/bin
+
+# --- print the usage and exit if required ---------------------------
+case "${1:-}" in
+  --version|--help|-h)
+    cat <<-__USAGE 1>&2
+	USAGE: ${0##*/} [datetime_text_or_file]    # for Real-datetime -> Unixtime
+	       ${0##*/} -r [unixtime_text_or_file] # for Unixtime      -> Real-datetime
+	Version : Thu Jan 30 15:03:38 JST 2014
+__USAGE
+    exit 1
+    ;;
+esac
+
+# --- conversion -----------------------------------------------------
+awk '
+BEGIN {
+  # 1) initialize
+  unixtime2YYYYMMDDhhmmss_init("LOCALTIME"); # initialize with localtime mode
+  revmode   = 0;
+  fromstdin = 1;
+
+  # 2) parse arguments
+  for (i=1; i<ARGC; i++) {
+    if (ARGV[i] == "-r") {
+      revmode = 1;
+      continue;
+    }
+    fromstdin = 0;
+    if ((ARGV[i] == "-") && (i == ARGC-1))                   {
+      fromstdin = 1;
+      break;
+    } else if ((revmode == 0) && match(ARGV[i], /^[0-9]+$/)) {
+      print YYYYMMDDhhmmss2unixtime(ARGV[i]);
+    } else if (revmode == 0) {
+      while (getline < ARGV[i]) {
+        print YYYYMMDDhhmmss2unixtime($1);
+      }
+    } else if ((revmode >  0) && match(ARGV[i], /^-?[0-9]+$/)) {
+      print unixtime2YYYYMMDDhhmmss(ARGV[i]);
+    } else {
+      while (getline < ARGV[i])                              {
+        print unixtime2YYYYMMDDhhmmss($1);
+      }
+    }
+  }
+
+  # 3) convert data from the stdin if necessary
+  if ((fromstdin > 0) && (revmode == 0)) {
+    while (getline < "/dev/stdin") {
+      print YYYYMMDDhhmmss2unixtime($1);
+    }
+  } else if (fromstdin > 0)              {
+    while (getline < "/dev/stdin") {
+      print unixtime2YYYYMMDDhhmmss($1);
+    }
+  }
+}
+
+function unixtime2YYYYMMDDhhmmss_init(localtime_flag, gm,lo) {
+  max_calced_year = 1970;              # To remember every days on 01/01 from
+  days_on_Jan1st_from_epoch[1970] = 0; # the Epoch which was calculated once
+
+  split("31 0 31 30 31 30 31 31 30 31 30 31", days_of_month);
+
+  if (localtime_flag == "LOCALTIME") {
+    gm      = YYYYMMDDhhmmss2unixtime("'$(TZ=UTC+0 date '+%Y%m%d%H%M%S')'");
+    lo      = YYYYMMDDhhmmss2unixtime("'$(         date '+%Y%m%d%H%M%S')'");
+    offset  = lo - gm;
+    offset -= (offset%2); # calcell the time lag of the two date starting time
+  } else {
+    offset  = 0;
+  }
+}
+
+function unixtime2YYYYMMDDhhmmss(ut, Y,M,D,h,m,s,t,i,j) {
+  # 0) timezone adjustment
+  ut += offset;
+  if (ut < 0) {return -1;}
+
+  # 1) calculate hour,minute,second and number of days from the Epoch
+  s = ut % 60;  t = int(ut/60);
+  m =  t % 60;  t = int( t/60);
+  h =  t % 24;
+  days_from_epoch = int( t/24);
+
+  # 2) calculate year
+  Y = int(days_from_epoch/365.2425)+1970+1;
+  if (Y > max_calced_year) {
+     i = days_on_Jan1st_from_epoch[max_calced_year];
+     for (j=max_calced_year; j<Y; j++) {
+       i += (j%4!=0)?365:(j%100!=0)?366:(j%400!=0)?365:366;
+       days_on_Jan1st_from_epoch[j+1] = i;
+     }
+     max_calced_year = Y;
+  }
+  for (;;Y--) {
+    if (days_from_epoch >= days_on_Jan1st_from_epoch[Y]) {
+      break;
+    }
+  }
+
+  # 3) calculate month,day
+  days_of_month[2] = (Y%4!=0)?28:(Y%100!=0)?29:(Y%400!=0)?28:29;
+  D = days_from_epoch - days_on_Jan1st_from_epoch[Y] + 1;
+  for (M=1; ; M++) {
+    if (D > days_of_month[M]) {
+      D -= days_of_month[M];
+    } else {
+      break;
+    }
+  }
+
+  return sprintf("%04d%02d%02d%02d%02d%02d",Y,M,D,h,m,s);
+}
+
+function YYYYMMDDhhmmss2unixtime(YYYYMMDDhhmmss, Y,M,D,h,m,s,l) {
+  # 1) seperate the units
+  l = length(YYYYMMDDhhmmss);
+  if        (l <  5) { # invalid
+    return -1;
+  } else if (l <  8) { # YYMMMDD only
+    Y = substr(YYYYMMDDhhmmss,  1,l-4)*1+int('$(date '+%Y')'/100)*100;
+    M = substr(YYYYMMDDhhmmss,l-3,  2)*1;
+    D = substr(YYYYMMDDhhmmss,l-1,  2)*1;
+    h = 0; m = 0; s = 0;
+  } else if (l < 12) { # YYYYMMDD only
+    Y = substr(YYYYMMDDhhmmss,  1,l-4)*1;
+    M = substr(YYYYMMDDhhmmss,l-3,  2)*1;
+    D = substr(YYYYMMDDhhmmss,l-1    )*1;
+    h = 0; m = 0; s = 0;
+  } else {             # YYYYMMDDhhmmss
+    Y = substr(YYYYMMDDhhmmss,  1,l-10)*1;
+    M = substr(YYYYMMDDhhmmss,l-9,   2)*1;
+    D = substr(YYYYMMDDhhmmss,l-7,   2)*1;
+    h = substr(YYYYMMDDhhmmss,l-5,   2)*1;
+    m = substr(YYYYMMDDhhmmss,l-3,   2)*1;
+    s = substr(YYYYMMDDhhmmss,l-1     )*1;
+  }
+
+  # 2) validate
+  if ((s>60) || (m>59) || (h>23) || (M>12)) {return -1;}
+  days_of_month[2] = (Y%4!=0)?28:(Y%100!=0)?29:(Y%400!=0)?28:29;
+  if (D > days_of_month[M]                ) {return -1;}
+
+  # 3) adjust the value of year and month
+  if (M<3) {M+=12; Y--;}
+
+  # 4) calculate unixtime
+  return (365*Y+int(Y/4)-int(Y/100)+int(Y/400)+int(306*(M+1)/10)-428+D-719163)*86400+(h*3600)+(m*60)+s-offset;
+}
+' "$@"

@@ -1,0 +1,241 @@
+#! /bin/sh
+
+######################################################################
+#
+# EXFLOCK : A file lock command that you can use like flock(2)
+#
+# Usage  : exflock <seconds> <file> [maxlifetime]
+#          <seconds> ...... maximum waiting time to succeed locking
+#          <file> ......... the path of the file you want to lock
+#          [maxlifetime] .. the maximum life of the locking process (sec)
+#                           (0 means infinity, and default is 45)
+#
+# Return : ==0 ... success to locking
+#          !=0 ... failure
+#
+# * This command tries to do exclusive flock and return locking process
+#   ID if it has succeeded.
+# * When the next command starts, locking continues.
+# * When you want to unlock, do one of the following.
+#   (a) terminate the process which calls exflock
+#       (then the locking process will also terminate)
+#   (b) execute this "kill <PID>"
+#       (<PID> is the number you got from me as the locking process ID)
+#   (c) wait for timeout you set by <maxlifetime>
+# * IMPORTANTS
+#   - When you want to get the locking process ID, you have to get with
+#     a temporary file. Neither variables nor piped commands.
+#     (correct)
+#       exflock 3 "file_for_flock" > locking_process.pid
+#       locking_process=$(cat locking_process.pid)
+#     (prohibited)
+#       ex.1: locking_process=$(exflock 3 "file_for_flock")
+#       ex.2: exflock 3 "file_for_flock" | cat > locking_process.pid
+#   - This command now supports the following Operating Systems.
+#       FreeBSD, Linux, NetBSD
+#     I want to know how to lock file on the other Operating Systems.
+#
+# Sample : trap "rm -f locking_process.$$.pid; exit" EXIT HUP INT QUIT ALRM TERM
+#          exflock 5 "file_to_flock" > locking_process.$$.pid
+#          [ $? -eq 0 ] || { echo 'fail to lock'; exit 1; }
+#          flock_pid=$(cat locking_process.$$.pid)
+#              :
+#          (here is the locked zone)
+#              :
+#          kill $flock_pid
+#
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2014/06/29
+#
+######################################################################
+
+
+DEFAULT_MAXLIFETIME=45
+
+# ===== FUNCTION =====================================================
+
+# --- print the usage and exit ---------------------------------------
+print_usage_and_exit () {
+  cat <<-__USAGE 1>&2
+	Usage  : ${0##*/} <seconds> <file> [maxlifetime]
+	         <seconds> ...... maximum waiting time to succeed locking
+	         <file> ......... the path of the file you want to lock
+	         [maxlifetime] .. the maximum life of the locking process (sec)
+	                          (0 means infinity, and default=$DEFAULT_MAXLIFETIME)
+	Version : Sun Jun 29 14:59:27 JST 2014
+__USAGE
+  exit 1
+}
+
+
+# ===== PREPARATION ==================================================
+
+# --- set the command path -------------------------------------------
+PATH='/usr/bin:/bin'
+
+# --- judge which is my flock command --------------------------------
+case $(uname) in
+  FreeBSD) CMD_flock='lockf' ;;
+  Linux)   CMD_flock='flock' ;;
+  NetBSD)  CMD_flock='flock' ;;
+esac
+[ -n "${CMD_flock:-}" ] || { echo 'Non-supported OS' 1>&2; exit 1; }
+
+# --- judge which I have started as a parent or a child --------------
+while :; do
+  pid=$$
+  check=$(ps -Ao pid,ppid | awk '$1=='$pid'{print $2}')
+  [ -n "${check}"     ] || { check='p'; break; }
+  check=$(ps -Ao pid,ppid,comm | awk '$1=='$check'{print $2,$3}')
+  [ "${check#* }" = "$CMD_flock" ] || { check='p'; break; }
+  check=$(ps -Ao pid,ppid | awk '$1=='${check% *}'{print $2}')
+  [ -n "${check}"     ] || { check='p'; break; }
+  check=$(ps -Ao pid,ppid | awk '$1=='${check% *}'{print $2}')
+  [ -n "${check}"     ] || { check='p'; break; }
+  [ "$check" -eq "$1" ] || { check='p'; break; }
+  check='c'; break;
+done
+
+
+# ===== ROUTINE AS A PARENT ==========================================
+
+case $check in 'p')
+
+  # --- exit trap (for parent) ---------------------------------------
+  exit_trap () {
+    trap EXIT HUP INT QUIT PIPE ALRM TERM
+    rm -f "${temp_datafile:-}"
+    exit ${1:-0}
+  }
+
+  # --- parse the arguments ------------------------------------------
+  [ $# -ne 0 ] || print_usage_and_exit
+  echo "_$1" | grep '^_[0-9]\{1,\}$' >/dev/null 2>&1
+  [ $? -eq 0 ] || print_usage_and_exit
+  waitsec=$1
+  shift
+  [ $# -ne 0 ] || print_usage_and_exit
+  [ -f "$1"  ] || print_usage_and_exit
+  file=$1
+  shift
+  [ $# -le 1 ] || print_usage_and_exit
+  if [ $# -eq 1 ]; then
+    echo "_$1" | grep '^_[0-9]\{1,\}$' >/dev/null 2>&1
+    [ $? -eq 0 ] || print_usage_and_exit
+    maxlifetime=$1
+  else
+    maxlifetime=$DEFAULT_MAXLIFETIME
+  fi
+
+  # --- make stderr silent -------------------------------------------
+  exec 2>&- >/dev/null 3>/dev/null # fd3 is only available for debugging
+
+  # --- enable the exit trap -----------------------------------------
+  trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM
+
+  # --- investigate the caller process ID ----------------------------
+  pid=$$
+  pid=$(ps -Ao pid,ppid | awk '$1=='$pid'{print $2}')
+
+  # --- prepare for locking -------------------------------------------
+  sleep 100 & # This is to wait for success or failure of starting of the child
+  sleepjob_pid=$!
+  if which mktemp >/dev/null 2>&1; then
+    temp_datafile=$(mktemp -t "${0##*/}.XXXXXXXX")
+  else
+    temp_datafile="/tmp/${0##*/}.$$"
+    touch "$temp_datafile"
+    chmod 600 "$temp_datafile"
+  fi
+  [ $? -eq 0 ] || { echo "${0##*/}: Can't make a tempfile" 1>&3; exit_trap 2; }
+  echo -n "-$sleepjob_pid" > "$temp_datafile"
+
+  # --- execute locking process, which is the child ------------------
+  case $(uname) in
+    FreeBSD)
+      {
+        lockf -ks -t $waitsec "$file"           \
+        $0 "$pid" "$maxlifetime" "$temp_datafile" ||
+        kill -s TERM $sleepjob_pid
+      } &
+      ;;
+    Linux)
+      {
+        flock --timeout=$waitsec "$file"        \
+        $0 "$pid" "$maxlifetime" "$temp_datafile" ||
+        kill -s TERM $sleepjob_pid
+      } &
+      ;;
+    NetBSD)
+      {
+        flock -x -w $waitsec "$file"            \
+        $0 "$pid" "$maxlifetime" "$temp_datafile" ||
+        kill -s TERM $sleepjob_pid
+      } &
+      ;;
+    *)
+      echo "Non-supported OS" 1>&3
+      exit_trap 3
+      ;;
+  esac
+
+  # --- return pid of the locking script -----------------------------
+  wait $sleepjob_pid >/dev/null 2>&1
+  cat "$temp_datafile" | grep -v '[^0-9]'
+
+  # --- finish -------------------------------------------------------
+  exit_trap $?
+
+;;
+
+
+# ===== ROUTINE AS A CHILD ===========================================
+
+'c')
+
+  # This child process must be called with the arguments
+  #   $1: PID which this script waits for termination
+  #   $2: timeout (secs)
+  #   $3: file for telling my pid
+
+  # --- validate the arguments ---------------------------------------
+  [ $# -eq 3 ] || { echo '*** Invalid arguments'   1>&3; exit 10; }
+  echo "_$1" | grep '^_[0-9]\{1,\}$' >/dev/null
+  [ $? -eq 0 ] || { echo '*** Invalid argument #1' 1>&3; exit 11; }
+  echo "_$2" | grep '^_[0-9]\{1,\}$' >/dev/null
+  [ $? -eq 0 ] || { echo '*** Invalid argument #2' 1>&3; exit 12; }
+  [ -f "$3"  ] || { echo '*** Invalid argument #3' 1>&3; exit 13; }
+
+  # --- set exiting trap ---------------------------------------------
+  exit_trap() {
+    trap EXIT HUP INT QUIT PIPE ALRM TERM
+    kill -s TERM "${timerjob_pid:-}" "${timersleep_pid:-}"
+    kill -s TERM "${pollingsleep_pid:-}"
+    exit ${1:-0}
+  }
+  trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM
+
+  # --- tell my pid to the parent process with the tempfile ($3) -----
+  notify_pid=$(tail -c +2 "$3")
+  echo -n $$ > "$3"
+  kill -s TERM "$notify_pid"
+
+  # --- set my life time ---------------------------------------------
+  if [ $2 -gt 0 ]; then
+    { sleep $2; kill -s ALRM $$ >/dev/null; } &
+    timerjob_pid=$!
+    timersleep_pid=$(ps -Ao pid,ppid | awk '$2=='$timerjob_pid'{print $1}')
+  fi
+
+  # --- wait for termination of the caller (is not the parent) process
+  while :; do
+    kill -0 $1 >/dev/null 2>&1
+    [ $? -ne 0 ] && break
+    sleep 1 &
+    pollingsleep_pid=$!
+    wait $pollingsleep_pid
+  done
+
+  # --- finish -------------------------------------------------------
+  exit_trap 0
+
+;; esac

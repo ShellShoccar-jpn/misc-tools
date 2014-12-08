@@ -1,0 +1,159 @@
+#! /bin/sh
+ 
+######################################################################
+#
+# SESSIONF - Session File Manager (useful for CGI scripts)
+#
+# USAGE: sessionf <subcommand> [argument] ...
+#
+# * List of Subcommands:
+#   create ..... $0 create at=<template_path>
+#      1) Create a new session file into/with <template_path> if possible.
+#      2) Return the path of the session file with $?=0. ($?>0 when failure)
+#   validate ... $0 validate <id> at=<template_path> lifemin=<life_minutes>
+#      1) Validate the session file whose name is <id> in <template_path>.
+#      2) return $?=0 when the file is valid. ($?>0 when invalid)
+#      - To be valid, the session file must pass the 2 following check points.
+#        1. Does the file exist?
+#        2. Did the file modify within the last <life_minutes> minutes?
+#   reuse ...... $0 avail <id> at=<template_path> lifemin=<life_minutes>
+#      1) Validate the session file whose name is <id> in <template_path>.
+#      2) Update the timestamp of the file.
+#      3) Return the path with $?=0 when the file is valid. ($?>0 when invalid)
+#   avail ...... $0 avail <id> at=<template_path> lifemin=<life_minutes>
+#      1) Update the timestamp of the session file whose name is <id>
+#         if it is valid. Otherwise, Create a new one.
+#      2) Return the path of the available one with $?=0. ($?>0 when failure)
+#   renew ...... $0 renew <id> at=<template_path> lifemin=<life_minutes>
+#      1) Renew the session ID. (It means renaming the session file)
+#      2) Update the timestamp of the file.
+#      3) Return the nenewed file path with $?=0 when the original one is
+#         valid. ($?>0 when invalid)
+#   remove ..... $0 remove <id> at=<template_path> [lifemin=<life_minutes>]
+#      1) Remove the session file in <template_path>.
+#      2) Return $?=0 when succeed.
+#      - Wildcard is available. Also return $?=0 when no file to remove found.
+#      - When <life_minutes> is set, only the files which are older than that
+#        are removed.
+#
+# * On "validate", "reuse" and "remove" subcommands, you can set the session
+#   file directory in the <id> argument instead of the "at" argument.
+#
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2014/06/27
+#
+######################################################################
+
+# --- initalization --------------------------------------------------
+PATH=/usr/bin:/bin
+#
+if [ \( -f "${0%/*}/mkstemp" \) -a \( -x "${0%/*}/mkstemp" \) ]; then
+  CMD_MKTEMP="${0%/*}/mkstemp"
+else
+  CMD_MKTEMP='mktemp'
+fi
+#
+print_usage_and_exit () {
+  cat <<-__USAGE 1>&2
+	Usage   : ${0##*/} <subcommand> [argument] ...
+	Version : Fri Jun 27 07:07:46 JST 2014
+__USAGE
+  exit 1
+}
+
+# --- parse arguments ------------------------------------------------
+subcmd=''
+id=''
+dir=''
+idtmpl=''
+lifemin=''
+[ $# -ge 2 ] || print_usage_and_exit
+echo "_$1" | grep '^_[a-z]\{1,\}$' >/dev/null || print_usage_and_exit
+subcmd=$1
+shift
+if [ "$subcmd" != 'create' ]; then
+  id=${1##*/}
+  echo "_$1" | grep '/' >/dev/null && dir=${1%/*} && [ -z "$dir" ] && dir='/'
+  shift
+fi
+for arg in "$@"; do
+  case "$arg" in
+    at=*)
+      check=${arg#at=}
+      if echo "_$check" | grep '/' >/dev/null; then
+        dir=${check%/*} && [ -z "$dir" ] && dir='/'
+        idtmpl=${check##*/}
+      else
+        dir='.'
+        idtmpl=$check
+      fi
+      [ -d "$dir" ] || { echo "${0##*/}: directory not found"; exit 1; }
+      ;;
+    lifemin=*)
+      echo "$arg" | grep '^lifemin=[0-9]\{1,\}$' >/dev/null || print_usage_and_exit
+      lifemin=${arg#lifemin=}
+      ;;
+    *)
+      print_usage_and_exit
+      ;;
+  esac
+done
+[ -n "$dir" ] || print_usage_and_exit
+
+# --- subcommand routines --------------------------------------------
+case $subcmd in
+  create)
+    [ -n "$idtmpl"  ] || print_usage_and_exit
+    exec $CMD_MKTEMP "$dir/$idtmpl"
+    ;;
+  validate)
+    [ -n "$lifemin" ] || print_usage_and_exit
+    [ -f "$dir/$id" ] || exit 1
+    find "$dir" -name "$id" -mmin +$lifemin | awk 'END{exit (NR>0) ? 1 : 0;}'
+    exit $?
+    ;;
+  reuse)
+    [ -n "$lifemin" ] || print_usage_and_exit
+    [ -f "$dir/$id" ] || exit 1
+    find "$dir" -name "$id" -mmin +$lifemin | awk 'END{exit (NR>0) ? 1 : 0;}'
+    [ $? -eq 0      ] || exit 2
+    touch "$dir/$id"
+    echo "$dir/$id"
+    exit 0
+    ;;
+  avail)
+    [ -n "$lifemin" ] || print_usage_and_exit
+    [ -n "$idtmpl"  ] || exit 1
+    [ -f "$dir/$id" ] || exec $CMD_MKTEMP "$dir/$idtmpl"
+    find "$dir" -name "$id" -mmin +$lifemin | awk 'END{exit (NR>0) ? 1 : 0;}'
+    [ $? -eq 0      ] || exec $CMD_MKTEMP "$dir/$idtmpl"
+    touch "$dir/$id"
+    echo "$dir/$id"
+    exit 0
+    ;;
+  renew)
+    [ -n "$lifemin" ] || print_usage_and_exit
+    [ -n "$idtmpl"  ] || print_usage_and_exit
+    [ -f "$dir/$id" ] || exit 1
+    find "$dir" -name "$id" -mmin +$lifemin | awk 'END{exit (NR>0) ? 1 : 0;}'
+    [ $? -eq 0      ] || exit 2
+    check=$($CMD_MKTEMP "$dir/$idtmpl" 2>/dev/null)
+    [ $? -eq 0      ] || exit 3
+    mv -f "$dir/$id" "$check"
+    [ $? -eq 0      ] || exit 4
+    touch "$check"
+    echo "$check"
+    exit 0
+    ;;
+  remove)
+    if [ -n "$lifemin" ]; then
+      find "$dir" -name "$id" -mmin +$lifemin | xargs rm -f
+      exit $?
+    else
+      find "$dir" -name "$id"                 | xargs rm -f
+      exit $?
+    fi
+    ;;
+  *)
+    print_usage_and_exit
+    ;;
+esac

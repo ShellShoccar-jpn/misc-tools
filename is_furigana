@@ -1,0 +1,129 @@
+#! /bin/sh
+
+######################################################################
+#
+# is_furigana
+# ファイルとして与えられた文字列が
+# UTF-8的にふりがな(平仮名・片仮名のみ)かどうかを戻り値で返す
+# (例1) echo "あか"  | is_furigana を実行すると0を返す。
+# (例2) echo "ﾐﾄﾞﾘ"  | is_furigana を実行すると0を返す。
+# (例3) echo "ｱｵ1号" | is_furigana を実行すると0以外を返す。
+# (注1) 空白や文字列最後以外の改行が含まれていると、ふりがなとは認定しない。
+# (注2) 空文字列でもふりがなとは認定しない。
+#
+# Written by Matsuura(richmikan@richlab.org) at 2014/05/10
+#
+# Usage  : is_furigana <file>
+#
+# Return : $?に判定結果
+#
+######################################################################
+
+# print the usage and exit
+print_usage_and_exit () {
+  cat <<-__USAGE 1>&2
+	Usage   : ${0##*/} <file>
+	Version : Sat May 10 16:05:28 JST 2014
+__USAGE
+  exit 1
+}
+
+if [ \( -f "$1"      \) -o \
+     \( -c "$1"      \) -o \
+     \( -p "$1"      \) -o \
+     \( "_$1" = '_-' \)    ]; then
+  file="$1"
+elif [ $# -lt 1 ]; then
+  file='-'
+else
+  print_usage_and_exit
+fi
+if [ \( ! -r "$file" \) -a \( "_$file" != '_-' \) ]; then
+  echo "${0##*/}: Cannot open the file" 1>&2
+  exit 1
+fi
+
+# main
+exec env - awk '
+BEGIN {
+  # register all character codes
+  for(i=1;i<=255;i++){asc[sprintf("%c",i)]=i;}
+
+  # register some character codes to refer quickly
+  #chr_80_1 = sprintf("\200");
+  chr_C0_X = sprintf("\300");
+  chr_E0_2 = sprintf("\340");
+  chr_F0_3 = sprintf("\360");
+  chr_F8_4 = sprintf("\370");
+  chr_FC_5 = sprintf("\374");
+  chr_FE_6 = sprintf("\376");
+
+  # return code
+  ret = 0;
+}
+
+{
+  if (NR>1) { ret=1; exit; }
+  for (i=1; i<=length($0); i++) {
+    s = substr($0,i,1);
+    #if        (s < chr_80_1) {
+    #  s_out = s_out s;
+    #  continue;
+    #}
+    if        (s < chr_C0_X) {
+      ret=11; exit;
+    } else if (s < chr_E0_2) {
+      ret=12; exit;
+    } else if (s < chr_F0_3) {
+      s1 = substr($0,i+1,1);
+      s2 = substr($0,i+2,1);
+      utf8c = asc[s]*65536 + asc[s1]*256 + asc[s2];
+      if        (utf8c < 14909825) { # 範囲外
+        ret=21; exit;
+      } else if (utf8c < 14909888) { # ぁ～み
+        i+=2; continue;
+      } else if (utf8c < 14910080) { # 範囲外
+        ret=22; exit;
+      } else if (utf8c < 14910103) { # む～ゖ
+        i+=2; continue;
+      } else if (utf8c < 14910106) { # 範囲外
+        ret=23; exit;
+      } else if (utf8c < 14910111) { # ゜～ゞ
+        i+=2; continue;
+      } else if (utf8c < 14910113) { # 範囲外
+        ret=24; exit;
+      } else if (utf8c < 14910144) { # ァ～タ
+        i+=2; continue;
+      } else if (utf8c < 14910336) { # 範囲外
+        ret=25; exit;
+      } else if (utf8c < 14910399) { # ダ～ヾ
+        i+=2; continue;
+      } else if (utf8c < 15711653) { # 範囲外
+        ret=26; exit;
+      } else if (utf8c < 15711680) { # ･～ｿ
+        i+=2; continue;
+      } else if (utf8c < 15711872) { # 範囲外
+        ret=27; exit;
+      } else if (utf8c < 15711904) { # ﾀ～ﾟ
+        i+=2; continue;
+      } else                       { # 範囲外
+        ret=28; exit;
+      }
+      i += 2;
+    } else if (s < chr_F8_4) {
+      ret=13; exit;
+    } else if (s < chr_FC_5) {
+      ret=14; exit;
+    } else if (s < chr_FE_6) {
+      ret=15; exit;
+    } else {
+      ret=16; exit;
+    }
+  }
+}
+
+END {
+  ret = (NR!=0) ? ret : 2;
+  exit ret;
+}
+' "$file"

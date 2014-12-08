@@ -1,0 +1,355 @@
+#! /bin/sh
+
+# base designed by Nobuaki Tounaka
+# written by 321516
+
+# print the usage and exit
+print_usage_and_exit () {
+  cat <<-__USAGE 1>&2
+	Usage   : ${0##*/} [+<n>h] <f1> <f2> ... <file>
+	        : ${0##*/} -d <string>
+	Version : Fri Jun 27 01:42:19 JST 2014
+	        : Open usp Tukubai (POSIX.1 Bourne Shell/POSIX.1 commands/UTF-8)
+__USAGE
+  exit 1
+}
+
+# initialize
+PATH='/usr/bin:/bin'
+directmode=0
+directstr=''
+awkc0=''
+file=''
+fldnums=''
+all_fields=0
+use_stdin=0
+opt_part=1
+hopt=0
+
+# parse the arguments
+if [ \( $# -eq 1 \) ]; then
+  case $1 in
+    -h|--help|--version) print_usage_and_exit;;
+  esac
+fi
+i=0
+for arg in "$@"; do
+  i=$((i+1))
+  fldnum=''
+  # direct mode processing
+  if   [ \( $opt_part -ne 0 \) -a \( "_$arg" = '_-d'        \) ]; then
+    directmode=1
+    continue
+  elif [ \( $opt_part -ne 0 \) -a \( "_$arg" != "_${arg#+}" \) ]; then
+    s=$(echo "_$arg" | sed 's/^_+\([0-9]*\)h$/\1/')
+    [ "_$s" != "_$arg" ] || print_usage_and_exit
+    [ -z "$s"          ] && { hopt=1; continue; }
+    hopt=$(expr $s + 0)
+    continue
+  fi
+  opt_part=0
+  if [ \( $i -eq $# \) -a \( $directmode -ne 0 \) ]; then
+    directstr=$arg
+    break
+  fi
+  # separate arg to arg1, arg2
+  arg1=${arg%%/*}
+  arg2=${arg##*/}
+  if [ \( "_${arg1}/${arg2}" = "_$arg"   \) -a \
+       \( -n "$arg1" \) -a \( -n "$arg2" \)    ]
+  then
+    :
+  else
+    arg1=$arg
+    arg2=''
+  fi
+  # check both
+  j=0
+  for s in $arg1 $arg2; do
+    if echo "_$s" | grep '^_[0-9]\{1,\}$' > /dev/null; then
+      j=$((j+1))
+      if [ "$s" -eq 0 ]; then
+        all_fields=1
+      fi
+    elif echo "_$s" | grep -E '^_(NF|NF-[0-9]+)$' > /dev/null; then
+      j=$((j+1))
+    fi
+  done
+  if [ \( $j -eq 2 \) -o \( \( $j -eq 1 \) -a \( -z "$arg2" \) \) ]; then
+    fldnums="$fldnums $arg"
+    continue
+  fi
+  # perhaps, this argument is a filename
+  if [ $# -eq $i ]; then
+    file=$arg
+    continue
+  fi
+  # otherwise, it is a invalid argument
+  print_usage_and_exit
+done
+# (if you want to regard no fldnums as all, set all_fields=1 instead of exit)
+[ -n "$fldnums" ] || all_fields=1
+if [ $directmode -ne 0 ]; then
+  [ -n "$directstr" ] || print_usage_and_exit
+  file=''
+else
+  [ -n "$file" ] || file='-'
+  if [ \( "_$file" = '_-'               \) -o \
+       \( "_$file" = '_/dev/stdin'      \) -o \
+       \( "_$file" = '_/dev/fd/0'       \) -o \
+       \( "_$file" = '_/proc/self/fd/0' \)    ]
+  then
+    use_stdin=$((use_stdin+1))
+  fi
+  if [ \( ! -f "$file"     \) -a \
+       \( ! -c "$file"     \) -a \
+       \( ! -p "$file"     \) -a \
+       \( "_$file" != '_-' \)    ]
+  then
+    print_usage_and_exit
+  elif [ \( ! -r "$file" \) -a \( "_$file" != '_-' \) ]; then
+    echo "${0##*/}: Cannot open the file" 1>&2
+    exit 1
+  fi
+fi
+
+# make the part of the awk code
+if [ $all_fields -eq 0 ]; then
+  awkc0=$(echo "$fldnums"                           |
+          sed 's/^0\{1,\}\([0-9]\)/\1/'             |
+          sed 's/\([^0-9]\)0\{1,\}\([0-9]\)/\1\2/g' |
+          tr ' ' '\n'                               |
+          awk                                       '
+            /^NF-[0-9]+\/NF-[0-9]+$/ {
+              nfofs1 = substr($0,4,index($0,"/")-4) + 0;
+              nfofs2 = substr($0,index($0,"/")+4) + 0;
+              if (nfofs1 > nfofs2) {
+                i = nfofs1;
+                nfofs1 = nfofs2;
+                nfofs2 = i;
+              }
+              for (i=nfofs1; i<=nfofs2; i++) {
+                print "0 NF-" i;
+              }
+            }
+            /^NF\/NF-[0-9]+$/ {
+              nfofs2 = substr($0,index($0,"/")+4);
+              print "0 NF";
+              for (i=1; i<=nfofs2; i++) {
+                print "0 NF-" i;
+              }
+            }
+            /^NF-[0-9]+\/NF$/ {
+              nfofs2 = substr($0,4,index($0,"/")-4) + 0;
+              print "0 NF";
+              for (i=1; i<=nfofs2; i++) {
+                print "0 NF-" i;
+              }
+            }
+            /^[0-9]+\/NF-[0-9]+$/ {
+              printf("0 %s NF-%s\n",
+                     substr($0,1,index($0,"/")-1),
+                     substr($0,index($0,"/")+4)   );
+            }
+            /^NF-[0-9]+\/[0-9]+$/ {
+              printf("0 %s NF-%s\n",
+                     substr($0,index($0,"/")+1),
+                     substr($0,4,index($0,"/")-4));
+            }
+            /^[0-9]+\/[0-9]+$/ {
+              pos = index($0, "/");
+              a = substr($0, 1, pos-1)+0;
+              b = substr($0, pos+1)+0;
+              if (a > b) {
+                swp = a;
+                a = b;
+                b = swp;
+              }
+              for (i=a; i<=b; i++) {
+                print 1, i;
+              }
+            }
+            /^[0-9]+\/NF$/ {
+              print 1, substr($0, 1, length($0)-3), "NF";
+            }
+            /^NF\/[0-9]+$/ {
+              print 1, substr($0, index($0,"/")+1), "NF";
+            }
+            /^[0-9]+$/ {
+              print 1, $0;
+            }
+            /^NF-[0-9]+$/ {
+              print 0, $0;
+            }
+            (($0 == "NF") || ($0 == "NF/NF")) {
+              print 0, "NF";
+            }
+          '                                         |
+          sort -k 1,1 -k 2n,2 -k 3n,3               |
+          uniq                                      |
+          sed -n '1,/1 [0-9]\{1,\} NF$/p'           |
+          awk                                       '
+            BEGIN {
+              f1_total  = 0;
+              f2_max    = 0;
+              f3_has_nf = 0;
+            }
+            {
+              f1_total += $1; 
+              if ($1 == 1) {
+                f2_max = ($2 > f2_max) ? $2 : f2_max;
+                f2_vals[$2] = 1;
+              }
+              f3_has_nf = ($3 == "NF") ? 1 : f3_has_nf;
+              cell[NR,1] = $2;
+              if (NF == 3) {
+                cell[NR,2] = $3;
+              }
+            }
+            END {
+              if ((f1_total == NR) && (f3_has_nf)) {
+                printf("split(\"\",mark);for(i=1;i<=NF;i++){mark[i]=1}");
+                for (i=1; i<f2_max; i++) {
+                  if (! (i in f2_vals)) {
+                    printf("delete mark[%d];", i);
+                  }
+                }
+              } else {
+                printf("split(\"\",mark);");
+                for (i=1; i<=NR; i++) {
+                  if (i SUBSEP 2 in cell) {
+                    printf("if(%s>%s){for(i=%s;i<=%s;i++){mark[i]=1}}else{for(i=%s;i<=%s;i++){mark[i]=1}}",
+                           cell[i,1],cell[i,2],
+                           cell[i,2],cell[i,1],
+                           cell[i,1],cell[i,2]);
+                  } else {
+                    if (match(cell[i,1],/^[0-9]+$/) || (cell[i,1] == "NF")) {
+                      printf("mark[%s]=1;",cell[i,1]);
+                    } else {
+                      printf("if(%s>0){mark[%s]=1}",cell[i,1],cell[i,1]);
+                    }
+                  }
+                }
+              }
+              printf("convert_marked_flds();print;");
+            }
+          '                                         )
+  echo "$awkc0" | grep 'NF' >/dev/null
+  if [ $? -ne 0 ]; then
+    awkc0b=${awkc0%convert_marked_flds*}
+    awkc0='convert_marked_flds();print;'
+  else
+    awkc0b=''
+  fi
+else
+  awkc0='print utf8kata2hira($0);'
+  awkc0b=''
+fi
+
+# make awk code
+awkcode='
+BEGIN {
+  for (i=0; i<hdr_skip; i++) {
+    if (getline line) {
+      print line;
+    } else {
+      exit;
+    }
+  }
+  utf8kata2hira_prep();
+  '"$awkc0b"'
+}
+{
+  '"$awkc0"'
+}
+function convert_marked_flds( fld) {
+  for (fld in mark) {
+    $fld = utf8kata2hira($fld);
+  }
+}
+function utf8kata2hira_prep( i,l) {
+
+  # register some character codes to refer quickly
+  #chr_80_1 = sprintf("\200");
+  chr_C0_X = sprintf("\300");
+  chr_E0_2 = sprintf("\340");
+  chr_F0_3 = sprintf("\360");
+  chr_F8_4 = sprintf("\370");
+  chr_FC_5 = sprintf("\374");
+  chr_FE_6 = sprintf("\376");
+
+  # register all character codes to shift kana code
+  for(i=1;i<=255;i++){chr[i]=sprintf("%c",i);asc[chr[i]]=i;}
+
+  # memorize other values
+  offset=14910112; # 「ァ」の1つ手前の文字の位置
+}
+
+function utf8kata2hira(s_in, i,s,s1,s2,utf8c,delta,s_out) {
+  s_out = "";
+  for (i=1; i<=length(s_in); i++) {
+    s = substr(s_in,i,1);
+    #if        (s < chr_80_1) {
+    #  s_out = s_out s;
+    #  continue;
+    #}
+    if        (s < chr_C0_X) {
+      s_out = s_out s;
+    } else if (s < chr_E0_2) {
+      i++;
+      s_out = s_out s substr(s_in,i,1);
+    } else if (s < chr_F0_3) {
+      s1 = substr(s_in,i+1,1);
+      s2 = substr(s_in,i+2,1);
+      utf8c = asc[s]*65536 + asc[s1]*256 + asc[s2];
+      if        (utf8c<(offset+  1)) { # 「ァ」未満
+        delta=   0;
+      } else if (utf8c<(offset+ 32)) { # 「ァ」～「タ」
+        delta= 288;
+      } else if (utf8c<(offset+224)) { # 未定義文字区間
+        delta=   0;
+      } else if (utf8c<(offset+256)) { # 「ダ」～「ミ」
+        delta= 480;
+      } else if (utf8c<(offset+279)) { # 「ム」～「ヶ」
+        delta= 288;
+      } else if (utf8c<(offset+285)) { # 対象外・未定義文字区間
+        delta=   0;
+      } else if (utf8c<(offset+287)) { # 「ヽ」「ヾ」
+        delta= 288;
+      } else {
+        delta=   0;
+      }
+      if (delta != 0) {
+        utf8c -= delta;
+        z = utf8c % 256;
+        y = ((utf8c % 65536) - z)/256;
+        x = (utf8c - y*256 - z) /65536;
+        s_out = s_out chr[x] chr[y] chr[z];
+      } else {
+        s_out = s_out s s1 s2;
+      }
+      i += 2;
+    } else if (s < chr_F8_4) {
+      s_out = s_out s substr(s_in,i+1,3);
+      i += 3;
+    } else if (s < chr_FC_5) {
+      s_out = s_out s substr(s_in,i+1,4);
+      i += 4;
+    } else if (s < chr_FE_6) {
+      s_out = s_out s substr(s_in,i+1,5);
+      i += 5;
+    } else {
+      s_out = s_out s;
+    }
+  }
+  return s_out;
+}
+'
+
+# main
+if [ $directmode -ne 0 ]; then
+       printf '%s' "$directstr"               |
+       env - awk -v hdr_skip=$hopt "$awkcode"
+else
+  exec env - awk -v hdr_skip=$hopt "$awkcode" "$file"
+fi

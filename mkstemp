@@ -1,0 +1,92 @@
+#! /bin/sh
+
+######################################################################
+#
+# MKSTEMP : A wrapper of mktemp(1) to behave as a equivalent of mkstemp(1)
+#
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2013/11/09
+#
+# Usage  : mkstemp [mktemp(1)options] <template>
+#
+# * <template> is necessary. And only 1.
+# * "mktemp(1) options" depend on mktemp(1) on the host
+#
+######################################################################
+
+# --- definition: print the usage and exit ---------------------------
+print_usage_and_exit () {
+  cat <<-__USAGE 1>&2
+	Usage   : ${0##*/} [mktemp(1)options] <template>
+	          "mktemp(1) options" depend on mktemp(1) on the host.
+	Version : Sat Nov 09 23:23:10 JST 2013
+__USAGE
+  exit 1
+}
+
+# --- definition: characters for substituting the "XXX..." string ----
+chrs='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_'
+xchrslen=$(echo "obase=16;${#chrs}" | bc)
+
+# --- parse the arguments --------------------------------------------
+[ $# -ge 1 ] || print_usage_and_exit
+i=1
+options=''
+for arg in "$@"; do
+  if [ $i -lt $# ]; then
+    options="$options $arg"
+  else
+    template=$arg
+  fi
+  i=$((i+1))
+done
+
+# --- separate filepath ----------------------------------------------
+s=${template%/*}
+if [ "_$s" != "_$template" ]; then
+  path=$s
+else
+  path='.'
+fi
+
+# --- count the number of the tail "X" characters --------------------
+template_without_x=$(echo "_$template" | sed '1s/^_//' | sed 's/X*$//')
+variable_len=$((${#template}-${#template_without_x}))
+
+# --- validate the path ----------------------------------------------
+[ -d "$path" ] || { echo "${0##*/}: No such directory" 1>&2; exit 1; }
+
+# --- make a temporary file (for non "X" terminated string) ----------
+if [ $variable_len -eq 0 ]; then
+  exec mktemp $options "$template_without_x"
+fi
+
+# --- make a temporary file (for "X" terminated string) --------------
+bytes=$(awk 'BEGIN{print int('$variable_len'*log('${#chrs}')/log(256))+1}')
+i=100  # <- time to retry
+while [ $i -gt 0 ]; do
+  i=$((i-1))
+  rndstr=$(cat /dev/urandom                                         |
+           head -c $bytes                                           |
+           od -v -An -tx1                                           |
+           tr -Cd '0-9a-fA-F'                                       |
+           tr 'a-f' 'A-F'                                           |
+           awk '{print "ibase=16; obase='$xchrslen'; " $1}'         |
+           bc                                                       |
+           tr -d '\\\n'                                             |
+           awk '{ORS="";                                            #
+                 split("'"$chrs"'",chrs,""); split($0,digits);      #
+                 for (pos in digits) {print chrs[digits[pos]+1];}}' |
+           head -c $variable_len                                    )
+  if [ $i -gt 0 ]; then
+    made_file=$(mktemp $options "$template_without_x$rndstr" 2>/dev/null)
+    [ $? -eq 0        ] || continue
+    [ -n "$made_file" ] || continue
+    break
+  else
+    exec mktemp $options "$template_without_x$rndstr"
+  fi
+done
+echo "$made_file"
+
+# --- finish ---------------------------------------------------------
+exit 0

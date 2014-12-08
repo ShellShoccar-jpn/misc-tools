@@ -1,0 +1,94 @@
+#! /bin/sh
+ 
+######################################################################
+#
+# MKCGIPOST - HTTP POST String Generator
+#
+# USAGE: mkcgipost <file>
+#
+# * <file> format :
+#   <variable_name#1> <value#1>
+#   <variable_name#2> <value#2>
+#            :            :
+# * <variablename> and <value> is separated by only one space.
+#   And <value> can have space characters.
+# * backslashes in <value> must be escaped as '\\'.
+#   And <value> can have LF characters as '\n'.
+#
+# Return: $?=0 (when all of the arguments are valid)
+#         stdout : encoded CGI variables for HTTP POST(GET)
+#
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2014/11/22
+#
+######################################################################
+ 
+# --- initalization --------------------------------------------------
+PATH=/usr/bin:/bin
+
+print_usage_and_exit () {
+  cat <<-__USAGE 1>&2
+	Usage   : ${0##*/} <file>
+	Version : Sat Nov 22 11:38:19 JST 2014
+__USAGE
+  exit 1
+}
+
+# --- parse arguments ------------------------------------------------
+[ $# -lt 2 ] || print_usage_and_exit
+if [ $# -eq 1 ]; then
+  case "$1" in
+    -h|--help|--version) print_usage_and_exit;;
+  esac
+  [ -f "$1" ] || print_usage_and_exit
+  file=$1
+else
+  file='-'
+fi
+
+
+# --- generate HTTP POST string --------------------------------------
+exec env - awk '
+  BEGIN {
+    # --- prepare
+    LF = sprintf("\n");
+    OFS = "";
+    ORS = "";
+    # --- prepare str2url
+    for(i= 0;i<256;i++){c2a[sprintf("%c",i)]=sprintf("%%%02X",i);}
+    c2a[" "]="+";
+    for(i=48;i< 58;i++){c2a[sprintf("%c",i)]=sprintf("%c",i);   }
+    for(i=65;i< 91;i++){c2a[sprintf("%c",i)]=sprintf("%c",i);   }
+    for(i=97;i<123;i++){c2a[sprintf("%c",i)]=sprintf("%c",i);   }
+    c2a["-"]="-"; c2a["."]="."; c2a["_"]="_"; c2a["~"]="~";
+    # --- first delemiter
+    dlm = "";
+  }
+  {
+    # --- get the name and value -------------------------------------
+    i = length($0);
+    j = index($0, " ");
+    if (i == 0) { next; }
+    if        (j == 0) {
+      name  = $0;
+      value = "";
+    } else if (i == j) {
+      name  = substr($0,   1, i-1);
+      value = "";
+    } else             {
+      name  = substr($0,   1, j-1);
+      value = substr($0, j+1     );
+    }
+    # --- unescape the value -----------------------------------------
+    gsub(/\\n/ , LF  , value);
+    gsub(/\\\\/, "\\", value);
+    # --- URL encode -------------------------------------------------
+    enc_value = "";
+    for(i=1; i<=length(value); i++) {
+      enc_value = enc_value c2a[substr(value,i,1)];
+    }
+    # --- print ------------------------------------------------------
+    print dlm, name, "=", enc_value;
+    # --- set delemiter ----------------------------------------------
+    dlm = "&";
+  }
+' "$file"

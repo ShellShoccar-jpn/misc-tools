@@ -1,0 +1,130 @@
+#! /bin/sh
+
+######################################################################
+#
+# utf8wc
+# ファイルとして与えられた文字列のUTF-8としての半角換算文字数を数える。
+# (例1) echo "あ"      | nkf -xw80 | utf8wc を実行すると 2を返す。
+# (例2) echo "ｱ"       | nkf -xw80 | utf8wc を実行すると 1を返す。
+# (例3) echo "ﾐﾄﾞﾘ1号" | nkf -xw80 | utf8wc を実行すると 7を返す。
+# (注1)  改行はCR+LFもLFも1文字として数える。
+# (注2)  一番最後の改行は無視される。
+#
+# Written by Matsuura(richmikan@richlab.org) at 2013/11/02
+#
+# Usage  : utf8wc <file>
+#
+# Return : stdoutに半角換算文字数
+#
+######################################################################
+
+# print the usage and exit
+print_usage_and_exit () {
+  cat <<__USAGE 1>&2
+Usage   : ${0##*/} <file>
+Version : Sat Nov 2 13:52:50 JST 2013
+__USAGE
+  exit 1
+}
+
+if [ \( -f "$1"      \) -o \
+     \( -c "$1"      \) -o \
+     \( -p "$1"      \) -o \
+     \( "_$1" = '_-' \)    ]; then
+  file="$1"
+elif [ $# -lt 1 ]; then
+  file='-'
+else
+  print_usage_and_exit
+fi
+if [ \( ! -r "$file" \) -a \( "_$file" != '_-' \) ]; then
+  echo "${0##*/}: Cannot open the file" 1>&2
+  exit 1
+fi
+
+# main
+env - awk '
+BEGIN {
+  RS="\n";
+
+  utf8strlen_prep();
+
+  numofletters = 0;
+  while (getline line) {
+    sub(/\r$/, "", line);
+    numofletters += utf8strlen(line);
+  }
+  while (getline line) {
+    numofletters += 1;
+    sub(/\r$/, "", line);
+    numofletters += utf8strlen(line);
+  }
+
+  print numofletters;
+}
+# strlen for UTF-8 (preparation : you must call this before using utf8strlen)
+function utf8strlen_prep() {
+  utf8strlen_80_1 = sprintf("\200");
+  utf8strlen_C0_X = sprintf("\300");
+  utf8strlen_E0_2 = sprintf("\340");
+  utf8strlen_F0_3 = sprintf("\360");
+  utf8strlen_F8_4 = sprintf("\370");
+  utf8strlen_FC_5 = sprintf("\374");
+  utf8strlen_FE_6 = sprintf("\376");
+  utf8strlen_K_EF = sprintf("\357");
+  utf8strlen_K_BD = sprintf("\275");
+  utf8strlen_K_BE = sprintf("\276");
+  utf8strlen_K_A0 = sprintf("\240");
+  utf8strlen_K_C0 = sprintf("\300");
+  utf8strlen_K_80 = sprintf("\200");
+}
+
+# strlen for UTF-8 (main)
+function utf8strlen(str) {
+  utf8strlen_ = 0;
+  for (utf8strlen_i = 1; utf8strlen_i <= length(str); utf8strlen_i++) {
+    utf8strlen_++;
+    utf8strlen_letter=substr(str, utf8strlen_i, 1);
+    if (utf8strlen_letter < utf8strlen_80_1) {
+      continue;
+    } else if (utf8strlen_letter < utf8strlen_C0_X) {
+      utf8strlen_--;
+      continue;
+    } else if (utf8strlen_letter < utf8strlen_E0_2) {
+      utf8strlen_i++;
+    } else if (utf8strlen_letter < utf8strlen_F0_3) {
+      if (utf8strlen_letter == utf8strlen_K_EF) {
+        utf8strlen_letter2 = substr(str, utf8strlen_i+1, 1);
+        if (utf8strlen_letter2 == utf8strlen_K_BD) {
+          utf8strlen_letter3 = substr(str, utf8strlen_i+2, 1);
+          if ((utf8strlen_letter3 >= utf8strlen_K_A0) &&
+              (utf8strlen_letter3 <  utf8strlen_K_C0)  ) {
+            utf8strlen_--;
+          }
+        } else if (utf8strlen_letter2 == utf8strlen_K_BE) {
+          utf8strlen_letter3 = substr(str, utf8strlen_i+2, 1);
+          if ((utf8strlen_letter3 >= utf8strlen_K_80) &&
+              (utf8strlen_letter3 <  utf8strlen_K_A0)  ) {
+            utf8strlen_--;
+          }
+        }
+      }
+      utf8strlen_i += 2;
+    } else if (utf8strlen_letter < utf8strlen_F8_4) {
+      utf8strlen_i += 3;
+    } else if (utf8strlen_letter < utf8strlen_FC_5) {
+      utf8strlen_i += 4;
+    } else if (utf8strlen_letter < utf8strlen_FE_6) {
+      utf8strlen_i += 5;
+    } else {
+      utf8strlen_--;
+      continue;
+    }
+    utf8strlen_++;
+  }
+  return utf8strlen_;
+}
+' "$file"
+
+# finish
+exit 0
