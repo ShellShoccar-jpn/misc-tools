@@ -4,7 +4,18 @@
 #
 # MKTEMP - The "mktemp" Command Written Within POSIX
 #
-# USAGE: mktemp [-d] [-p [DIR]] [-q] [-u] [-t] [--suffix=<suff>] [template [..]]
+# USAGE: mktemp [--by-myself] [options] [template [...]]
+#
+#        "--by-myself" ..... Not use the "built-in" mktemp command
+#                            and always do mktemp by myself
+#        "-d" .............. Make a directory instead of a file
+#        "-p [DIR]" ........ Define the temporary directory instead of
+#                            $TMPDIR
+#        "-q" .............. Quiet even if some error occurred
+#        "-u" .............. Make a file but remove it immediately
+#        "-t" .............. Add the temporary directory as a prefix
+#                            in front of the filepath
+#        "--suffix=<suff>" . Add the suffix behind the filename
 #
 # Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/16
 #
@@ -13,8 +24,9 @@
 # print the usage and exit
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
-	Usage   : ${0##*/} [-d] [-p [DIR]] [-q] [-u] [-t] [--suffix=<suff>] [template [..]]
-	Version : Fri Jan 16 07:39:14 JST 2015
+	Usage   : ${0##*/} [--by-myself] [options] [template [...]]
+	        : "-d" "-p [DIR]" "-q" "-u" "-t" "--suffix=<suff>"
+	Version : Fri Jan 16 15:51:27 JST 2015
 __USAGE
   exit 1
 }
@@ -39,7 +51,10 @@ max_retry_when_failed=10
 LF=$(printf '\\\n_');LF=${LF%_}
 
 # --- exec the mktemp command if exists ------------------------------
-which mktemp >/dev/null 2>&1 && { exec mktemp "$@"; exit 0; }
+case "${1:-}" in
+  --by-myself) shift                                                         ;;
+  *)           which mktemp >/dev/null 2>&1 && { exec mktemp "$@"; exit 1; } ;;
+esac
 
 
 # ===== OPTION PARSING ===============================================
