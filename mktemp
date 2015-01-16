@@ -26,7 +26,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [options] [template [...]]
 	        : "-d" "-p [DIR]" "-q" "-u" "-t" "--suffix=<suff>"
-	Version : Fri Jan 16 15:51:27 JST 2015
+	Version : Fri Jan 16 17:42:56 JST 2015
 __USAGE
   exit 1
 }
@@ -154,16 +154,18 @@ random_string () {
   fi
 
   # make a random string from the hexadecimal digit
-  echo "obase=${#chrs};ibase=16;$hstr"     |
-  bc                                       |
-  tr -d '\\\n'                             |
-  tr ' ' '\n'                              |
-  awk 'BEGIN  {ORS="";                     #
-               s="'"$chrs"'";              #
-               for(i=0;i<length(s);i++){   #
-                 c[i]=substr(s,i+1,1);     #
-               }                        }  #
-       /[0-9]/{print c[$0*1];           }' |
+  echo "obase=${#chrs};ibase=16;$hstr"         |
+  bc                                           |
+  tr -d '\\\n'                                 |
+  tr ' ' '\n'                                  |
+  awk 'BEGIN  {for(i=1;i<'$1';i++){print 0;}}  #
+       /[0-9]/{print;                       }' |
+  awk 'BEGIN  {ORS="";                         #
+               s="'"$chrs"'";                  #
+               for(i=0;i<length(s);i++){       #
+                 c[i]=substr(s,i+1,1);         #
+               }                        }      #
+       /[0-9]/{print c[$0*1];           }'     |
   tail -c $1
 }
 
@@ -202,8 +204,10 @@ for arg in "$@"; do
 
     # --- Making the file --------------------------------------------
     case $optd in
-      0) umask 177
-         cp "$0" "$Path_target" 2>/dev/null || {
+      0) printf 'umask 177; cp -i "%s" "%s"' "$0" "$Path_target" |
+         sed 's/\\/\\\\/g'                                       |
+         sh 2>/dev/null
+         [ $? -eq 0 ] || {
            [ -f "$Path_target" ] && { n=$((n-1)); continue; }
            n=-1; break;
          }
