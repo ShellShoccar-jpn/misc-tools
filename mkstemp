@@ -4,12 +4,16 @@
 #
 # MKSTEMP : A wrapper of mktemp(1) to behave as a equivalent of mkstemp(1)
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2013/11/09
-#
 # Usage  : mkstemp [mktemp(1)options] <template>
 #
 # * <template> is necessary. And only 1.
 # * "mktemp(1) options" depend on mktemp(1) on the host
+#
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2013/11/09
+#
+# This is a public-domain software. It measns that all of the people
+# can use this with no restrictions at all. By the way, I am fed up
+# the side effects which are broght about by the major licenses.
 #
 ######################################################################
 

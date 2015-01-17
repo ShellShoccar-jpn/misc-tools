@@ -2,7 +2,7 @@
 
 ######################################################################
 #
-# MKTEMP - The "mktemp" Command Written Within POSIX
+# MKTEMP - The "mktemp" Command Also Works On Just A POSIX Environment
 #
 # USAGE: mktemp [--by-myself] [options] [template [...]]
 #
@@ -20,6 +20,10 @@
 #        "--suffix=<suff>" . Add the suffix behind the filename
 #
 # Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/16
+#
+# This is a public-domain software. It measns that all of the people
+# can use this with no restrictions at all. By the way, I am fed up
+# the side effects which are broght about by the major licenses.
 #
 ######################################################################
  

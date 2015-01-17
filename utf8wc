@@ -10,11 +10,15 @@
 # (注1)  改行はCR+LFもLFも1文字として数える。
 # (注2)  一番最後の改行は無視される。
 #
-# Written by Matsuura(richmikan@richlab.org) at 2013/11/02
-#
 # Usage  : utf8wc <file>
 #
 # Return : stdoutに半角換算文字数
+#
+# Written by Matsuura(richmikan@richlab.org) at 2013/11/02
+#
+# This is a public-domain software. It measns that all of the people
+# can use this with no restrictions at all. By the way, I am fed up
+# the side effects which are broght about by the major licenses.
 #
 ######################################################################
 

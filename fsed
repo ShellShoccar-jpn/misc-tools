@@ -13,6 +13,10 @@
 #   expression has, so that you can very easily substitute strings
 #   include various meta-characters, e.g. ^, $, \, /, &, and so on.
 #
+# This is a public-domain software. It measns that all of the people
+# can use this with no restrictions at all. By the way, I am fed up
+# the side effects which are broght about by the major licenses.
+#
 ######################################################################
 
 # print the usage and exit

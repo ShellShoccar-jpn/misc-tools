@@ -11,11 +11,15 @@
 # (注1) 空白や文字列最後以外の改行が含まれていると、ふりがなとは認定しない。
 # (注2) 空文字列でもふりがなとは認定しない。
 #
-# Written by Matsuura(richmikan@richlab.org) at 2014/05/10
-#
 # Usage  : is_furigana <file>
 #
 # Return : $?に判定結果
+#
+# Written by Rich Mikan(richmikan@richlab.org) at 2014/05/10
+#
+# This is a public-domain software. It measns that all of the people
+# can use this with no restrictions at all. By the way, I am fed up
+# the side effects which are broght about by the major licenses.
 #
 ######################################################################
 
