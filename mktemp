@@ -7,7 +7,9 @@
 # USAGE: mktemp [--by-myself] [options] [template [...]]
 #
 #        "--by-myself" ..... Not use the "built-in" mktemp command
-#                            and always do mktemp by myself
+#                            and always do mktemp by myself but it is
+#                            inferior to the built-in in performance
+#                            (write as the 1st argument when use)
 #        "-d" .............. Make a directory instead of a file
 #        "-p [DIR]" ........ Define the temporary directory instead of
 #                            $TMPDIR
@@ -26,7 +28,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [options] [template [...]]
 	        : "-d" "-p [DIR]" "-q" "-u" "-t" "--suffix=<suff>"
-	Version : Sat Jan 17 20:28:39 JST 2015
+	Version : Sat Jan 17 20:43:53 JST 2015
 __USAGE
   exit 1
 }
@@ -204,9 +206,7 @@ for arg in "$@"; do
 
     # --- Making the file --------------------------------------------
     case $optd in
-      0) printf 'umask 177; : > "%s"' "$Path_target"          |
-         sed 's/\\/\\\\/g'                                    |
-         sh -C 2>/dev/null                                    || {
+      0) (umask 177; : > "$Path_target") 2>/dev/null          || {
            [ -f "$Path_target" ] && { n=$((n-1)); continue; }
            n=-1; break;
          }
