@@ -26,7 +26,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [options] [template [...]]
 	        : "-d" "-p [DIR]" "-q" "-u" "-t" "--suffix=<suff>"
-	Version : Fri Jan 16 17:42:56 JST 2015
+	Version : Sat Jan 17 20:28:39 JST 2015
 __USAGE
   exit 1
 }
@@ -126,9 +126,9 @@ done
 # stdout: generated random string
 random_string () {
   # calculate the number of words which required
-  nw=$(echo "${1}*l(${#chrs})/11.09+0.5" | # 11.09=ln(65536)
-       bc -l                             |
-       sed 's/\..*$//'                   )
+  nw=$(echo "${1}*l(${#chrs})/11.09+1" | # 11.09=ln(65536)
+       bc -l                           |
+       sed 's/\..*$//'                 )
 
   # make a random hexadecimal digit
   if [ -c /dev/urandom ]; then
@@ -204,17 +204,15 @@ for arg in "$@"; do
 
     # --- Making the file --------------------------------------------
     case $optd in
-      0) printf 'umask 177; cp -i "%s" "%s"' "$0" "$Path_target" |
-         sed 's/\\/\\\\/g'                                       |
-         sh 2>/dev/null
-         [ $? -eq 0 ] || {
+      0) printf 'umask 177; : > "%s"' "$Path_target"          |
+         sed 's/\\/\\\\/g'                                    |
+         sh -C 2>/dev/null                                    || {
            [ -f "$Path_target" ] && { n=$((n-1)); continue; }
            n=-1; break;
          }
-         : > "$Path_target"
          ;;
       1) umask 077
-         mkdir   "$Path_target" 2>/dev/null || {
+         mkdir "$Path_target" 2>/dev/null || {
            [ -d "$Path_target" ] && { n=$((n-1)); continue; }
            n=-1; break;
          }
@@ -227,6 +225,7 @@ for arg in "$@"; do
   # --- print error message when failed to make a file ---------------
   case "${optq}${n}" in
     '0-1') echo "${0##*/}: failed on $Path_target" 1>&2; err=1; continue;;
+    '1-1')                                               err=1; continue;;
   esac
 
   # --- print the path of the file -----------------------------------
