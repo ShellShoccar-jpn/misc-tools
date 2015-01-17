@@ -47,7 +47,7 @@
 #   That means, you can join various filters to fd=2 (stderr). Although
 #   it is very tricky. ;-)
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/18
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2014/06/29
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -64,7 +64,7 @@ DEFAULT_TIMEOUT=600
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [-t timeout] <named_pipe_to_use> [output_file]
-	Version : Sun Jan 18 04:48:59 JST 2015
+	Version : Sun Jun 29 15:01:50 JST 2014
 __USAGE
   exit 1
 }
@@ -77,12 +77,12 @@ PATH='/usr/bin:/bin'
 
 # --- judge which I have started as a parent or a child --------------
 while :; do
-  case $#     in                               6) :;; *) check='p'; break;; esac
+  [ $# -eq 6      ] || { check='p'; break; }
   pid=$$
   pid=$(ps -Ao pid,ppid | awk '$1=='$pid'{print $2*1}')
-  case "$pid" in '') echo '*** Unexpected error (ps command)' 1>&2; break;; esac
+  [ -n "$pid"     ] || { echo '*** Unexpected error (ps command)' 1>&3;break; }
   pid=$(ps -Ao pid,ppid | awk '$1=='$pid'{print $2*1}')
-  case "$pid" in                            "$5") :;; *) check='p'; break;; esac
+  [ "$pid" = "$5" ] || { check='p'; break; }
   check='c';break;
 done
 
@@ -100,21 +100,21 @@ case $check in 'p')
 
   # --- parse the arguments ------------------------------------------
   timeout=$DEFAULT_TIMEOUT
-  case $#   in                              0) print_usage_and_exit;; esac
-  case "$1" in
-    -t) shift
-        case $# in                          0) print_usage_and_exit;; esac
-        printf '%s' "$1" | grep -q '[^0-9]' || print_usage_and_exit
-        timeout=$1
-        shift
-        ;;
-  esac
-  case $#   in                   [12]) :;;  *) print_usage_and_exit;; esac
-  case "$1" in                             '') print_usage_and_exit;; esac
+  [ $# -ne 0                         ] || print_usage_and_exit
+  if [ "_$1" = '_-t' ]; then
+    shift
+    [ $# -ne 0 ] || print_usage_and_exit
+    printf '%s' "$1" | grep '[^0-9]' >/dev/null
+    [ $? -ne 0 ] || print_usage_and_exit
+    timeout=$1
+    shift
+  fi
+  [ \( $# -eq 1 \) -o \( $# -eq 2 \) ] || print_usage_and_exit
+  [ -n "$1"                          ] || print_usage_and_exit
   pipe=$1
   outfile=''
-  case $# in 2) case "$2" in '') :;; *) outfile=$2;; esac;; esac
-  case "$pipe" in                  "$outfile") print_usage_and_exit;; esac
+  [ \( $# -eq 2 \) -a \( -n "$2" \)  ] && outfile=$2
+  [ "_$pipe" != "_$outfile"     ] || print_usage_and_exit
 
   # --- enable the exit trap -----------------------------------------
   trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM
@@ -125,41 +125,40 @@ case $check in 'p')
 
   # --- make the named pipe if required ------------------------------
   check=$(ls -l "$pipe" 2>/dev/null)
-  case "$?$check" in
-    [1-9]|[1-9][0-9]|[012][0-9][0-9]) # $?>0 && $check==''
-       mkfifo -m 600 "$pipe"
-       case $? in
-         0)  :                                                          ;;
-         *)  echo "${0##*/}: Can't make the named pipe" 1>&2
-             exit_trap 2                                                ;;
-       esac
-       namedpipe_to_del_by_myself=$pipe
-       ;;
-    0[^0-9]*)                         # $?==0 && $check!=''
-       case "$check" in
-         p*) :                                                          ;;
-         *)  echo "${0##*/}: \"$pipe\" exists as another attribute" 1>&2
-             exit_trap 3                                                ;;
-       esac
-       ;;
-    *) echo "${0##*/}: An error occured at executing ls command" 1>&2
-       exit_trap 4
-       ;;
-  esac
+  ret=$?
+  if   [ \( $ret -ne 0 \) -a \( -z "$check" \) ]; then
+    mkfifo -m 600 "$pipe"
+    if [ $? -ne 0 ]; then
+      echo "${0##*/}: Can't make the named pipe" 1>&2
+      exit_trap 2
+    fi
+    namedpipe_to_del_by_myself=$pipe
+  elif [ \( $ret -eq 0 \) -a \( -n "$check" \) ]; then
+    case "$check" in
+      p*) :;;
+      *)  echo "${0##*/}: \"$pipe\" exists as another attribute" 1>&2
+          exit_trap 3
+          ;;
+    esac
+  else
+    echo "${0##*/}: An error occured at executing ls command" 1>&2
+    exit_trap 4
+  fi
 
   # --- make stderr silent -------------------------------------------
-  #exec 3>&2 2>/dev/null 1>&2 # fd3 is only available for debugging
-  exec 2>/dev/null 1>&2 3>&2
+  exec 2>&- >/dev/null 3>/dev/null # fd3 is only available for debugging
 
   # --- prepare for locking ------------------------------------------
   sleep 100 & # This is to wait that the child process is ready
   sleepjob_pid=$!
 
   # --- exec the gzip piping script ----------------------------------
-  case "${namedpipe_to_del_by_myself:-}" in
-    '') check=0                               ;;
-    *)  check=1; namedpipe_to_del_by_myself='';;
-  esac
+  if [ -n "${namedpipe_to_del_by_myself:-}" ]; then
+    check=1
+    namedpipe_to_del_by_myself=''
+  else
+    check=0
+  fi
   "$0" "$pipe" "$outfile" "$check" "$sleepjob_pid" "$pid" "$timeout" &
 
   # --- wait for starting of the gzip piping script ------------------
@@ -185,24 +184,27 @@ case $check in 'p')
   #   $6:timeout (seconds)
 
   # --- validate the arguments ---------------------------------------
-  case $# in      6) :;; *) echo '*** Invalid arguments'   1>&3; exit 10;; esac
-  [ -p "$1" ] ||          { echo '*** Invalid argument #1' 1>&3; exit 11; }
+  [ $# -eq 6 ] || { echo '*** Invalid arguments'   1>&3; exit 10; }
+  [ -p "$1"  ] || { echo '*** Invalid argument #1' 1>&3; exit 11; }
   pipe=$1
   if [ \( -n "$2" \) -a \( \( ! -f "$2" \) -o \( ! -w "$2" \) ]; then
     echo '*** Invalid argument #2' 1>&3
     exit 12
   fi
   file=$2
-  case "$3" in [01]) :;; *) echo '*** Invalid argument #3' 1>&3; exit 13;; esac
+  if [ \( "_$3" != '_0' \) -a \( "_$3" != '_1' \) ]; then
+    echo '*** Invalid argument #3' 1>&3
+    exit 13
+  fi
   del_the_pipe=$3
-  echo "_$4" | grep -q '^_[0-9]\+$' ||
-                          { echo '*** Invalid argument #4' 1>&3; exit 14; }
+  echo "_$4" | grep '^_[0-9]\+$' >/dev/null
+  [ $? -eq 0 ] || { echo '*** Invalid argument #4' 1>&3; exit 14; }
   ppid=$4
-  echo "_$5" | grep -q '^_[0-9]\+$' ||
-                          { echo '*** Invalid argument #5' 1>&3; exit 15; }
+  echo "_$5" | grep '^_[0-9]\+$' >/dev/null
+  [ $? -eq 0 ] || { echo '*** Invalid argument #5' 1>&3; exit 15; }
   cpid=$5
-  echo "_$6" | grep -q '^_[0-9]\+$' ||
-                          { echo '*** Invalid argument #6' 1>&3; exit 16; }
+  echo "_$6" | grep '^_[0-9]\+$' >/dev/null
+  [ $? -eq 0 ] || { echo '*** Invalid argument #6' 1>&3; exit 16; }
   timeout=$6
 
   # --- set exiting trap ---------------------------------------------
@@ -210,9 +212,9 @@ case $check in 'p')
     trap EXIT HUP INT QUIT PIPE ALRM TERM
     ret=${1:-0}
     # --- the gzipped pipe has been used or not? ---
-    while [ -f "${gz_file:-}" ]; do
-      check=$(cat "$gz_file")
-      case "$check" in '') break;; esac
+    while [ -f "${gzipret_file:-}" ]; do
+      check=$(cat "$gzipret_file")
+      [ -n "$check" ] || break
       ret=$check
       break
     done
@@ -221,8 +223,8 @@ case $check in 'p')
                  "${gzippedpipingjob_pid:-}" "${gzip_pid:-}" \
                  "${pollingsleep_pid:-}"
     # --- delete the unnecessary files ---
-    rm -f "${gz_file:-}"
-    case $del_the_pipe in 1) rm -f "$pipe";; esac
+    rm -f "${gzipret_file:-}"
+    [ $del_the_pipe -eq 1 ] && rm -f "$pipe"
     # --- finish ---
     exit $ret
   }
@@ -233,32 +235,32 @@ case $check in 'p')
 
   # --- make a temporary file ----------------------------------------
   if which mktemp >/dev/null 2>&1; then
-    gz_file=$(mktemp -t "${0##*/}.XXXXXXXX")
+    gzipret_file=$(mktemp -t "${0##*/}.XXXXXXXX")
   else
-    gz_file="/tmp/${0##*/}.$$"
-    touch "$gz_file"
-    chmod 600 "$gz_file"
+    gzipret_file="/tmp/${0##*/}.$$"
+    touch "$gzipret_file"
+    chmod 600 "$gzipret_file"
   fi
-  case $? in
-    0) :                                                        ;;
-    *) echo "${0##*/}: Can't make a tempfile" 1>&3; exit_trap 18;;
-  esac
+  if [ $? -ne 0 ]; then
+    echo "${0##*/}: Can't make a tempfile" 1>&3
+    exit_trap 18
+  fi
 
   # --- set my life time ---------------------------------------------
-  case $timeout in
-    0) :                                                                      ;;
-    *) pid=$$
-       { sleep $timeout; kill -s ALRM $pid; } &
-       timerjob_pid=$!
-       timersleep_pid=$(ps -Ao pid,ppid | awk '$2=='$timerjob_pid'{print $1}');;
-  esac
+  if [ $timeout -gt 0 ]; then
+    pid=$$
+    { sleep $timeout; kill -s ALRM $pid; } &
+    timerjob_pid=$!
+    timersleep_pid=$(ps -Ao pid,ppid | awk '$2=='$timerjob_pid'{print $1}')
+  fi
 
   # --- do the gzipped piping (hehave as a background job) -----------
   pid=$$
-  case "$file" in
-    '') { gzip <"$pipe"         ; echo $? >"$gz_file"; kill -s ALRM $pid; } & ;;
-    *)  { gzip <"$pipe" >"$file"; echo $? >"$gz_file"; kill -s ALRM $pid; } & ;;
-  esac
+  if [ -z "$file" ]; then
+    { gzip <"$pipe"         ; echo $? >"$gzipret_file"; kill -s ALRM $pid; } &
+  else
+    { gzip <"$pipe" >"$file"; echo $? >"$gzipret_file"; kill -s ALRM $pid; } &
+  fi
   gzippedpipingjob_pid=$!
   gzip_pid=$(ps -Ao pid,ppid | awk '$2=='${gzippedpipingjob_pid}'{print $1}')
     # TIPS: { gzip < namedpipe_which_is_received_nothing_yet; } &
@@ -269,7 +271,7 @@ case $check in 'p')
   # --- wait for termination of the caller (is not the parent) process
   while :; do
     kill -0 $cpid >/dev/null 2>&1
-    case $? in 0) :;; *) break;; esac
+    [ $? -ne 0 ] && break
     sleep 1 &
     pollingsleep_pid=$!
     wait $pollingsleep_pid

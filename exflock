@@ -44,7 +44,7 @@
 #              :
 #          kill $flock_pid
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2014/06/29
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/18
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -65,7 +65,7 @@ print_usage_and_exit () {
 	         <file> ......... the path of the file you want to lock
 	         [maxlifetime] .. the maximum life of the locking process (sec)
 	                          (0 means infinity, and default=$DEFAULT_MAXLIFETIME)
-	Version : Sun Jun 29 14:59:27 JST 2014
+	Version : Sun Jan 18 02:47:23 JST 2015
 __USAGE
   exit 1
 }
@@ -78,24 +78,24 @@ PATH='/usr/bin:/bin'
 
 # --- judge which is my flock command --------------------------------
 case $(uname) in
-  FreeBSD) CMD_flock='lockf' ;;
-  Linux)   CMD_flock='flock' ;;
-  NetBSD)  CMD_flock='flock' ;;
+  FreeBSD) CMD_flock='lockf'                   ;;
+  Linux)   CMD_flock='flock'                   ;;
+  NetBSD)  CMD_flock='flock'                   ;;
+  *)       echo 'Non-supported OS' 1>&2; exit 1;;
 esac
-[ -n "${CMD_flock:-}" ] || { echo 'Non-supported OS' 1>&2; exit 1; }
 
 # --- judge which I have started as a parent or a child --------------
 while :; do
   pid=$$
   check=$(ps -Ao pid,ppid | awk '$1=='$pid'{print $2}')
-  [ -n "${check}"     ] || { check='p'; break; }
+  case "$check" in                       '') check='p'; break;; esac
   check=$(ps -Ao pid,ppid,comm | awk '$1=='$check'{print $2,$3}')
-  [ "${check#* }" = "$CMD_flock" ] || { check='p'; break; }
+  case "${check#* }" in "$CMD_flock") :;; *) check='p'; break;; esac
   check=$(ps -Ao pid,ppid | awk '$1=='${check% *}'{print $2}')
-  [ -n "${check}"     ] || { check='p'; break; }
+  case "$check" in                       '') check='p'; break;; esac
   check=$(ps -Ao pid,ppid | awk '$1=='${check% *}'{print $2}')
-  [ -n "${check}"     ] || { check='p'; break; }
-  [ "$check" -eq "$1" ] || { check='p'; break; }
+  case "$check" in                       '') check='p'; break;; esac
+  case "$check" in              "$1") :;; *) check='p'; break;; esac
   check='c'; break;
 done
 
@@ -112,26 +112,26 @@ case $check in 'p')
   }
 
   # --- parse the arguments ------------------------------------------
-  [ $# -ne 0 ] || print_usage_and_exit
+  case $# in             0) print_usage_and_exit;; esac
   echo "_$1" | grep '^_[0-9]\{1,\}$' >/dev/null 2>&1
-  [ $? -eq 0 ] || print_usage_and_exit
+  case $? in      0) :;; *) print_usage_and_exit;; esac
   waitsec=$1
   shift
-  [ $# -ne 0 ] || print_usage_and_exit
+  case $# in             0) print_usage_and_exit;; esac
   [ -f "$1"  ] || print_usage_and_exit
   file=$1
   shift
-  [ $# -le 1 ] || print_usage_and_exit
-  if [ $# -eq 1 ]; then
-    echo "_$1" | grep '^_[0-9]\{1,\}$' >/dev/null 2>&1
-    [ $? -eq 0 ] || print_usage_and_exit
-    maxlifetime=$1
-  else
-    maxlifetime=$DEFAULT_MAXLIFETIME
-  fi
+  case $# in   [01]) :;; *) print_usage_and_exit;; esac
+  case $# in
+    1) echo "_$1" | grep -q '^_[0-9]\{1,\}$'
+       case $? in 0) :;; *) print_usage_and_exit;; esac
+       maxlifetime=$1                                   ;;
+    0) maxlifetime=$DEFAULT_MAXLIFETIME                 ;;
+  esac
 
   # --- make stderr silent -------------------------------------------
-  exec 2>&- >/dev/null 3>/dev/null # fd3 is only available for debugging
+  #exec 3>&2 2>/dev/null # fd3 is only available for debugging
+  exec 2>/dev/null 3>&2
 
   # --- enable the exit trap -----------------------------------------
   trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM
@@ -150,29 +150,32 @@ case $check in 'p')
     touch "$temp_datafile"
     chmod 600 "$temp_datafile"
   fi
-  [ $? -eq 0 ] || { echo "${0##*/}: Can't make a tempfile" 1>&3; exit_trap 2; }
+  case $? in
+    0) :                                                       ;;
+    *) echo "${0##*/}: Can't make a tempfile" 1>&3; exit_trap 2;;
+  esac
   echo -n "-$sleepjob_pid" > "$temp_datafile"
 
   # --- execute locking process, which is the child ------------------
   case $(uname) in
     FreeBSD)
       {
-        lockf -ks -t $waitsec "$file"           \
-        $0 "$pid" "$maxlifetime" "$temp_datafile" ||
+        lockf -ks -t $waitsec "$file"               \
+        "$0" "$pid" "$maxlifetime" "$temp_datafile" ||
         kill -s TERM $sleepjob_pid
       } &
       ;;
     Linux)
       {
-        flock --timeout=$waitsec "$file"        \
-        $0 "$pid" "$maxlifetime" "$temp_datafile" ||
+        flock --timeout=$waitsec "$file"            \
+        "$0" "$pid" "$maxlifetime" "$temp_datafile" ||
         kill -s TERM $sleepjob_pid
       } &
       ;;
     NetBSD)
       {
-        flock -x -w $waitsec "$file"            \
-        $0 "$pid" "$maxlifetime" "$temp_datafile" ||
+        flock -x -w $waitsec "$file"                \
+        "$0" "$pid" "$maxlifetime" "$temp_datafile" ||
         kill -s TERM $sleepjob_pid
       } &
       ;;
@@ -202,12 +205,12 @@ case $check in 'p')
   #   $3: file for telling my pid
 
   # --- validate the arguments ---------------------------------------
-  [ $# -eq 3 ] || { echo '*** Invalid arguments'   1>&3; exit 10; }
+  case $# in 3) :;; *) echo '*** Invalid arguments'   1>&3; exit 10;; esac
   echo "_$1" | grep '^_[0-9]\{1,\}$' >/dev/null
-  [ $? -eq 0 ] || { echo '*** Invalid argument #1' 1>&3; exit 11; }
+  case $? in 0) :;; *) echo '*** Invalid argument #1' 1>&3; exit 11;; esac
   echo "_$2" | grep '^_[0-9]\{1,\}$' >/dev/null
-  [ $? -eq 0 ] || { echo '*** Invalid argument #2' 1>&3; exit 12; }
-  [ -f "$3"  ] || { echo '*** Invalid argument #3' 1>&3; exit 13; }
+  case $? in 0) :;; *) echo '*** Invalid argument #2' 1>&3; exit 12;; esac
+  [ -f "$3"  ] ||    { echo '*** Invalid argument #3' 1>&3; exit 13; }
 
   # --- set exiting trap ---------------------------------------------
   exit_trap() {
@@ -224,16 +227,17 @@ case $check in 'p')
   kill -s TERM "$notify_pid"
 
   # --- set my life time ---------------------------------------------
-  if [ $2 -gt 0 ]; then
-    { sleep $2; kill -s ALRM $$ >/dev/null; } &
-    timerjob_pid=$!
-    timersleep_pid=$(ps -Ao pid,ppid | awk '$2=='$timerjob_pid'{print $1}')
-  fi
+  case $2 in
+    0) :                                                                      ;;
+    *) { sleep $2; kill -s ALRM $$ >/dev/null; } &
+       timerjob_pid=$!
+       timersleep_pid=$(ps -Ao pid,ppid | awk '$2=='$timerjob_pid'{print $1}');;
+  esac
 
   # --- wait for termination of the caller (is not the parent) process
   while :; do
     kill -0 $1 >/dev/null 2>&1
-    [ $? -ne 0 ] && break
+    case $? in 0) :;; *) break;; esac
     sleep 1 &
     pollingsleep_pid=$!
     wait $pollingsleep_pid
