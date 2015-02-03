@@ -6,10 +6,10 @@
 #
 # USAGE: mktemp [--by-myself] [options] [template [...]]
 #
-#        "--by-myself" ..... Not use the "built-in" mktemp command
+#        "--by-myself" ..... (write as the 1st argument when use)
+#                            Not use the "built-in" mktemp command
 #                            and always do mktemp by myself but it is
 #                            inferior to the built-in in performance
-#                            (write as the 1st argument when use)
 #        "-d" .............. Make a directory instead of a file
 #        "-p [DIR]" ........ Define the temporary directory instead of
 #                            $TMPDIR
@@ -19,7 +19,7 @@
 #                            in front of the filepath
 #        "--suffix=<suff>" . Add the suffix behind the filename
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/16
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/02
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -32,7 +32,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [options] [template [...]]
 	        : "-d" "-p [DIR]" "-q" "-u" "-t" "--suffix=<suff>"
-	Version : Sat Jan 17 21:00:55 JST 2015
+	Version : Mon Feb  2 21:53:44 JST 2015
 __USAGE
   exit 1
 }
@@ -40,8 +40,27 @@ __USAGE
 
 # ===== PREPARATION ==================================================
 
+# --- which command also works on Just a POSIX environment -----------
+which which >/dev/null 2>&1 || {
+  which () {
+    case "$1" in
+       /*) ls   "$1" 2>/dev/null; return $?;;
+      */*) ls "./$1" 2>/dev/null; return $?;;
+    esac
+    (
+      echo "$PATH" | tr ':' '\n' | while read dir; do
+        case "$dir" in '') break;; esac
+        ls "${dir%/}/$1" 2>/dev/null && exit 1 || continue
+      done
+      exit $((1-$?))
+    )
+    return $?
+  }
+}
+
 # --- set the command path -------------------------------------------
 PATH='/usr/bin:/bin'
+set -u
 
 # --- set the temporary directory ------------------------------------
 Dir_tmp=$(set | grep -q ^TMPDIR= | sed 's/^[^=]\{1,\}=//');
@@ -72,6 +91,7 @@ optt=0
 opts=''
 optmode=''
 while :; do
+  case $# in 0) break;; esac
   case "$optmode" in
     '') case "$1" in
           -[duqtp]*)   s=$(echo "_${1#-}"                                |

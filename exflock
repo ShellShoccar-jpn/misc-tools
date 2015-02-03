@@ -1,4 +1,4 @@
-#! /bin/sh
+#! /bin/sh -u
 
 ######################################################################
 #
@@ -44,7 +44,7 @@
 #              :
 #          kill $flock_pid
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/18
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/03
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -65,11 +65,28 @@ print_usage_and_exit () {
 	         <file> ......... the path of the file you want to lock
 	         [maxlifetime] .. the maximum life of the locking process (sec)
 	                          (0 means infinity, and default=$DEFAULT_MAXLIFETIME)
-	Version : Sun Jan 18 02:47:23 JST 2015
+	Version : Tue Feb  3 16:35:34 JST 2015
 __USAGE
   exit 1
 }
 
+# --- which command also works on Just a POSIX environment -----------
+which which >/dev/null 2>&1 || {
+  which () {
+    case "$1" in
+       /*) ls   "$1" 2>/dev/null; return $?;;
+      */*) ls "./$1" 2>/dev/null; return $?;;
+    esac
+    (
+      echo "$PATH" | tr ':' '\n' | while read dir; do
+        case "$dir" in '') break;; esac
+        ls "${dir%/}/$1" 2>/dev/null && exit 1 || continue
+      done
+      exit $((1-$?))
+    )
+    return $?
+  }
+}
 
 # ===== PREPARATION ==================================================
 

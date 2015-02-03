@@ -1,4 +1,4 @@
-#! /bin/sh
+#! /bin/sh -u
  
 ######################################################################
 #
@@ -39,7 +39,7 @@
 # Return: $?=0 (when all of the options are valid)
 #         stdout : HTTP Cookie string
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2014/06/27
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/18
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -65,7 +65,7 @@ print_usage_and_exit () {
 	          -h <"Y"|"N">       : for JavaScript restriction (HttpOnly)
 	                               "Y" is HttpOnly ON.
 	                               "N" is HttpOnly OFF (default).
-	Version : Sat Jun 28 18:51:06 JST 2014
+	Version : Sun Jan 18 23:46:26 JST 2015
 __USAGE
   exit 1
 }
@@ -155,60 +155,58 @@ for arg in "$@"; do
 done
 
 # --- validate the arguments -----------------------------------------
-if [ -n "$var" ]; then
-  echo "_$var" | grep '^_[^[:blank:]=]\{1,\}=' >/dev/null || print_usage_and_exit
-fi
-if [ -n "$eopt" ]; then
-  check=$(echo "_$eopt"                                                                            |
-          awk '                                                                                    #
-            /^_[0-9]+[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$/ {         #
-              print substr($0,2), 0;                                                               #
-              exit;                                                                                #
-            }                                                                                      #
-            /^_\+[0-9]+$/ {                                                                        #
-              print "_", substr($0,3);                                                             #
-              exit;                                                                                #
-            }                                                                                      #
-            /^_[0-9]+[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]\+[0-9]+$/ { #
-              pos = index($0,"+");                                                                 #
-              print substr($0,2,pos-2), substr($0,pos+1);                                          #
-              exit;                                                                                #
-            }                                                                                      #
-            {                                                                                      #
-              print "!";                                                                           #
-              exit;                                                                                #
-            }'                                                                                     )
-  [ "$check" != '!' ] || print_usage_and_exit
-  datetime=${check% *}
-  [ "$datetime" = '_' ] && datetime=$(date -u '+%Y%m%d%H%M%S')
-  lifetime=${check#* }
-fi
-if [ -n "$popt" ]; then
-  path=$(    printf '%s' "$popt" | tr -d ';\n'         )
-  [ "_$path"     = "_$popt" ] || print_usage_and_exit
-fi
-if [ -n "$dopt" ]; then
-  domain=$(  printf '%s' "$dopt" | tr -Cd 'A-Za-z0-9.-')
-  [ "_$domain"   = "_$dopt" ] || print_usage_and_exit
-fi
-if [ -n "$sopt" ]; then
-  secure=$(  printf '%s' "$sopt" | tr -Cd 'A-Za-z'     )
-  [ "_$secure"   = "_$sopt" ] || print_usage_and_exit
-  https=$(printf '%s' "${HTTPS:-off}" | tr -Cd 'A-Za-z')
-fi
-if [ -n "$hopt" ]; then
-  httponly=$(printf '%s' "$hopt" | tr -Cd 'A-Za-z'     )
-  [ "_$httponly" = "_$hopt" ] || print_usage_and_exit
-fi
+echo "_$var" | grep -Eq "$(printf '^_([^ \t=]+=)?')" || print_usage_and_exit
+case "$eopt" in
+  '') ;;
+   *) check=$(echo "_$eopt"                                                                           |
+             awk '                                                                                    #
+               /^_[0-9]+[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$/ {         #
+                 print substr($0,2), 0;                                                               #
+                 exit;                                                                                #
+               }                                                                                      #
+               /^_\+[0-9]+$/ {                                                                        #
+                 print "_", substr($0,3);                                                             #
+                 exit;                                                                                #
+               }                                                                                      #
+               /^_[0-9]+[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]\+[0-9]+$/ { #
+                 pos = index($0,"+");                                                                 #
+                 print substr($0,2,pos-2), substr($0,pos+1);                                          #
+                 exit;                                                                                #
+               }                                                                                      #
+               {                                                                                      #
+                 print "!";                                                                           #
+                 exit;                                                                                #
+               }'                                                                                     )
+     case "$check"    in '!') print_usage_and_exit               ;; esac
+     datetime=${check% *}
+     case "$datetime" in '_') datetime=$(date -u '+%Y%m%d%H%M%S');; esac
+     lifetime=${check#* }
+     ;;
+esac
+case "$popt" in '') ;;
+  *) path=$(    printf '%s' "$popt" | tr -d ';\n'         )
+     case "$path"     in "$popt") :;; *) print_usage_and_exit;; esac;;
+esac
+case "$dopt" in '') ;;
+  *) domain=$(  printf '%s' "$dopt" | tr -Cd 'A-Za-z0-9.-')
+     case "$domain"   in "$dopt") :;; *) print_usage_and_exit;; esac;;
+esac
+case "$sopt" in '') ;;
+  *) secure=$(  printf '%s' "$sopt" | tr -Cd 'A-Za-z'     )
+     case "$secure"   in "$sopt") :;; *) print_usage_and_exit;; esac;;
+esac
+case "$hopt" in '') ;;
+  *) httponly=$(printf '%s' "$hopt" | tr -Cd 'A-Za-z'     )
+     case "$httponly" in "$hopt") :;; *) print_usage_and_exit;; esac;;
+esac
 
 
 # --- print the basic part of cookie (with URL encoding) -------------
-if [ -n "$var" ]; then                                                         #
-  printf '%s %s\n' "${var%%=*}" "${var#*=}"                                    #
-else                                                                           #
-  cat                                                                          #
-fi                                                                             |
-env - path="$path" awk '                                                       #
+case "$var" in                                                                 #
+  '') cat                                                                     ;;
+   *) printf '%s %s\n' "${var%%=*}" "${var#*=}"                               ;;
+esac                                                                           |
+env - path="${path:-}" awk '                                                   #
   BEGIN {                                                                      #
     # --- prepare                                                              #
     LF = sprintf("\n");                                                        #
@@ -224,18 +222,18 @@ env - path="$path" awk '                                                       #
     c2a["-"]="-"; c2a["."]="."; c2a["_"]="_"; c2a["~"]="~";                    #
     # --- make the additional variables                                        #
     s = "'"${datetime:-}"'";                                                   #
-    if (s != "") { addvar = addvar expires_var(s,"'"$lifetime"'"); }           #
+    if (s != "") { addvar = addvar expires_var(s,"'"${lifetime:-}"'"); }       #
     s = ENVIRON["path"];                                                       #
-    if (s != "") { addvar = addvar sprintf("; path=%s", s);        }           #
+    if (s != "") { addvar = addvar sprintf("; path=%s", s);            }       #
     s = "'"${domain:-}"'";                                                     #
-    if (s != "") { addvar = addvar sprintf("; domain=%s", s);      }           #
+    if (s != "") { addvar = addvar sprintf("; domain=%s", s);          }       #
     s = "'"${secure:-AUTO}"'";                                                 #
     if (match(s,/^[Yy]/)) {                                                    #
       addvar = addvar "; Secure";                                              #
-    } else if (match(s,/^[Aa]/) && (match("'"$https"'",/^[Oo][Nn]$/))) {       #
+    } else if (match(s,/^[Aa]/) && (match("'"${HTTPS:-}"'",/^[Oo][Nn]$/))) {   #
       addvar = addvar "; Secure";                                              #
     }                                                                          #
-    if (match("'"$httponly"'",/^[Yy]/)) { addvar = addvar "; HttpOnly"; }      #
+    if (match("'"${httponly:-}"'",/^[Yy]/)) { addvar = addvar "; HttpOnly"; }  #
   }                                                                            #
   {                                                                            #
     pos = index($0," ");                                                       #

@@ -1,4 +1,4 @@
-#! /bin/sh
+#! /bin/sh -u
 
 ######################################################################
 #
@@ -47,7 +47,7 @@
 #   That means, you can join various filters to fd=2 (stderr). Although
 #   it is very tricky. ;-)
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/18
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/03
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -64,9 +64,27 @@ DEFAULT_TIMEOUT=600
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [-t timeout] <named_pipe_to_use> [output_file]
-	Version : Sun Jan 18 04:48:59 JST 2015
+	Version : Tue Feb  3 16:36:39 JST 2015
 __USAGE
   exit 1
+}
+
+# --- which command also works on Just a POSIX environment -----------
+which which >/dev/null 2>&1 || {
+  which () {
+    case "$1" in
+       /*) ls   "$1" 2>/dev/null; return $?;;
+      */*) ls "./$1" 2>/dev/null; return $?;;
+    esac
+    (
+      echo "$PATH" | tr ':' '\n' | while read dir; do
+        case "$dir" in '') break;; esac
+        ls "${dir%/}/$1" 2>/dev/null && exit 1 || continue
+      done
+      exit $((1-$?))
+    )
+    return $?
+  }
 }
 
 
@@ -91,6 +109,12 @@ done
 
 case $check in 'p')
 
+  # --- make sure that gzip command exists ---------------------------
+  which gzip >/dev/null 2>&1 || {
+    echo "${0##*/}: gzip command is not found" 1>&2
+    exit 1
+  }
+
   # --- exit trap (for parent) ---------------------------------------
   exit_trap() {
     trap EXIT HUP INT QUIT PIPE ALRM TERM
@@ -104,7 +128,7 @@ case $check in 'p')
   case "$1" in
     -t) shift
         case $# in                          0) print_usage_and_exit;; esac
-        printf '%s' "$1" | grep -q '[^0-9]' || print_usage_and_exit
+        printf '%s' "$1" | grep -q '[^0-9]' && print_usage_and_exit
         timeout=$1
         shift
         ;;
@@ -148,8 +172,8 @@ case $check in 'p')
   esac
 
   # --- make stderr silent -------------------------------------------
-  #exec 3>&2 2>/dev/null 1>&2 # fd3 is only available for debugging
-  exec 2>/dev/null 1>&2 3>&2
+  #exec 3>&2 2>/dev/null # fd3 is only available for debugging
+  exec 2>/dev/null 3>&2
 
   # --- prepare for locking ------------------------------------------
   sleep 100 & # This is to wait that the child process is ready

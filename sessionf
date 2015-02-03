@@ -39,7 +39,7 @@
 # * On "validate", "reuse" and "remove" subcommands, you can set the session
 #   file directory in the <id> argument instead of the "at" argument.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2014/06/27
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/26
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -48,7 +48,9 @@
 ######################################################################
 
 # --- initalization --------------------------------------------------
+set -u
 PATH=/usr/bin:/bin
+Homedir="$(d=${0%/*}/; [ "_$d" = "_$0/" ] && d='./'; cd "$d"; pwd)"
 #
 if [ \( -f "${0%/*}/mkstemp" \) -a \( -x "${0%/*}/mkstemp" \) ]; then
   CMD_MKTEMP="${0%/*}/mkstemp"

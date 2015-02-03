@@ -2,14 +2,13 @@
 
 ######################################################################
 #
-# MKSTEMP : A wrapper of mktemp(1) to behave as a equivalent of mkstemp(1)
+# MKSTEMP : A wrapper of mktemp(1) to behave as a equivalent of mkstemp(3)
 #
-# Usage  : mkstemp [mktemp(1)options] <template>
+# Usage  : mkstemp <mktemp(1)arguments>
 #
-# * <template> is necessary. And only 1.
 # * "mktemp(1) options" depend on mktemp(1) on the host
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2013/11/09
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/26
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -22,75 +21,236 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [mktemp(1)options] <template>
 	          "mktemp(1) options" depend on mktemp(1) on the host.
-	Version : Sat Nov 09 23:23:10 JST 2013
+	Version : Mon Jan 26 15:22:35 JST 2015
 __USAGE
   exit 1
 }
 
-# --- definition: characters for substituting the "XXX..." string ----
+
+##### PREPARATION ####################################################
+
+# --- initialization -------------------------------------------------
+set -u
+PATH='/usr/bin:/bin'
+
+
+# --- use the built-in mktemp command if not need to do by myself ----
+which mktemp >/dev/null 2>&1
+case $? in
+  0) [ -f /etc/issue ] && grep -q '^CentOS.* 5\.[0-9]' /etc/issue
+     case $? in
+       0) do_by_myself=1;;
+       *) do_by_myself=0;;
+     esac                 ;;
+  *)      do_by_myself=1  ;;
+esac
+
+
+# --- call the bult-in mktemp if do_by_myself==0 ---------------------
+case $do_by_myself in
+  0) exec mktemp "$@";;
+esac
+
+
+
+##### DO MKTEMP BY MYSELF ############################################
+
+# ===== PREPARATION ==================================================
+
+# --- set the command path -------------------------------------------
+PATH='/usr/bin:/bin'
+
+# --- set the temporary directory ------------------------------------
+Dir_tmp=$(set | grep -q ^TMPDIR= | sed 's/^[^=]\{1,\}=//');
+case "$Dir_tmp" in
+  '') Dir_tmp='/tmp'      ;;
+  /)  Dir_tmp='/.'        ;;
+  *)  Dir_tmp=${Dir_tmp%/};;
+esac
+
+# --- misc -----------------------------------------------------------
 chrs='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_'
-xchrslen=$(echo "obase=16;${#chrs}" | bc)
+max_retry_when_failed=10
+LF=$(printf '\\\n_');LF=${LF%_}
 
-# --- parse the arguments --------------------------------------------
-[ $# -ge 1 ] || print_usage_and_exit
-i=1
-options=''
+
+# ===== OPTION PARSING ===============================================
+
+optd=0
+optu=0
+optq=0
+optt=0
+opts=''
+optmode=''
+while :; do
+  case "$optmode" in
+    '') case "$1" in
+          -[duqtp]*)   s=$(echo "_${1#-}"                                |
+                           awk '{d = "_"; u = "_"; q = "_";              #
+                                 t = "_"; p = "_"; err = 0;              #
+                                 for (i=2;i<=length($0);i++) {           #
+                                   s = substr($0,i,1);                   #
+                                   if      (s == "d") { d   = "d"; }     #
+                                   else if (s == "u") { u   = "u"; }     #
+                                   else if (s == "q") { q   = "q"; }     #
+                                   else if (s == "t") { t   = "t"; }     #
+                                   else if (s == "p") { p   =  p ; }     #
+                                   else               { err =  1 ; }     #
+                                 }                                       #
+                                 p = (substr($0,i-1)=="p") ? "p" : "_";  #
+                                 printf("%s%s%s%s%s%s",d,u,q,t,p,err); }')
+                       case "$s" in *1*) print_usage_and_exit;; esac
+                       case "$s" in *d*) optd=1              ;; esac
+                       case "$s" in *u*) optu=1              ;; esac
+                       case "$s" in *q*) optq=1              ;; esac
+                       case "$s" in *t*) optt=1              ;; esac
+                       case "$s" in *p*) optmode='p'         ;; esac
+                       shift; continue
+                       ;;
+          --directory) optd=1     ; shift; continue;;
+          --dry-run)   optu=1     ; shift; continue;;
+          --quiet)     optq=1     ; shift; continue;;
+          --tmpdir)                 shift; continue;;
+          --tmpdir=*)  optmode='p'
+                       s=${1#--tmpdir=}            ;;
+          --suffix=*)  optmode='s'
+                       s=${1#--suffix=}            ;;
+          -*)          print_usage_and_exit ;;
+        esac                                         ;;
+    *)  s=$1                                         ;;
+  esac
+  case "$optmode" in
+    p) [ -d "$s" ] || {
+         echo "${0##*/}: Invalid path by -p,--tmpdir option" 1>&2
+         exit 1
+       }
+       Dir_tmp=${s%/}; [ -n "$Dir_tmp" ] || Dir_tmp='/.'
+       optmode=''; shift; continue        ;;
+    s) { printf '%s' "$s" | grep -q '/'; } && {
+         echo "${0##*/}: Invalid suffix option" 1>&2
+         exit 1
+       }
+       opts=$s
+       optmode=''; shift; continue        ;;
+  esac
+  break
+done
+
+
+# ===== FUNC: random string generator ================================
+# arg   : $1=length
+# ret   : 0
+# stdout: generated random string
+random_string () {
+  # calculate the number of words which required
+  nw=$(echo "${1}*l(${#chrs})/11.09+1" | # 11.09=ln(65536)
+       bc -l                           |
+       sed 's/\..*$//'                 )
+
+  # make a random hexadecimal digit
+  if [ -c /dev/urandom ]; then
+    hstr=$(dd if=/dev/urandom bs=2 count=$nw 2>/dev/null |
+           od -A n -t x2 -v                              |
+           tr 'abcdef ' 'ABCDEF\n'                       |
+           tr -Cd 0123456789ABCDEF                       )
+  else
+    hstr=$( (ps -Ao pid,etime,pcpu,vsz; date)         |
+           od -t d4 -A n -v                           |
+           sed 's/[^0-9]\{1,\}/'"$LF"'/g'             |
+           grep '[0-9]'                               |
+           tail -n 42                                 |
+           sed 's/.*\(.\{8\}\)$/\1/g'                 |
+           awk 'BEGIN{a=-2147483648;}                 #
+                     {a+=$1;        }                 #
+                END  {                                #
+                  srand(a);                           #
+                  for(i=0;i<'$nw';i++){               #
+                    printf("%02X",int(rand()*65536)); #
+                  }                                   #
+                }'                                    )
+  fi
+
+  # make a random string from the hexadecimal digit
+  echo "obase=${#chrs};ibase=16;$hstr"         |
+  bc                                           |
+  tr -d '\\\n'                                 |
+  tr ' ' '\n'                                  |
+  awk 'BEGIN  {for(i=1;i<'$1';i++){print 0;}}  #
+       /[0-9]/{print;                       }' |
+  awk 'BEGIN  {ORS="";                         #
+               s="'"$chrs"'";                  #
+               for(i=0;i<length(s);i++){       #
+                 c[i]=substr(s,i+1,1);         #
+               }                        }      #
+       /[0-9]/{print c[$0*1];           }'     |
+  tail -c $1
+}
+
+
+# ===== MAKING LOOP ==================================================
+
+case $# in 0) optt=1; set -- 'tmp.XXXXXXXXXX';; esac
+
+err=0
 for arg in "$@"; do
-  if [ $i -lt $# ]; then
-    options="$options $arg"
-  else
-    template=$arg
-  fi
-  i=$((i+1))
-done
 
-# --- separate filepath ----------------------------------------------
-s=${template%/*}
-if [ "_$s" != "_$template" ]; then
-  path=$s
-else
-  path='.'
-fi
+  n=$max_retry_when_failed
+  while [ $n -ge 0 ]; do
 
-# --- count the number of the tail "X" characters --------------------
-template_without_x=$(echo "_$template" | sed '1s/^_//' | sed 's/X*$//')
-variable_len=$((${#template}-${#template_without_x}))
+    # --- Making the file path ---------------------------------------
+    #
+    # replace the end of "XXX..." string to a random one
+    Path_target=$arg
+    s=$(printf '%s' "$Path_target" | sed 's/X*$//')
+    i=$((${#Path_target}-${#s}))
+    case $i in
+      0) :                                    ;;
+      *) Path_target="${s}$(random_string $i)";;
+    esac
+    #
+    # add the suffix
+    Path_target="${Path_target}${opts}"
+    #
+    # add the prefix if the option -t is enabled
+    case $optt in 1) Path_target="${Dir_tmp}/${Path_target}";; esac
+    #
+    # normalize
+    Path_target=$(printf '%s' "$Path_target" |
+                  sed 's!//!/!g'             |
+                  sed 's!/./!/!g'            )
 
-# --- validate the path ----------------------------------------------
-[ -d "$path" ] || { echo "${0##*/}: No such directory" 1>&2; exit 1; }
+    # --- Making the file --------------------------------------------
+    case $optd in
+      0) (set -C; umask 177;   : > "$Path_target") 2>/dev/null || {
+           [ -f "$Path_target" ] && { n=$((n-1)); continue; }
+           n=-1; break;
+         }
+         ;;
+      1)          umask 077; mkdir "$Path_target"  2>/dev/null || {
+           [ -d "$Path_target" ] && { n=$((n-1)); continue; }
+           n=-1; break;
+         }
+         ;;
+    esac
 
-# --- make a temporary file (for non "X" terminated string) ----------
-if [ $variable_len -eq 0 ]; then
-  exec mktemp $options "$template_without_x"
-fi
-
-# --- make a temporary file (for "X" terminated string) --------------
-bytes=$(awk 'BEGIN{print int('$variable_len'*log('${#chrs}')/log(256))+1}')
-i=100  # <- time to retry
-while [ $i -gt 0 ]; do
-  i=$((i-1))
-  rndstr=$(cat /dev/urandom                                         |
-           head -c $bytes                                           |
-           od -v -An -tx1                                           |
-           tr -Cd '0-9a-fA-F'                                       |
-           tr 'a-f' 'A-F'                                           |
-           awk '{print "ibase=16; obase='$xchrslen'; " $1}'         |
-           bc                                                       |
-           tr -d '\\\n'                                             |
-           awk '{ORS="";                                            #
-                 split("'"$chrs"'",chrs,""); split($0,digits);      #
-                 for (pos in digits) {print chrs[digits[pos]+1];}}' |
-           head -c $variable_len                                    )
-  if [ $i -gt 0 ]; then
-    made_file=$(mktemp $options "$template_without_x$rndstr" 2>/dev/null)
-    [ $? -eq 0        ] || continue
-    [ -n "$made_file" ] || continue
     break
-  else
-    exec mktemp $options "$template_without_x$rndstr"
-  fi
-done
-echo "$made_file"
+  done
 
-# --- finish ---------------------------------------------------------
-exit 0
+  # --- print error message when failed to make a file ---------------
+  case "${optq}${n}" in
+    '0-1') echo "${0##*/}: failed on $Path_target" 1>&2; err=1; continue;;
+    '1-1')                                               err=1; continue;;
+  esac
+
+  # --- print the path of the file -----------------------------------
+  echo "$Path_target"
+
+  # --- remove the file if -u,--dry-run option is set ----------------
+  case $optu in 1) rm -rf "$Path_target";; esac
+
+done
+
+
+# ===== EXIT =========================================================
+
+exit $err

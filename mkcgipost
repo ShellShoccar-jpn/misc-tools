@@ -1,4 +1,4 @@
-#! /bin/sh
+#! /bin/sh -u
  
 ######################################################################
 #
@@ -18,7 +18,7 @@
 # Return: $?=0 (when all of the arguments are valid)
 #         stdout : encoded CGI variables for HTTP POST(GET)
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2014/11/22
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/18
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -32,22 +32,19 @@ PATH=/usr/bin:/bin
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} <file>
-	Version : Sat Nov 22 11:38:19 JST 2014
+	Version : Sun Jan 18 23:18:21 JST 2015
 __USAGE
   exit 1
 }
 
 # --- parse arguments ------------------------------------------------
-[ $# -lt 2 ] || print_usage_and_exit
-if [ $# -eq 1 ]; then
-  case "$1" in
-    -h|--help|--version) print_usage_and_exit;;
-  esac
-  [ -f "$1" ] || print_usage_and_exit
-  file=$1
-else
-  file='-'
-fi
+case $# in
+  0) file='-'                                                     ;;
+  1) case "$1" in -h|--help|--version) print_usage_and_exit;; esac
+     [ -f "$1" ] || print_usage_and_exit
+     file=$1                                                      ;;
+  *) print_usage_and_exit                                         ;;
+esac
 
 
 # --- generate HTTP POST string --------------------------------------

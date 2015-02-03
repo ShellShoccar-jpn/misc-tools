@@ -1,10 +1,8 @@
-#! /bin/sh
+#! /bin/sh -u
 
 ######################################################################
 #
 # FSED : flexible sed (looks like the fgrep)
-#
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2014/04/08
 #
 # Usage  : fsed <pattern_str> <substitute_str> <file>
 #
@@ -12,6 +10,8 @@
 #   ignores all of the functions which every meta-character of regular
 #   expression has, so that you can very easily substitute strings
 #   include various meta-characters, e.g. ^, $, \, /, &, and so on.
+#
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/18
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -23,24 +23,25 @@
 print_usage_and_exit () {
   cat <<__USAGE 1>&2
 Usage   : ${0##*/} <pattern_str> <substitute_str>
-Version : Tue Apr 08 01:38:30 JST 2014
+Version : Sun Jan 18 22:12:40 JST 2015
 __USAGE
   exit 1
 }
 
 # parse the arguments
-if   [ \( $# -le 1 \) -o  \( $# -ge 4 \) ]; then
-  print_usage_and_exit
-elif [ $# -eq 3 ]; then
-  if [ \( -f "$3" \) -o \( -c "$3" \) -o \( -p "$3" \) -o \( "_$3" = '_-' \) ]; then
-    file=$3
-  else
-    echo '*** No such file found' 1>&2
-    print_usage_and_exit
-  fi
-else
-  file='-'
-fi
+case $# in
+  3) if [ \( -f "$3"      \) -o \
+          \( -c "$3"      \) -o \
+          \( -p "$3"      \) -o \
+          \( "_$3" = '_-' \)     ]; then
+       file=$3
+     else
+       echo '*** No such file found' 1>&2
+       print_usage_and_exit
+     fi                                  ;;
+  2) file='-'                            ;;
+  *) print_usage_and_exit                ;;
+esac
 pat=$(printf '%s' "$1"            |
       sed 's/\([].\*/[]\)/\\\1/g' |
       sed 's/^\^/\\^/'            |
@@ -49,8 +50,7 @@ sub=$(printf '%s' "$2"         |
       sed 's/\([\&/]\)/\\\1/g' )
 
 # transformation
-if [ "_$file" = '_-' ]; then
-  sed "s/$pat/$sub/g"
-else
-  sed "s/$pat/$sub/g" "$file"
-fi
+case "$file" in
+  -) sed "s/$pat/$sub/g"        ;;
+  *) sed "s/$pat/$sub/g" "$file";;
+esac
