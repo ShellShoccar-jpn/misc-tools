@@ -17,7 +17,7 @@
 #                         from wrapping.
 #        "-i" ........... When decoding, ignore non-alphabet characters.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/03
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/04
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -30,7 +30,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [-w <COLS>] <file>
 	          ${0##*/} [--by-myself] -d [-i] <file>
-	Version : Tue Feb  3 03:42:30 JST 2015
+	Version : Wed Feb  4 04:10:07 JST 2015
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
 	        :   * Although the bult-in base64 command or GNU AWK produces
 	        :     better performance than the POSIX command set
@@ -69,7 +69,7 @@ case "${1:-}" in
 esac
 
 # --- check whether this host has a "binarable" AWK command or not ---
-binarable_awk=0
+binarable_awk=1
 while :; do
   CMD_AWK=$(which gawk 2>/dev/null)
   [ $? -eq 0 ] && break
@@ -262,15 +262,18 @@ case $mode$binarable_awk in
             fmt[s]  = sprintf("%c",i);                                        #
             fmtl[s] = 1              ;                                        #
           }                                                                   #
-          fmt["00100101"]="%%"         ; fmtl["00100101"]=2;                  #
-          fmt["01011100"]="\\\\\\\\"   ; fmtl["01011100"]=4;                  #
-          fmt["00000000"]="\\\\000"    ; fmtl["00000000"]=5;                  #
-          fmt["00001010"]="\\\\n"      ; fmtl["00001010"]=3;                  #
-          fmt["00001101"]="\\\\r"      ; fmtl["00001101"]=3;                  #
-          fmt["00001001"]="\\\\t"      ; fmtl["00001001"]=3;                  #
-          fmt["00100000"]="\\\\040"    ; fmtl["00100000"]=5;                  #
-          fmt["00100010"]="\\\\\\\""   ; fmtl["00100010"]=4;                  #
-          fmt["00100111"]="\\\\\\'"'"'"; fmtl["00100111"]=4;                  #
+          fmt["00100101"]="%%"      ; fmtl["00100101"]=2; # "%"               #
+          fmt["01011100"]="\\\\\\\\"; fmtl["01011100"]=4; # (back slash)      #
+          fmt["00000000"]="\\\\000" ; fmtl["00000000"]=5; # (null)            #
+          fmt["00001010"]="\\\\n"   ; fmtl["00001010"]=3; # (Line Feed)       #
+          fmt["00001101"]="\\\\r"   ; fmtl["00001101"]=3; # (Carriage Return) #
+          fmt["00001001"]="\\\\t"   ; fmtl["00001001"]=3; # (tab)             #
+          fmt["00001011"]="\\\\v"   ; fmtl["00001011"]=3; # (Vertical Tab)    #
+          fmt["00001100"]="\\\\f"   ; fmtl["00001100"]=3; # (Form Feed)       #
+          fmt["00100000"]="\\\\040" ; fmtl["00100000"]=5; # (space)           #
+          fmt["00100010"]="\\\""    ; fmtl["00100010"]=2; # (double quot)     #
+          fmt["00100111"]="\\'"'"'" ; fmtl["00100111"]=2; # (single quot)     #
+          fmt["00101101"]="\\\\055" ; fmtl["00101101"]=5; # "-"               #
           # 2) make the table of Base64-character-to-binary-digits            #
           for(i=0;i<26;i++){                                                  #
             s = sprintf("%02o\n",i);                                          #
@@ -318,9 +321,26 @@ case $mode$binarable_awk in
             }                                                                 #
             buf = substr(buf, int(length(buf)/4)*4+1);                        #
           }                                                                   #
+          if (NR>0) {print LF;}                                               #
         }'                                                                    |
-      xargs -n 1 printf
+      xargs -n 1 printf 2>/dev/null
       ;;
+      # MEMO: transition of some special letters                           #
+      #       from the above AWK to "xargs printf"                         #
+      #                                                                    #
+      # 1) description in AWK                                              #
+      # 2) interpreted and outputed to stdout by AWK                       #
+      #    (and it is for auto-description on arguement of "xargs printf") #
+      # 3) interpreted and sent by shell to "printf" as an arguement       #
+      # 4) interpreted and outputed to stdout by "printf"                  #
+      #                                                                    #
+      # [chr]     1) -------> 2) -------> 3) -------> 4)                   #
+      # %      :  "%%"        %%          %%          %                    #
+      # \      :  "\\\\\\\\"  \\\\        \\          \                    #
+      # <NULL> :  "\\\\000"   \\000       \000        <NULL>               #
+      # <LF>   :  "\\\\n"     \\n         \n          <LF>                 #
+      # "      :  "\\\""      \"          "           "                    #"
+      # '      :  "\\'"'"'"   \'          '           '                    #'
   d1) case "$file" in                                                         #
         -) fold -b -w 508        ;;                                           #
         *) fold -b -w 508 "$file";;                                           #
