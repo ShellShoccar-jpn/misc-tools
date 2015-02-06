@@ -15,7 +15,7 @@
 #
 # Return : $?に判定結果
 #
-# Written by Rich Mikan(richmikan@richlab.org) at 2015/01/18
+# Written by Rich Mikan(richmikan@richlab.org) at 2015/02/07
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -27,7 +27,7 @@
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} <file>
-	Version : Sun Jan 18 23:08:01 JST 2015
+	Version : Sat Feb  7 00:44:28 JST 2015
 __USAGE
   exit 1
 }
@@ -43,9 +43,10 @@ else
   print_usage_and_exit
 fi
 if [ \( ! -r "$file" \) -a \( "_$file" != '_-' \) ]; then
-  echo "${0##*/}: Cannot open the file" 1>&2
+  printf '%s\n' "${0##*/}: Cannot open the file" 1>&2
   exit 1
 fi
+case "$file" in -) :;; -*) file="./$file";; esac
 
 # main
 exec env - awk '

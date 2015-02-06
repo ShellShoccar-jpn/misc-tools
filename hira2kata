@@ -12,7 +12,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [+<n>h] <f1> <f2> ... <file>
 	        : ${0##*/} -d <string>
-	Version : Sun Jan 18 22:40:26 JST 2015
+	Version : Sat Feb  7 00:37:00 JST 2015
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands/UTF-8)
 __USAGE
   exit 1
@@ -43,7 +43,7 @@ for arg in "$@"; do
     directmode=1
     continue
   elif [ \( $opt_part -ne 0 \) -a \( "_$arg" != "_${arg#+}" \) ]; then
-    s=$(echo "_$arg" | sed 's/^_+\([0-9]*\)h$/\1/')
+    s=$(printf '%s\n' "$arg" | sed 's/^+\([0-9]*\)h$/\1/')
     case "$s" in "$arg") print_usage_and_exit;; esac
     case "$s" in     '') hopt=1; continue    ;; esac
     hopt=$(expr $s + 0)
@@ -65,10 +65,10 @@ for arg in "$@"; do
   # check both
   j=0
   for s in $arg1 $arg2; do
-    if echo "_$s" | grep -q '^_[0-9]\{1,\}$'; then
+    if printf '%s\n' "$s" | grep -q '^[0-9]\{1,\}$'; then
       j=$((j+1))
       case "$s" in 0) all_fields=1;; esac
-    elif echo "_$s" | grep -Eq '^_(NF|NF-[0-9]+)$'; then
+    elif printf '%s\n' "$s" | grep -Eq '^(NF|NF-[0-9]+)$'; then
       j=$((j+1))
     fi
   done
@@ -99,7 +99,7 @@ case $directmode in
      then
        print_usage_and_exit
      elif [ \( ! -r "$file" \) -a \( "_$file" != '_-' \) ]; then
-       echo "${0##*/}: Cannot open the file" 1>&2
+       printf '%s\n' "${0##*/}: Cannot open the file" 1>&2
        exit 1
      fi
      ;;
@@ -107,6 +107,7 @@ case $directmode in
      file=''
      ;;
 esac
+case "$file" in -) :;; -*) file="./$file";; esac
 
 # make the part of the awk code
 case $all_fields in

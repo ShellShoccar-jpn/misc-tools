@@ -39,7 +39,7 @@
 # * On "validate", "reuse" and "remove" subcommands, you can set the session
 #   file directory in the <id> argument instead of the "at" argument.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/26
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/07
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -50,7 +50,7 @@
 # --- initalization --------------------------------------------------
 set -u
 PATH=/usr/bin:/bin
-Homedir="$(d=${0%/*}/; [ "_$d" = "_$0/" ] && d='./'; cd "$d"; pwd)"
+Homedir=$(cd $(dirname "$0") && pwd)
 #
 if [ \( -f "${0%/*}/mkstemp" \) -a \( -x "${0%/*}/mkstemp" \) ]; then
   CMD_MKTEMP="${0%/*}/mkstemp"
@@ -61,7 +61,7 @@ fi
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} <subcommand> [argument] ...
-	Version : Fri Jun 27 07:07:46 JST 2014
+	Version : Sat Feb  7 01:46:59 JST 2015
 __USAGE
   exit 1
 }
@@ -73,29 +73,34 @@ dir=''
 idtmpl=''
 lifemin=''
 [ $# -ge 2 ] || print_usage_and_exit
-echo "_$1" | grep '^_[a-z]\{1,\}$' >/dev/null || print_usage_and_exit
+printf '%s\n' "$1" | grep -q '^[a-z]\{1,\}$' || print_usage_and_exit
 subcmd=$1
 shift
 if [ "$subcmd" != 'create' ]; then
   id=${1##*/}
-  echo "_$1" | grep '/' >/dev/null && dir=${1%/*} && [ -z "$dir" ] && dir='/'
+  printf '%s\n' "$1" | grep -q '/' && dir=${1%/*} && [ -z "$dir" ] && dir='/'
   shift
 fi
 for arg in "$@"; do
   case "$arg" in
     at=*)
       check=${arg#at=}
-      if echo "_$check" | grep '/' >/dev/null; then
+      if printf '%s\n' "$check" | grep -q '/'; then
         dir=${check%/*} && [ -z "$dir" ] && dir='/'
         idtmpl=${check##*/}
       else
         dir='.'
         idtmpl=$check
       fi
-      [ -d "$dir" ] || { echo "${0##*/}: directory not found"; exit 1; }
+      [ -d "$dir" ] || {
+        printf '%s\n' "${0##*/}: directory not found"
+        exit 1
+      }
       ;;
     lifemin=*)
-      echo "$arg" | grep '^lifemin=[0-9]\{1,\}$' >/dev/null || print_usage_and_exit
+      printf '%s\n' "$arg"                     |
+      grep '^lifemin=[0-9]\{1,\}$' >/dev/null ||
+      print_usage_and_exit
       lifemin=${arg#lifemin=}
       ;;
     *)
@@ -104,6 +109,7 @@ for arg in "$@"; do
   esac
 done
 [ -n "$dir" ] || print_usage_and_exit
+case "$dir" in -*) dir="./$dir";; esac
 
 # --- subcommand routines --------------------------------------------
 case $subcmd in
@@ -123,7 +129,7 @@ case $subcmd in
     find "$dir" -name "$id" -mmin +$lifemin | awk 'END{exit (NR>0) ? 1 : 0;}'
     [ $? -eq 0      ] || exit 2
     touch "$dir/$id"
-    echo "$dir/$id"
+    printf '%s\n' "$dir/$id"
     exit 0
     ;;
   avail)
@@ -133,7 +139,7 @@ case $subcmd in
     find "$dir" -name "$id" -mmin +$lifemin | awk 'END{exit (NR>0) ? 1 : 0;}'
     [ $? -eq 0      ] || exec $CMD_MKTEMP "$dir/$idtmpl"
     touch "$dir/$id"
-    echo "$dir/$id"
+    printf '%s\n' "$dir/$id"
     exit 0
     ;;
   renew)
@@ -147,7 +153,7 @@ case $subcmd in
     mv -f "$dir/$id" "$check"
     [ $? -eq 0      ] || exit 4
     touch "$check"
-    echo "$check"
+    printf '%s\n' "$check"
     exit 0
     ;;
   remove)

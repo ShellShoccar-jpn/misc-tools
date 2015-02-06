@@ -12,12 +12,13 @@
 #                         Not use the "built-in" base64 command and
 #                         always do base64 by myself but it is inferior
 #                         to the built-in in performance
+#        "-d" ........... Run as a Base64 decoder.
 #        "-w <COLS>" .... When encoding, wrap encoded lines after COLS
 #                         character (default 76). 0 means preventing
 #                         from wrapping.
 #        "-i" ........... When decoding, ignore non-alphabet characters.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/04
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/07
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -30,7 +31,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [-w <COLS>] <file>
 	          ${0##*/} [--by-myself] -d [-i] <file>
-	Version : Wed Feb  4 04:10:07 JST 2015
+	Version : Sat Feb  7 00:24:34 JST 2015
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
 	        :   * Although the bult-in base64 command or GNU AWK produces
 	        :     better performance than the POSIX command set
@@ -43,29 +44,23 @@ __USAGE
 # --- which command also works on Just a POSIX environment -----------
 which which >/dev/null 2>&1 || {
   which () {
-    case "$1" in
-       /*) ls   "$1" 2>/dev/null; return $?;;
-      */*) ls "./$1" 2>/dev/null; return $?;;
-    esac
     (
-      echo "$PATH" | tr ':' '\n' | while read dir; do
-        case "$dir" in '') break;; esac
-        ls "${dir%/}/$1" 2>/dev/null && exit 1 || continue
-      done
-      exit $((1-$?))
+      ans=$(LANG=C LC_ALL=C type "$1") || exit $?
+      case "$1"   in */*) printf '%s\n' "$1"        ; exit;; esac
+      case "$ans" in */*) printf '%s\n' "/${ans#*/}"; exit;; esac
+      printf '%s\n' "$1"
     )
-    return $?
   }
 }
 
-# --- miac setting #1 ------------------------------------------------
+# --- misc setting #1 ------------------------------------------------
 PATH='/usr/bin:/bin:/usr/local/bin'
 set -u
 
 # --- exec the "bult-in" base64 command if exists --------------------
 case "${1:-}" in
-  --by-myself) shift                                                         ;;
-  *)           which base64 >/dev/null 2>&1 && { exec base64 "$@"; exit 1; } ;;
+  --by-myself) shift                                                        ;;
+  *)           type base64 >/dev/null 2>&1 && { exec base64 "$@"; exit 1; } ;;
 esac
 
 # --- check whether this host has a "binarable" AWK command or not ---
@@ -78,7 +73,7 @@ while :; do
   binarable_awk=0; break
 done
 
-# --- miac setting #2 ------------------------------------------------
+# --- misc setting #2 ------------------------------------------------
 PATH='/usr/bin:/bin'
 export LC_ALL=C
 export LANG=C
@@ -97,12 +92,12 @@ while :; do
     '') case "$1" in
           -)        case $# in 1) break;; esac
                     ;;
-          -[diw]*)  s=$(echo "_${1#-}"                                     |
+          -[diw]*)  s=$(printf '%s\n' "${1#-}"                             |
                         awk '{d = "_"; i = "_"; w = "_"; err=0;            #
                               s = $0;                                      #
                               sub(/w[0-9]+$/, "w", s);                     #
                               l = length(s);                               #
-                              for (n=2;n<=l;n++) {                         #
+                              for (n=1;n<=l;n++) {                         #
                                 c = substr(s, n, 1);                       #
                                 if      ( c=="d"         ) { d   = "d"; }  #
                                 else if ( c=="i"         ) { i   = "i"; }  #
@@ -151,8 +146,8 @@ while :; do
         ;;
   esac
   case "$optmode" in
-    w) echo "_$s" | grep -q '^_[0-9]\{1,\}$' || {
-         echo "${0##*/}: Invalid value of -w,--wrap option" 1>&2
+    w) printf '%s\n' "$s" | grep -q '^[0-9]\{1,\}$' || {
+         printf '%s\n' "${0##*/}: Invalid value of -w,--wrap option" 1>&2
          exit 1
        }
        width=$s

@@ -8,7 +8,7 @@
 #
 # * "mktemp(1) options" depend on mktemp(1) on the host
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/26
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/07
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -21,7 +21,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [mktemp(1)options] <template>
 	          "mktemp(1) options" depend on mktemp(1) on the host.
-	Version : Mon Jan 26 15:22:35 JST 2015
+	Version : Sat Feb  7 01:11:12 JST 2015
 __USAGE
   exit 1
 }
@@ -35,7 +35,7 @@ PATH='/usr/bin:/bin'
 
 
 # --- use the built-in mktemp command if not need to do by myself ----
-which mktemp >/dev/null 2>&1
+type mktemp >/dev/null 2>&1
 case $? in
   0) [ -f /etc/issue ] && grep -q '^CentOS.* 5\.[0-9]' /etc/issue
      case $? in
@@ -85,10 +85,10 @@ optmode=''
 while :; do
   case "$optmode" in
     '') case "$1" in
-          -[duqtp]*)   s=$(echo "_${1#-}"                                |
+          -[duqtp]*)   s=$(printf '%s\n' "${1#-}"                        |
                            awk '{d = "_"; u = "_"; q = "_";              #
                                  t = "_"; p = "_"; err = 0;              #
-                                 for (i=2;i<=length($0);i++) {           #
+                                 for (i=1;i<=length($0);i++) {           #
                                    s = substr($0,i,1);                   #
                                    if      (s == "d") { d   = "d"; }     #
                                    else if (s == "u") { u   = "u"; }     #
@@ -121,13 +121,13 @@ while :; do
   esac
   case "$optmode" in
     p) [ -d "$s" ] || {
-         echo "${0##*/}: Invalid path by -p,--tmpdir option" 1>&2
+         printf '%s\n' "${0##*/}: Invalid path by -p,--tmpdir option" 1>&2
          exit 1
        }
        Dir_tmp=${s%/}; [ -n "$Dir_tmp" ] || Dir_tmp='/.'
        optmode=''; shift; continue        ;;
     s) { printf '%s' "$s" | grep -q '/'; } && {
-         echo "${0##*/}: Invalid suffix option" 1>&2
+         printf '%s\n' "${0##*/}: Invalid suffix option" 1>&2
          exit 1
        }
        opts=$s
@@ -218,6 +218,9 @@ for arg in "$@"; do
     Path_target=$(printf '%s' "$Path_target" |
                   sed 's!//!/!g'             |
                   sed 's!/./!/!g'            )
+    #
+    # for security
+    case "$Path_target" in -*) Path_target="./$Path_target";; esac
 
     # --- Making the file --------------------------------------------
     case $optd in
@@ -238,12 +241,17 @@ for arg in "$@"; do
 
   # --- print error message when failed to make a file ---------------
   case "${optq}${n}" in
-    '0-1') echo "${0##*/}: failed on $Path_target" 1>&2; err=1; continue;;
-    '1-1')                                               err=1; continue;;
+    '0-1') printf '%s\n' "${0##*/}: failed on $Path_target" 1>&2
+           err=1
+           continue
+           ;;
+    '1-1') err=1
+           continue
+           ;;
   esac
 
   # --- print the path of the file -----------------------------------
-  echo "$Path_target"
+  printf '%s\n' "$Path_target"
 
   # --- remove the file if -u,--dry-run option is set ----------------
   case $optu in 1) rm -rf "$Path_target";; esac

@@ -18,7 +18,7 @@
 # Return: $?=0 (when all of the arguments are valid)
 #         stdout : encoded CGI variables for HTTP POST(GET)
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/18
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/07
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -32,7 +32,7 @@ PATH=/usr/bin:/bin
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} <file>
-	Version : Sun Jan 18 23:18:21 JST 2015
+	Version : Sat Feb  7 01:06:58 JST 2015
 __USAGE
   exit 1
 }
@@ -41,8 +41,15 @@ __USAGE
 case $# in
   0) file='-'                                                     ;;
   1) case "$1" in -h|--help|--version) print_usage_and_exit;; esac
-     [ -f "$1" ] || print_usage_and_exit
-     file=$1                                                      ;;
+     if [ \( -f "$1"      \) -o \
+          \( -c "$1"      \) -o \
+          \( -p "$1"      \) -o \
+          \( "_$1" = '_-' \)    ]; then
+       file="$1"
+       case "$file" in -) :;; -*) file="./$file";; esac
+     else
+       print_usage_and_exit
+     fi                                                           ;;
   *) print_usage_and_exit                                         ;;
 esac
 

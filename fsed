@@ -11,7 +11,7 @@
 #   expression has, so that you can very easily substitute strings
 #   include various meta-characters, e.g. ^, $, \, /, &, and so on.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/18
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/07
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -23,7 +23,7 @@
 print_usage_and_exit () {
   cat <<__USAGE 1>&2
 Usage   : ${0##*/} <pattern_str> <substitute_str>
-Version : Sun Jan 18 22:12:40 JST 2015
+Version : Sat Feb  7 00:53:24 JST 2015
 __USAGE
   exit 1
 }
@@ -35,6 +35,7 @@ case $# in
           \( -p "$3"      \) -o \
           \( "_$3" = '_-' \)     ]; then
        file=$3
+       case "$file" in -) :;; -*) file="./$file";; esac
      else
        echo '*** No such file found' 1>&2
        print_usage_and_exit

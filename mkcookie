@@ -39,7 +39,7 @@
 # Return: $?=0 (when all of the options are valid)
 #         stdout : HTTP Cookie string
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/01/18
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/07
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -65,7 +65,7 @@ print_usage_and_exit () {
 	          -h <"Y"|"N">       : for JavaScript restriction (HttpOnly)
 	                               "Y" is HttpOnly ON.
 	                               "N" is HttpOnly OFF (default).
-	Version : Sun Jan 18 23:46:26 JST 2015
+	Version : Sat Feb  7 01:09:45 JST 2015
 __USAGE
   exit 1
 }
@@ -84,7 +84,7 @@ for arg in "$@"; do
   if [ -z "$optmode" ]; then
     case "$arg" in
       -[epdsh]*)
-        ret=$(echo "${arg#-}"                                     |
+        ret=$(printf '%s\n' "${arg#-}"                            |
               awk '{opt     = substr($0,1,1);                     #
                     opt_str = (length($0)>1) ? substr($0,2) : ""; #
                     printf("%s %s", opt, opt_str);              }')
@@ -155,10 +155,10 @@ for arg in "$@"; do
 done
 
 # --- validate the arguments -----------------------------------------
-echo "_$var" | grep -Eq "$(printf '^_([^ \t=]+=)?')" || print_usage_and_exit
+printf '%s\n' "$var" | grep -Eq "$(printf '^([^ \t=]+=)?')" || print_usage_and_exit
 case "$eopt" in
   '') ;;
-   *) check=$(echo "_$eopt"                                                                           |
+   *) check=$(printf '%s\n' "$eopt"                                                                   |
              awk '                                                                                    #
                /^_[0-9]+[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$/ {         #
                  print substr($0,2), 0;                                                               #

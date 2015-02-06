@@ -1,0 +1,128 @@
+#! /bin/sh
+
+# ====================================================================
+# Send the Japanese mail
+# --------------------------------------------------------------------
+# args1 : Template file path which I may use (*1)
+# args2 : Temporary file path which I may use
+#
+# ret   : 0==Success 0!=Failure
+#
+# require : nkf command(path in $CMD_NKF), sendmail command
+#
+# notice(*1):
+#   The body of the template file has to conform the following rules:
+#   * Header part is requires. ("Subject:", "From:", "To:", "Cc:"...)
+#   * Body part is following the head part lines with a empty line.
+#     |<header line #1>
+#     |<header line #2>
+#     |       :
+#     |<header line #n>
+#     |                     <- a empty line inserted here
+#     |<body line #1>
+#     |<body line #2>
+#     |       :
+#   * Do not contain 0x80-0xFF characters any header part lines except
+#     "Subject:" (e.g. "From:", "To:", "Cc:")
+#   * If the following headers is omitted, inserted by this function.
+#     "Content-Type:", "Content-Transfer-Encoding:", "MIME-Version:"
+#
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2014/06/27
+#
+# This is a public-domain software. It measns that all of the people
+# can use this with no restrictions at all. By the way, I am fed up
+# the side effects which are broght about by the major licenses.
+
+# ----- preparing --------------------------------------------------
+CMD_SENDMAIL=/usr/sbin/sendmail
+if [ ! -x "$CMD_SENDMAIL" ]; then
+  echo "ERROR: ${0##*/}: sendmail command is not found" 1>&2
+  exit 1
+fi
+CMD_NKF="${0%/*}/nkf"
+[ -x "$CMD_NKF" ] || CMD_NKF="$(which nkf)"
+if [ ! -x "$CMD_NKF" ]; then
+  echo "ERROR: ${0##*/}: nkf command is not found" 1>&2
+  exit 1
+fi
+if [ \( ! -f "$1" \) -o \( ! -r "$1" \) ]; then
+  echo "ERROR: ${0##*/}: template file is invalid" 1>&2
+  exit 1
+fi
+PATH_mailtemplate=$1
+touch "$2"
+if [ \( ! -f "$2" \) -o \( ! -r "$2" \) -o \( ! -w "$2" \) ]; then
+  echo "ERROR: ${0##*/}: temporary file is invalid" 1>&2
+  exit 1
+fi
+trap "rm -f \"$2\"" 1 2 3 15
+PATH_tempfile=$2
+
+# ----- header part processing -------------------------------------
+echo -n > $PATH_tempfile
+line_num=0
+from=''
+f=0   # When "Content-Type"              is contained in the mail template, set to 1
+f1=0  # When "Content-Transfer-Encoding" is contained in the mail template, set to 1
+f2=0  # When "MIME-Version"              is contained in the mail template, set to 1
+for line in `sed -e 's/'"$(printf '\357\275\236')"'/'"$(printf '\343\200\234')"'/g;s/\(.*\)/\1_/' "$PATH_mailtemplate" | tr ' \t' '\006\025'`; do
+  line=`echo -n "$line" | tr '\006\025' ' \t'`
+  line=${line%_}
+  line_num=$((line_num+1))
+  if [ -z "$line" ]; then
+    if [ $f -eq 0 ]; then
+      echo 'Content-Type: text/plain;charset="ISO-2022-JP"' >> $PATH_tempfile
+    fi
+    if [ $f1 -eq 0 ]; then
+      echo 'Content-Transfer-Encoding: 7bit' >> $PATH_tempfile
+    fi
+    if [ $f2 -eq 0 ]; then
+      echo 'MIME-Version: 1.0' >> $PATH_tempfile
+    fi
+    echo >> $PATH_tempfile
+    break
+  fi
+  if [ -n "`echo "$line" | grep -i '^Subject: '`" ]; then
+    s=`echo -n "$line" | cut -b 1-9`
+    s1=`echo -n "$line" | cut -b 10- | $CMD_NKF -W8 -jMB | tr -d '\n' | awk 'BEGIN{fmt="=?ISO-2022-JP?B?%s?=\n"} NR==1{printf(fmt,$0)} NR>1{printf("\011"fmt,$0)}'`
+    line="${s}${s1}"
+  elif [ -n "`echo "$line" | grep -i '^Content-Type: '`" ]; then
+    f=1
+  elif [ -n "`echo "$line" | grep -i '^Content-Transfer-Encoding: '`" ]; then
+    f1=1
+  elif [ -n "`echo "$line" | grep -i '^MIME-Version: '`" ]; then
+    f2=1
+  elif [ -n "`echo "$line" | grep -i '^From: '`" ]; then
+    from=`echo -n "$line" | sed -e 's/.*<\(.*\)>.*/\1/'`
+    if [ -z "$from" ]; then
+      from=`echo -n "$line" | sed -e 's/.*[[:space:]]\([A-Za-z_0-9.-]\{1,\}@[A-Za-z_0-9.-]\{1,\}\).*/\1/'`
+    fi
+  fi
+  if [ -n "`echo "$line" | grep -iE '^(From: )|(To: )'`" ]; then
+    line=$(echo "$line" |
+           awk '{
+                  if(NF==2){print;exit}
+                  a=$1;c=$NF;
+                  b=substr($0,length(a)+2,length($0)-length(a)-length(c)-2);
+                  if(! match(c, /^<[A-Za-z0-9._@-]+>$/)){print;exit}
+                  if(match(b, /^[ !-~]+$/)){print;exit}
+                  printf("%s ",a);
+                  system("echo -n \"_" b "\" | sed \"1s/^_//\" | '"$CMD_NKF"' -W8 -jMB | tr -d \"\\\\n\" | awk '"'"'BEGIN{fmt=\"=?ISO-2022-JP?B?%s?=\"} NR==1{printf(fmt,$0)} NR>1{printf(\"\\n\\011\"fmt,$0)}'"'"'");
+                  printf(" %s",c);
+                }
+         ')
+  fi
+  echo "$line" >> $PATH_tempfile
+done
+# ----- body part processing ---------------------------------------
+tail -n +$((line_num+1)) $PATH_mailtemplate                         |
+sed 's/'"$(printf '\357\275\236')"'/'"$(printf '\343\200\234')"'/g' |
+$CMD_NKF -W8 -j                                     >> $PATH_tempfile
+
+# ----- sendmail ---------------------------------------------------
+if [ -n "$from" ]; then
+  $CMD_SENDMAIL -i -t -f "$from" < "$PATH_tempfile"
+else
+  $CMD_SENDMAIL -i -t < "$PATH_tempfile"
+fi
+exit $?
