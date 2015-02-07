@@ -19,11 +19,11 @@
 #     |<body line #2>
 #     |       :
 #   * Do not contain 0x80-0xFF characters any header part lines except
-#     "Subject:", "From:", "To:", "Cc:" and "Bcc:"
+#     "Subject:", "From:", "To:", "Cc:", "Bcc:" and "Reply-To:"
 #   * If the following headers is omitted, inserted by this function.
 #     "Content-Type:", "Content-Transfer-Encoding:", "MIME-Version:"
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/07
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/08
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -35,7 +35,7 @@
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} <mailfile>
-	Version : Sat Feb  7 13:12:08 JST 2015
+	Version : Sun Feb  8 03:07:23 JST 2015
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands/sendmail command/UTF-8)
 __USAGE
   exit 1
@@ -56,8 +56,53 @@ which which >/dev/null 2>&1 || {
   }
 }
 
-# --- Base64 Encoder with wrapping width=40 --------------------------
-base64_w40 () {
+# --- UTF-8 string cutter within required bytes ----------------------
+cutstr_by_bytes () {
+  awk -v maxbytes=$1 '
+    BEGIN {
+      OFS = ""; ORS = "";
+      CHR_80_1 = sprintf("\200");  CHR_C0_X = sprintf("\300");
+      CHR_E0_2 = sprintf("\340");  CHR_F0_3 = sprintf("\360");
+      CHR_F8_4 = sprintf("\370");  CHR_FC_5 = sprintf("\374");
+      CHR_FE_6 = sprintf("\376");
+      LF = sprintf("\n"  );
+
+      while (getline str) {
+        bytes_thisline = 0;
+        len = length(str);
+        for (pos=1; pos<=len; pos+=bytes_a_letter) {
+          c = substr(str, pos, 1);
+          if      (c < CHR_80_1) {bytes_a_letter=1;}
+          else if (c < CHR_C0_X) {bytes_a_letter=1;} # invalid pattern!
+          else if (c < CHR_E0_2) {bytes_a_letter=2;}
+          else if (c < CHR_F0_3) {bytes_a_letter=3;}
+          else if (c < CHR_F8_4) {bytes_a_letter=4;}
+          else if (c < CHR_FC_5) {bytes_a_letter=5;}
+          else if (c < CHR_FE_6) {bytes_a_letter=6;}
+          else                   {bytes_a_letter=1;} # invalid pattern!
+          if (bytes_thisline+bytes_a_letter > maxbytes) {
+            print LF, substr(str, pos, bytes_a_letter);
+            bytes_thisline  = bytes_a_letter;
+          } else                               {
+            print     substr(str, pos, bytes_a_letter);
+            bytes_thisline += bytes_a_letter;
+          }
+        }
+        print LF;
+      }
+    }'
+}
+
+# --- Base64 Encoder -------------------------------------------------
+base64 () {
+  w=''
+  case "${1:-}" in
+    --wrap=*) printf '%s\n' "$1" | grep -q '^--wrap=[0-9]\{1,\}$' && {
+                w=${1#--wrap=}
+              }
+              ;;
+  esac
+  case "$w" in '') w=76;; esac
   od -A n -t x1 -v                                                         |
   awk 'BEGIN{OFS=""; ORS="";                                               #
              x2o["0"]="0000"; x2o["1"]="0001"; x2o["2"]="0010";            #
@@ -79,7 +124,7 @@ base64_w40 () {
              for(p=1;p<u;p+=6){print substr(buf,p,6);}                     #
              buf=substr(buf,p);                                         }  #
        END  {if(length(buf)>0){print substr(buf "00000",1,6);}          }' |
-  awk 'BEGIN{ORS=""; w=40;                                                 #
+  awk 'BEGIN{ORS=""; w='$w';                                               #
              o2b6["000000"]="A"; o2b6["000001"]="B"; o2b6["000010"]="C";   #
              o2b6["000011"]="D"; o2b6["000100"]="E"; o2b6["000101"]="F";   #
              o2b6["000110"]="G"; o2b6["000111"]="H"; o2b6["001000"]="I";   #
@@ -120,24 +165,21 @@ export LANG=C
 PATH='/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/sbin:/usr/local/bin'
 CMD_SENDMAIL=$(which sendmail 2>/dev/null)
 case "$CMD_SENDMAIL" in
-  '') echo "${0##*/}: sendmail command is not found"          1>&2; exit 1;;
+  '') echo "${0##*/}: sendmail command is not found" 1>&2; exit 1;;
 esac
 PATH='/usr/bin:/bin:/usr/local/bin'
-CMD_ICONV=$(which iconv 2>/dev/null)
-CMD_NKF=$(  which nkf   2>/dev/null)
-case "$CMD_ICONV$CMD_NKF" in
-  '') echo "${0##*/}: Neither iconv nor nkf command is found" 1>&2; exit 1;;
-esac
 CMD_BASE64=$(which base64 2>/dev/null)
 case "$CMD_BASE64" in
-  '') :                                     ;;
-   *) base64_w40 () { "$CMD_BASE64" -w 40; };;
+  '') :                                  ;;
+   *) base64 () { "$CMD_BASE64" ${1:-}; };;
 esac
 
 # --- misc setting #2 ------------------------------------------------
 PATH='/usr/bin:/bin'
+CR=$( printf '\r'   )
 LF=$( printf '\\\n_'); LF=${LF%_}
 ACK=$(printf '\006' )
+NAK=$(printf '\025' )
 TAB=$(printf '\t'   )
 
 
@@ -172,14 +214,14 @@ mode=''
 cat "$file"                                                                    |
 while read -r line; do                                                         #
   case "$line" in                                                              #
-    '')                          mode='endh'       ;;                          #
-    From:*|To:*|Cc:*|Bcc:*)      mode='addr'       ;;                          #
-    Subject:*)                   mode='subj'       ;;                          #
-    "$TAB"*|' '*)                                  ;;                          #
-    Content-Type:*)              mode='othr';  ct=0;;                          #
-    Content-Transfer-Encoding:*) mode='othr'; cte=0;;                          #
-    MIME-Version:*)              mode='othr';  mv=0;;                          #
-    *)                           mode='othr'       ;;                          #
+    '')                                mode='endh'       ;;                    #
+    From:*|To:*|Cc:*|Bcc:*|Reply-To:*) mode='addr'       ;;                    #
+    Subject:*)                         mode='subj'       ;;                    #
+    "$TAB"*|' '*)                                        ;;                    #
+    Content-Type:*)                    mode='othr';  ct=0;;                    #
+    Content-Transfer-Encoding:*)       mode='othr'; cte=0;;                    #
+    MIME-Version:*)                    mode='othr';  mv=0;;                    #
+    *)                                 mode='othr'       ;;                    #
   esac                                                                         #
   #                                                                            #
   case "$mode" in                                                              #
@@ -192,20 +234,26 @@ while read -r line; do                                                         #
       sed 's/^\([^'"$TAB"' ]*['"$TAB"' ]*\).*/\1/' |                           #
       tr -d '\n'                                                               #
       # 2) convert and print header of the after part                          #
-      printf '%s' "$line"                                   |                  #
-      sed "s/^[^$TAB ]*[$TAB ]*//"                          |                  #
-     #case "$CMD_NKF" in                                    #                  #
-     #  '') "$CMD_ICONV" -c -f UTF-8 -t ISO-2022-JP;;       #                  #
-     #   *) "$CMD_NKF"   -j                     ;;          #                  #
-     #esac                                                  |                  #
-      base64_w40                                            |                  #
-      awk 'BEGIN{OFS=""; indent = "";                    }  #                  #
-           NR==2{        indent = sprintf("\t");         }  #                  #
-                {print indent,"=?UTF-8?B?",$0,"?=";      }'                    #
+      firstloop1=1                                                             #
+      printf '%s' "$line"          |                                           #
+      sed "s/^[^$TAB ]*[$TAB ]*//" |                                           #
+      cutstr_by_bytes 42           |                                           #
+      while read -r str; do                                                    #
+        case $firstloop1 in                                                    #
+          1) firstloop1=0                                                      #
+             printf '%s' "$str"                     |                          #
+             base64 --wrap=0                        |                          #
+             xargs -n 1 printf   '=?UTF-8?B?%s?=\n'                            #
+             ;;                                                                #
+          0) printf '%s' "$str"                     |                          #
+             base64 --wrap=0                        |                          #
+             xargs -n 1 printf '\t=?UTF-8?B?%s?=\n'                            #
+             ;;                                                                #
+        esac                                                                   #
+      done                                                                     #
       ;;                                                                       #
-    # --- address header (From, To, Cc, Bcc) processing --------------         #
+    # --- address header (From, To, Cc, Bcc, Reply-To) processing ----         #
     'addr')                                                                    #
-      loopindent=''                                                            #
       # 0) check whether converting is required or not                         #
       printf '%s\n' "$line" | grep "^[${TAB} -~]\\{1,\\}\$" && continue        #
       # 1) print the label of the header (header name)                         #
@@ -213,6 +261,7 @@ while read -r line; do                                                         #
       sed 's/^\([^'"$TAB"' ]*['"$TAB"' ]*\).*/\1/' |                           #
       tr -d '\n'                                                               #
       # 2) convert and print header of the after part                          #
+      firstloop1=1                                                             #
       printf '%s' "$line"                                        |             #
       sed "s/^[^$TAB ]*[$TAB ]*//"                               |             #
       sed "s/\"/$LF\"$LF/g"                                      |             #
@@ -220,32 +269,33 @@ while read -r line; do                                                         #
            /^"/ {attr = (attr=="RAW:") ? "ESC:" : "RAW:";next;}  #             #
                 {print attr $0;                               }' |             #
       sed "/^ESC:/s/,/$ACK/g"                                    |             #
+      sed "/^ESC:/s/;/$NAK/g"                                    |             #
       sed 's/^....//'                                            |             #
       tr '\n' '"'                                                |             #
       sed 's/"$//'                                               |             #
-      sed "s/,/,$LF/g"                                           |             #
+      sed "s/\\([,;]\\)/\\1$LF/g"                                |             #
+      sed "s/^['"$TAB"' ]\{1,\}//"                               |             #
       grep -v '^$'                                               |             #
-      tr "$ACK" ','                                              |             #
-      while read -r line1; do                                                  #
-        printf "$loopindent"                                                   #
-        printf '%s' "$line1"                                                 | #
+      tr "$ACK$NAK" ',;'                                         |             #
+      while read -r str1; do                                                   #
+        case "$firstloop1" in 1) firstloop1=0;; 0) printf '\t';; esac          #
+        printf '%s' "$str1" |                                                  #
         grep -E "^[$TAB ]*<?[!-?A-~]+@[A-Za-z0-9][A-Za-z0-9.-]+[A-Za-z0-9]>?[$TAB ]*,?[$TAB ]*$" &&
         continue                                                               #
-        printf '%s' "$line1"                                                 | #
+        firstloop2=1                                                           #
+        printf '%s' "$str1"                              |                     #
         sed "s/[$TAB ]*<\\{0,1\\}[!-?A-~]\\{1,\\}@[A-Za-z0-9][A-Za-z0-9.-]\\{1,\\}[A-Za-z0-9]>\\{0,1\\}[$TAB ]*,\\{0,1\\}[$TAB ]*\$//" |
-        sed 's/^[^'"$TAB"' ]*"\(.*\)"[^'"$TAB"' ]*$/\1/'                     | #
-       #case "$CMD_NKF" in                                                   # #
-       #  '') "$CMD_ICONV" -c -f UTF-8 -t ISO-2022-JP;;                      # #
-       #   *) "$CMD_NKF"   -j                        ;;                      # #
-       #esac                                                                 | #
-        base64_w40                                                           | #
-        awk 'BEGIN{OFS=""; ORS=""; lf="";            indent="";           }  # #
-             NR==2{                lf=sprintf("\n"); indent=sprintf("\t");}  # #
-                  {print lf,indent,"=?UTF-8?B?",$0,"?=";                  }'   #
-        printf '%s' "$line1"                                                 | #
-        sed "s/\\([$TAB ]*<\\{0,1\\}[!-?A-~]\\{1,\\}@[A-Za-z0-9][A-Za-z0-9.-]\\{1,\\}[A-Za-z0-9]>\\{0,1\\}[$TAB ]*,\\{0,1\\}[$TAB ]*\\)\$/$ACK\1/" |
+        sed 's/^[^'"$TAB"' ]*"\(.*\)"[^'"$TAB"' ]*$/\1/' |                     #
+        cutstr_by_bytes 30                               |                     #
+        while read -r str2; do                                                 #
+          case "$firstloop2" in 1) firstloop2=0;; 0) printf '\n\t';; esac      #
+          printf '%s' "$str2"                |                                 #
+          base64 --wrap=0                    |                                 #
+          xargs -n 1 printf '=?UTF-8?B?%s?='                                   #
+        done                                                                   #
+        printf '%s' "$str1" |                                                  #
+        sed "s/\\([$TAB ]*<\\{0,1\\}[!-?A-~]\\{1,\\}@[A-Za-z0-9][A-Za-z0-9.-]\\{1,\\}[A-Za-z0-9]>\\{0,1\\}[$TAB ]*,\\{0,1\\}[$TAB ]*\\)\$/$ACK\\1/" |
         sed "s/^.*$ACK//"                                                      #
-        case "$loopindent" in '') loopindent=$TAB;; esac                       #
       done                                                                     #
       ;;                                                                       #
     # --- another header processing ----------------------------------         #
@@ -256,21 +306,20 @@ while read -r line; do                                                         #
     'endh')                                                                    #
       # 1) print headers which are printed yet                                 #
       case $ct  in                                                             #
-        '1') echo 'Content-Type: text/plain;charset="ISO-2022-JP"';;           #
+        '1') echo 'Content-Type: text/plain;charset="UTF-8"';;                 #
       esac                                                                     #
       case $cte in                                                             #
-        '1') echo 'Content-Transfer-Encoding: 7bit'               ;;           #
+        '1') echo 'Content-Transfer-Encoding: base64'       ;;                 #
       esac                                                                     #
       case $mv  in                                                             #
-        '1') echo 'MIME-Version: 1.0'                             ;;           #
+        '1') echo 'MIME-Version: 1.0'                       ;;                 #
       esac                                                                     #
       # 2) print a blank line, which means a boundary between header and body  #
       echo                                                                     #
       # 3) print the body part                                                 #
-      case "$CMD_NKF" in                                                       #
-        '') "$CMD_ICONV" -c -f UTF-8 -t ISO-2022-JP;;                          #
-         *) "$CMD_NKF"   -j                        ;;                          #
-      esac                                                                     #
+      cat              |                                                       #
+      sed "s/\$/$CR/"  |                                                       #
+      base64 --wrap=40                                                         #
       ;;                                                                       #
     # --- when a invalid header line is given ------------------------         #
     '')                                                                        #
