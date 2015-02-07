@@ -23,7 +23,7 @@
 #   * If the following headers is omitted, inserted by this function.
 #     "Content-Type:", "Content-Transfer-Encoding:", "MIME-Version:"
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/06
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/07
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -35,7 +35,7 @@
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} <mailfile>
-	Version : Fri Feb  6 16:50:24 JST 2015
+	Version : Sat Feb  7 13:12:08 JST 2015
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands/sendmail command/UTF-8)
 __USAGE
   exit 1
@@ -155,6 +155,7 @@ case $# in
         case "$file" in -*) file="./$file";; esac
         ;;
         # supporting $#==2 is for compatibility with the previous version
+        # even if given, ignored
      *) print_usage_and_exit
         ;;
 esac
@@ -192,15 +193,15 @@ while read -r line; do                                                         #
       tr -d '\n'                                                               #
       # 2) convert and print header of the after part                          #
       printf '%s' "$line"                                   |                  #
-      sed 's/^[^'"$TAB"' ]*['"$TAB"' ]*//'                  |                  #
-      case "$CMD_NKF" in                                    #                  #
-        '') "$CMD_ICONV" -f UTF-8 -t ISO-2022-JP;;          #                  #
-         *) "$CMD_NKF" -j                       ;;          #                  #
-      esac                                                  |                  #
+      sed "s/^[^$TAB ]*[$TAB ]*//"                          |                  #
+     #case "$CMD_NKF" in                                    #                  #
+     #  '') "$CMD_ICONV" -c -f UTF-8 -t ISO-2022-JP;;       #                  #
+     #   *) "$CMD_NKF"   -j                     ;;          #                  #
+     #esac                                                  |                  #
       base64_w40                                            |                  #
       awk 'BEGIN{OFS=""; indent = "";                    }  #                  #
            NR==2{        indent = sprintf("\t");         }  #                  #
-                {print indent,"=?ISO-2022-JP?B?",$0,"?=";}'                    #
+                {print indent,"=?UTF-8?B?",$0,"?=";      }'                    #
       ;;                                                                       #
     # --- address header (From, To, Cc, Bcc) processing --------------         #
     'addr')                                                                    #
@@ -213,9 +214,8 @@ while read -r line; do                                                         #
       tr -d '\n'                                                               #
       # 2) convert and print header of the after part                          #
       printf '%s' "$line"                                        |             #
-      sed 's/^[^'"$TAB"' ]*['"$TAB"' ]*//'                       |             #
-      sed 's/"/'"$LF"'"'"$LF"'/g'                                |             #
-      grep -v '^$'                                               |             #
+      sed "s/^[^$TAB ]*[$TAB ]*//"                               |             #
+      sed "s/\"/$LF\"$LF/g"                                      |             #
       awk 'BEGIN{attr = "RAW:";                               }  #             #
            /^"/ {attr = (attr=="RAW:") ? "ESC:" : "RAW:";next;}  #             #
                 {print attr $0;                               }' |             #
@@ -233,14 +233,15 @@ while read -r line; do                                                         #
         continue                                                               #
         printf '%s' "$line1"                                                 | #
         sed "s/[$TAB ]*<\\{0,1\\}[!-?A-~]\\{1,\\}@[A-Za-z0-9][A-Za-z0-9.-]\\{1,\\}[A-Za-z0-9]>\\{0,1\\}[$TAB ]*,\\{0,1\\}[$TAB ]*\$//" |
-        case "$CMD_NKF" in                                                   # #
-          '') "$CMD_ICONV" -f UTF-8 -t ISO-2022-JP;;                         # #
-           *) "$CMD_NKF" -j                       ;;                         # #
-        esac                                                                 | #
+        sed 's/^[^'"$TAB"' ]*"\(.*\)"[^'"$TAB"' ]*$/\1/'                     | #
+       #case "$CMD_NKF" in                                                   # #
+       #  '') "$CMD_ICONV" -c -f UTF-8 -t ISO-2022-JP;;                      # #
+       #   *) "$CMD_NKF"   -j                        ;;                      # #
+       #esac                                                                 | #
         base64_w40                                                           | #
-        awk 'BEGIN{OFS=""; ORS=""; lf = "";          indent="";           }  # #
+        awk 'BEGIN{OFS=""; ORS=""; lf="";            indent="";           }  # #
              NR==2{                lf=sprintf("\n"); indent=sprintf("\t");}  # #
-                  {print lf,indent,"=?ISO-2022-JP?B?",$0,"?=";            }'   #
+                  {print lf,indent,"=?UTF-8?B?",$0,"?=";                  }'   #
         printf '%s' "$line1"                                                 | #
         sed "s/\\([$TAB ]*<\\{0,1\\}[!-?A-~]\\{1,\\}@[A-Za-z0-9][A-Za-z0-9.-]\\{1,\\}[A-Za-z0-9]>\\{0,1\\}[$TAB ]*,\\{0,1\\}[$TAB ]*\\)\$/$ACK\1/" |
         sed "s/^.*$ACK//"                                                      #
@@ -266,11 +267,16 @@ while read -r line; do                                                         #
       # 2) print a blank line, which means a boundary between header and body  #
       echo                                                                     #
       # 3) print the body part                                                 #
-      cat                                          |                           #
-      case "$CMD_NKF" in                           #                           #
-        '') "$CMD_ICONV" -f UTF-8 -t ISO-2022-JP;; #                           #
-         *) "$CMD_NKF" -j                       ;; #                           #
+      case "$CMD_NKF" in                                                       #
+        '') "$CMD_ICONV" -c -f UTF-8 -t ISO-2022-JP;;                          #
+         *) "$CMD_NKF"   -j                        ;;                          #
       esac                                                                     #
+      ;;                                                                       #
+    # --- when a invalid header line is given ------------------------         #
+    '')                                                                        #
+      printf '%s\n' "${0##*/}: Invalid header part" 1>&2                       #
+      cat >/dev/nulll                                                          #
+      CMD_SENDMAIL=':'                                                         #
       ;;                                                                       #
   esac                                                                         #
 done                                                                           |
