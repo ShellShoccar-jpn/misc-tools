@@ -1,0 +1,278 @@
+#! /bin/sh
+ 
+######################################################################
+#
+# TRUNCATE - The "truncate"-Like Command Also Works On Just A POSIX Environment
+#
+# USAGE: truncate [--by-myself] [-c] -s [+|-]size[K|k|M|m|G|g|T|t] file ...
+#        truncate [--by-myself] [-c] -r rfile file ...
+#
+#        "--by-myself" ..... (write as the 1st argument when use)
+#                            Not use the "built-in" mktemp command
+#                            and always do mktemp by myself but it is
+#                            inferior to the built-in in performance
+#        "-c" .............. Do not create files if they do not exist.
+#                            The truncate utility does not treat this
+#                            as an error.
+#        "-r rfile" ........ Truncate or extend files to the length of
+#                            the file rfile.
+#        "-s [+|-]size[K|k|M|m|G|g|T|t]"
+#                        ... Truncate or extend files by the size value.
+#                            When "+" or "-" is written at first, it means
+#                            relative, otherwise absolute.
+#                            And when the unit suffix is written at last,
+#                            the value is multiplied by the unit suffix.
+#
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/16
+#
+# This is a public-domain software. It measns that all of the people
+# can use this with no restrictions at all. By the way, I am fed up
+# the side effects which are broght about by the major licenses.
+#
+######################################################################
+
+# print the usage and exit
+print_usage_and_exit () {
+  cat <<-__USAGE 1>&2
+	Usage   : ${0##*/} [--by-myself] [-c] -s [+|-]size[K|k|M|m|G|g|T|t] file ...
+	        : ${0##*/} [-c] -r rfile file ...
+	Version : Mon Feb 16 21:33:03 JST 2015
+__USAGE
+  exit 1
+}
+
+
+# ===== PREPARE ======================================================
+
+# --- exec the truncate command if exists ----------------------------
+PATH='/usr/bin:/bin:/usr/local/bin'
+case "${1:-}" in
+  --by-myself) shift
+               ;;
+  *)           type truncate >/dev/null 2>&1 && {
+                 exec truncate "$@"
+                 exit 1
+               }
+               ;;
+esac
+
+# --- set the command path -------------------------------------------
+PATH='/usr/bin:/bin'
+set -u
+export LANG=C
+export LC_ALL=C
+
+# --- exec the mktemp command if exists ------------------------------
+get_attr_and_size0() {
+  attr=$1
+  size0=$(ls -adl "$attr" 2>/dev/null) || [ ! -e "$attr" ] || {
+    attr=''
+    size0=''
+    return 1
+  }
+  set -- $size0
+  attr=${1:-}
+  size0=${5:-0}
+  return 0
+}
+
+
+# ===== PARSE OPTION =================================================
+
+optc=0    # 1 when -c is set
+opto=0    # not implemented yet
+asize=''  # absolute size which is wanted
+dsize=''  # delta-size which is wanted
+optmode=''
+while :; do
+  case $# in 0) break;; esac
+  case "$optmode" in
+    '') case "$1" in
+          -[cors]*)      s=$(printf '%s\n' "$1"                              |
+                             awk '{c = "_"; o = "_"; r = "_"; s = "_";       #
+                                   for (i=2;i<=length($0);i++) {             #
+                                     l = substr($0,i,1);                     #
+                                     if      (l == "c") { c = "c";        }  #
+                                     else if (l == "o") { o = "o";        }  #
+                                     else if (l == "r") { r = "r"; break; }  #
+                                     else if (l == "s") { s = "s"; break; }  #
+                                     else               { c = "_";           #
+                                                          o = "_";           #
+                                                          r = "_";           #
+                                                          s = "_"; break; }  #
+                                   }                                         #
+                                   str = substr($0,i+1);                     #
+                                   printf("%s%s%s%s/%s",c,o,r,s,str);      }')
+                         case "$s" in ____/*) print_usage_and_exit;; esac
+                         case "$s" in c???/*) optc=1     ;; esac
+                         case "$s" in ?o??/*) opto=1     ;; esac
+                         case "$s" in ??r?/*) optmode='r';; esac
+                         case "$s" in ???s/*) optmode='s';; esac
+                         s=${s#????/}
+                         case "$s" in '') shift; continue;; esac              ;;
+          --no-create)   optc=1     ; shift; continue                         ;;
+          --io-blocks)   opto=1     ; shift; continue                         ;;
+          --reference=*) optmode='r'; s=${1#--reference=}                     ;;
+          --size=*)      optmode='s'; s=${1#--size=}                          ;;
+          -*)            print_usage_and_exit                                 ;;
+        esac
+        ;;
+    *)  s=$1
+        ;;
+  esac
+  case "$optmode" in
+    r) case "$s" in /*|./*|../*) file=$s;; *) file="./$s";; esac
+       while :; do
+         get_attr_and_size0 "$file" || {
+           printf '%s\n' "${0##*/}: cannot open \`$s' (Permission denied)" 1>&2
+           exit 1
+         }
+         case "$attr" in
+           '') # skip when option -c is set
+               printf '%s: %s: No such file or directory\n' "${0##*/}" "$s" 1>&2
+               exit 1
+               ;;
+           -*) break
+               ;;
+           l*) srcfile=$(file "$file"                                  |
+                         sed 's/^.\{'${#file}'\}: symbolic link to //' |
+                         sed 's/^`\(.*\)'"'"'$/\1/'                    )
+               case "$srcfile" in
+                 /*) file=$srcfile             ;;
+                  *) file="${file%/*}/$srcfile";;
+               esac
+               continue
+               ;;
+           d*) break
+               ;;
+            *) printf '%s\n' "${0##*/}: \`$file0' is not a regular file." 1>&2
+               exit 1
+               ;;
+         esac
+       done
+       asize=$size0
+       dsize=''
+       shift
+       optmode=''
+       continue
+       ;;
+    s) printf '%s' "$s"                      |
+       awk '/^[0-9]+[KkMmGgTt]?$/  {exit 0;} #
+            /^\+[0-9]+[KkMmGgTt]?$/{exit 1;} #
+            /^-[0-9]+[KkMmGgTt]?$/ {exit 1;} #
+                                   {exit 2;}'
+       case $? in
+         0) case "$s" in
+              *[0-9]) asize=$s                                 ;;
+              *[Kk])  asize=$(echo "${s%?}*1024"          | bc);;
+              *[Mm])  asize=$(echo "${s%?}*1048576"       | bc);;
+              *[Gg])  asize=$(echo "${s%?}*1073741824"    | bc);;
+              *[Tt])  asize=$(echo "${s%?}*1099511627776" | bc);;
+            esac
+            dsize=''
+            ;;
+         1) s=${s#+}
+            case "$s" in
+              *[0-9]) dsize=$s                                 ;;
+              *[Kk])  dsize=$(echo "${s%?}*1024"          | bc);;
+              *[Mm])  dsize=$(echo "${s%?}*1048576"       | bc);;
+              *[Gg])  dsize=$(echo "${s%?}*1073741824"    | bc);;
+              *[Tt])  dsize=$(echo "${s%?}*1099511627776" | bc);;
+            esac
+            asize=''
+            ;;
+         2) printf '%s\n' "${0##*/}: Invalid size by -s,--size option" 1>&2
+            exit 1
+            ;;
+       esac
+       shift
+       optmode=''
+       continue
+       ;;
+  esac
+  break
+done
+
+
+# ===== TRUNCATE OR EXTEND ===========================================
+
+err=0
+for file0 in "$@"; do
+  case "$file0" in /*|./*|../*) file=$file0;; *) file="./$file0";; esac
+
+  # --- 1) Search the regular file path and the size of that file ----
+  while :; do
+    get_attr_and_size0 "$file" || {
+      printf '%s\n' "${0##*/}: cannot open \`$file0' (Permission denied)" 1>&2
+      continue 2
+    }
+    case "$attr" in
+      '') # skip when option -c is set
+          case $optc in 0) break;; 1) continue 2;; esac
+          ;;
+      -*) break
+          ;;
+      l*) srcfile=$(file "$file"                                  |
+                    sed 's/^.\{'${#file}'\}: symbolic link to //' |
+                    sed 's/^`\(.*\)'"'"'$/\1/'                    )
+          case "$srcfile" in
+            /*) file=$srcfile             ;;
+             *) file="${file%/*}/$srcfile";;
+          esac
+          continue
+          ;;
+      d*) printf '%s\n' "${0##*/}: \`$file0' is a directory." 1>&2
+          err=1
+          continue 2
+          ;;
+       *) #printf '%s\n' "${0##*/}: \`$file0' is not a regular file." 1>&2
+          #err=1
+          continue 2
+          ;;
+    esac
+  done
+
+  # --- 2) Re-calculate $dsize(delta-size) when $asize(absolute size) is set
+  case "${asize}:${dsize}" in
+    :[0-9-]*) size1=$(echo "$dsize + $size0" | bc)   # when only dsize
+              case $size1 in -*) size1=0;; esac   ;;
+    [0-9]*:*) size1=$asize                           # when size exists
+              dsize=$(echo "$asize - $size0" | bc);;
+           *) echo 'error!' 1>&2; exit 255        ;; # otherwise (error)
+  esac
+  # 2-1) Refuse truncating when dsize >= 16GB
+  case $(echo "${dsize}-17179869184" | bc) in
+    [0-9]*) printf '%s: Too large to increase the filesize of `'"'"'\n' \
+                   "${0##*/}"                                           \
+                   "$file0"                                             1>&2
+            err=1
+            continue
+            ;;
+  esac
+
+  # --- 3) Truncate or extend ----------------------------------------
+  case $dsize in
+    -*) # decrease size
+        case $size1 in
+          0) : > "$file0"                                                   ;;
+          *) (
+               rm -f "$file" && dd count=1 bs=$size1 "of=$file0" 2>/dev/null
+             ) < "$file0"                                                   ;;
+        esac
+        ;;
+     0) # same size (do nothing)
+        :
+        ;;
+     *) # increase size
+        if [ -c /dev/zero ]; then
+          dd if=/dev/zero count=1 bs=$dsize >> "$file0" 2>/dev/null
+        else
+          yes '' | dd count=1 bs=$dsize 2>/dev/null | tr '\n' '\000' >> "$file0"
+        fi
+        ;;
+  esac
+done
+
+
+# ===== TERMINATE ====================================================
+exit $err

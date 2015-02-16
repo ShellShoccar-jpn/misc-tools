@@ -14,7 +14,7 @@
 #
 # Return : stdoutに半角換算文字数
 #
-# Written by Matsuura(richmikan@richlab.org) at 2015/02/07
+# Written by Matsuura(richmikan@richlab.org) at 2015/02/13
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -26,7 +26,7 @@
 print_usage_and_exit () {
   cat <<__USAGE 1>&2
 Usage   : ${0##*/} <file>
-Version : Sat Feb  7 01:56:47 JST 2015
+Version : Fri Feb 13 15:37:31 JST 2015
 __USAGE
   exit 1
 }
@@ -36,7 +36,7 @@ if [ \( -f "$1"      \) -o \
      \( -p "$1"      \) -o \
      \( "_$1" = '_-' \)    ]; then
   file="$1"
-  case "$file" in -) :;; -*) file="./$file";; esac
+  case "$file" in -|/*|./*|../*) :;; *) file="./$file";; esac
 elif [ $# -lt 1 ]; then
   file='-'
 else

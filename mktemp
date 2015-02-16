@@ -19,7 +19,7 @@
 #                            in front of the filepath
 #        "--suffix=<suff>" . Add the suffix behind the filename
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/07
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/13
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -32,7 +32,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [options] [template [...]]
 	        : "-d" "-p [DIR]" "-q" "-u" "-t" "--suffix=<suff>"
-	Version : Sat Feb  7 01:21:44 JST 2015
+	Version : Fri Feb 13 15:29:52 JST 2015
 __USAGE
   exit 1
 }
@@ -211,7 +211,10 @@ for arg in "$@"; do
                   sed 's!/./!/!g'            )
     #
     # for security
-    case "$Path_target" in -*) Path_target="./$Path_target";; esac
+    case "$Path_target" in
+      -|/*|./*|../*) :                           ;;
+                  *) Path_target="./$Path_target";;
+    esac
 
     # --- Making the file --------------------------------------------
     case $optd in

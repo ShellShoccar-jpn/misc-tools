@@ -64,7 +64,7 @@ DEFAULT_TIMEOUT=600
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [-t timeout] <named_pipe_to_use> [output_file]
-	Version : Sat Feb  7 00:32:39 JST 2015
+	Version : Fri Feb 13 15:18:45 JST 2015
 __USAGE
   exit 1
 }
@@ -121,8 +121,8 @@ case $check in 'p')
   outfile=''
   case $# in 2) case "$2" in '') :;; *) outfile=$2;; esac;; esac
   case "$pipe" in                  "$outfile") print_usage_and_exit;; esac
-  case "$pipe"    in -*) pipe="./$pipe"      ;; esac
-  case "$outfile" in -*) outfile="./$outfile";; esac
+  case "$pipe"    in -|/*|./*|../*) :;; *) pipe="./$pipe"      ;; esac
+  case "$outfile" in -|/*|./*|../*) :;; *) outfile="./$outfile";; esac
 
   # --- enable the exit trap -----------------------------------------
   trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM

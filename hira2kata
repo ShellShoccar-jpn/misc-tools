@@ -12,7 +12,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [+<n>h] <f1> <f2> ... <file>
 	        : ${0##*/} -d <string>
-	Version : Sat Feb  7 00:37:00 JST 2015
+	Version : Fri Feb 13 15:19:17 JST 2015
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands/UTF-8)
 __USAGE
   exit 1
@@ -107,7 +107,7 @@ case $directmode in
      file=''
      ;;
 esac
-case "$file" in -) :;; -*) file="./$file";; esac
+case "$file" in -|/*|./*|../*) :;; *) file="./$file";; esac
 
 # make the part of the awk code
 case $all_fields in

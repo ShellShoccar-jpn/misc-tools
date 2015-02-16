@@ -23,7 +23,7 @@
 #   * If the following headers is omitted, inserted by this function.
 #     "Content-Type:", "Content-Transfer-Encoding:", "MIME-Version:"
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/08
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/13
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -35,7 +35,7 @@
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} <mailfile>
-	Version : Sun Feb  8 03:07:23 JST 2015
+	Version : Fri Feb 13 15:33:27 JST 2015
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands/sendmail command/UTF-8)
 __USAGE
   exit 1
@@ -194,7 +194,7 @@ case $# in
           print_usage_and_exit
         }
         file=$1
-        case "$file" in -*) file="./$file";; esac
+        case "$file" in -|/*|./*|../*) :;; *) file="./$file";; esac
         ;;
         # supporting $#==2 is for compatibility with the previous version
         # even if given, ignored

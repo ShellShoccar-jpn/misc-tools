@@ -39,7 +39,7 @@
 # * On "validate", "reuse" and "remove" subcommands, you can set the session
 #   file directory in the <id> argument instead of the "at" argument.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/07
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/13
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -61,7 +61,7 @@ fi
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} <subcommand> [argument] ...
-	Version : Sat Feb  7 01:46:59 JST 2015
+	Version : Fri Feb 13 15:35:17 JST 2015
 __USAGE
   exit 1
 }
@@ -109,7 +109,7 @@ for arg in "$@"; do
   esac
 done
 [ -n "$dir" ] || print_usage_and_exit
-case "$dir" in -*) dir="./$dir";; esac
+case "$dir" in -|/*|./*|../*) :;; *) dir="./$dir";; esac
 
 # --- subcommand routines --------------------------------------------
 case $subcmd in
