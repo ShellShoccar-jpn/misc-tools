@@ -23,7 +23,7 @@
 #                            And when the unit suffix is written at last,
 #                            the value is multiplied by the unit suffix.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/16
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/20
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -36,7 +36,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [-c] -s [+|-]size[K|k|M|m|G|g|T|t] file ...
 	        : ${0##*/} [-c] -r rfile file ...
-	Version : Mon Feb 16 21:33:03 JST 2015
+	Version : Fri Feb 20 18:35:59 JST 2015
 __USAGE
   exit 1
 }
@@ -62,7 +62,7 @@ set -u
 export LANG=C
 export LC_ALL=C
 
-# --- exec the mktemp command if exists ------------------------------
+# --- FUNC: exec the mktemp command if exists ------------------------
 get_attr_and_size0() {
   attr=$1
   size0=$(ls -adl "$attr" 2>/dev/null) || [ ! -e "$attr" ] || {
@@ -73,6 +73,93 @@ get_attr_and_size0() {
   set -- $size0
   attr=${1:-}
   size0=${5:-0}
+  return 0
+}
+
+# --- FUNC: Make a Temporary File ------------------------------------
+# arg   : (none)
+# ret   : 0 when succeeded
+# stdout: path of the generated temporary file
+mktempf() {
+  # --- parameters, etc. ---------------------------------------------
+  num_of_digits=16  # Length of Random String
+  n=10              # Max Times of Retrying
+  chrs='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_'
+                    # Available letters
+  LF=$(printf '\\\n_');LF=${LF%_}
+  # --- call built-in mktemp if exists -------------------------------
+  type mktemp >/dev/null 2>&1 && {
+    mktemp -t tmp.${0##*/}.$$.XXXXXXXXXXXXXXXX
+    return $?
+  }
+  # --- set the temporary directory ----------------------------------
+  Dir_tmp=$(set | grep -q ^TMPDIR= | sed 's/^[^=]\{1,\}=//');
+  case "$Dir_tmp" in
+    '') Dir_tmp='/tmp'      ;;
+    /)  Dir_tmp=''          ;;
+    *)  Dir_tmp=${Dir_tmp%/};;
+  esac
+  # --- mktemp loop --------------------------------------------------
+  while [ $n -ge 0 ]; do
+    # --- Generate Ramdom string -------------------------------------
+    # calculate the number of words which required
+    nw=$(echo "${num_of_digits}*l(${#chrs})/11.09+1" | # 11.09=ln(65536)
+         bc -l                           |
+         sed 's/\..*$//'                 )
+    # make a random hexadecimal digit
+    if [ -c /dev/urandom ]; then
+      hstr=$(dd if=/dev/urandom bs=2 count=$nw 2>/dev/null |
+             od -A n -t x2 -v                              |
+             tr 'abcdef ' 'ABCDEF\n'                       |
+             tr -Cd 0123456789ABCDEF                       )
+    else
+      hstr=$( (ps -Ao pid,etime,pcpu,vsz; date)         |
+             od -t d4 -A n -v                           |
+             sed 's/[^0-9]\{1,\}/'"$LF"'/g'             |
+             grep '[0-9]'                               |
+             tail -n 42                                 |
+             sed 's/.*\(.\{8\}\)$/\1/g'                 |
+             awk 'BEGIN{a=-2147483648;}                 #
+                       {a+=$1;        }                 #
+                  END  {                                #
+                    srand(a);                           #
+                    for(i=0;i<'$nw';i++){               #
+                      printf("%02X",int(rand()*65536)); #
+                    }                                   #
+                  }'                                    )
+    fi
+    # make a random string from the hexadecimal digit
+    s=$(echo "obase=${#chrs};ibase=16;$hstr"                     |
+        bc                                                       |
+        tr -d '\\\n'                                             |
+        tr ' ' '\n'                                              |
+        awk 'BEGIN  {for(i=1;i<'$num_of_digits';i++){print 0;}}  #
+             /[0-9]/{print;                                   }' |
+        awk 'BEGIN  {ORS="";                                     #
+                     s="'"$chrs"'";                              #
+                     for(i=0;i<length(s);i++){                   #
+                       c[i]=substr(s,i+1,1);                     #
+                     }                        }                  #
+             /[0-9]/{print c[$0*1];           }'                 |
+        tail -c $num_of_digits                                   )
+    # --- Making the file path ---------------------------------------
+    Path_target="${Dir_tmp}/tmp.${0##*/}.$$.$s"
+    # --- Making the file --------------------------------------------
+    (set -C; umask 177; : > "$Path_target") 2>/dev/null || {
+      [ -f "$Path_target" ] && { n=$((n-1)); continue; }
+      n=-1; break;
+    }
+    break
+  done
+  # --- print error message when failed to make a file ---------------
+  case "${n}" in
+    1) printf '%s\n' "${0##*/}: failed on $Path_target" 1>&2
+       return 1
+       ;;
+  esac
+  # --- print the path of the file -----------------------------------
+  printf '%s\n' "$Path_target"
+  # --- return successfully ------------------------------------------
   return 0
 }
 
@@ -156,11 +243,10 @@ while :; do
        optmode=''
        continue
        ;;
-    s) printf '%s' "$s"                      |
-       awk '/^[0-9]+[KkMmGgTt]?$/  {exit 0;} #
-            /^\+[0-9]+[KkMmGgTt]?$/{exit 1;} #
-            /^-[0-9]+[KkMmGgTt]?$/ {exit 1;} #
-                                   {exit 2;}'
+    s) printf '%s' "$s"                        |
+       awk '/^[0-9]+[KkMmGgTt]?$/    {exit 0;} #
+            /^[+-][0-9]+[KkMmGgTt]?$/{exit 1;} #
+                                     {exit 2;}'
        case $? in
          0) case "$s" in
               *[0-9]) asize=$s                                 ;;
@@ -242,9 +328,9 @@ for file0 in "$@"; do
   esac
   # 2-1) Refuse truncating when dsize >= 16GB
   case $(echo "${dsize}-17179869184" | bc) in
-    [0-9]*) printf '%s: Too large to increase the filesize of `'"'"'\n' \
-                   "${0##*/}"                                           \
-                   "$file0"                                             1>&2
+    [0-9]*) printf '%s: Too large to increase the filesize of `%s'"'"'\n' \
+                   "${0##*/}"                                             \
+                   "$file0"                                               1>&2
             err=1
             continue
             ;;
@@ -254,10 +340,24 @@ for file0 in "$@"; do
   case $dsize in
     -*) # decrease size
         case $size1 in
-          0) : > "$file0"                                                   ;;
-          *) (
-               rm -f "$file" && dd count=1 bs=$size1 "of=$file0" 2>/dev/null
-             ) < "$file0"                                                   ;;
+          0) : > "$file0"
+             ;;
+          *) case "${tmpf:-}" in
+               '') tmpf=$(mktempf) || {
+                     printf '%s: %s: Failed to truncate\n' "${0##*/}" "$file0"
+                     err=1
+                     continue
+                   }
+                   trap "rm -f $tmpf; exit" EXIT HUP INT QUIT PIPE ALRM TERM
+                   ;;
+             esac
+             dd "if=$file0" count=1 bs=$size1 "of=$tmpf" 2>/dev/null || {
+               printf '%s: %s: Failed to truncate\n' "${0##*/}" "$file0"
+               err=1
+               continue
+             }
+             cat "$tmpf" > "$file0"
+             ;;
         esac
         ;;
      0) # same size (do nothing)
