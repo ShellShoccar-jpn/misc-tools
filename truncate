@@ -23,7 +23,7 @@
 #                            And when the unit suffix is written at last,
 #                            the value is multiplied by the unit suffix.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/20
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/21
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -36,7 +36,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [-c] -s [+|-]size[K|k|M|m|G|g|T|t] file ...
 	        : ${0##*/} [-c] -r rfile file ...
-	Version : Fri Feb 20 18:35:59 JST 2015
+	Version : Sat Feb 21 22:18:58 JST 2015
 __USAGE
   exit 1
 }
@@ -80,7 +80,7 @@ get_attr_and_size0() {
 # arg   : (none)
 # ret   : 0 when succeeded
 # stdout: path of the generated temporary file
-mktempf() {
+mktempf0() {
   # --- parameters, etc. ---------------------------------------------
   num_of_digits=16  # Length of Random String
   n=10              # Max Times of Retrying
@@ -104,8 +104,8 @@ mktempf() {
     # --- Generate Ramdom string -------------------------------------
     # calculate the number of words which required
     nw=$(echo "${num_of_digits}*l(${#chrs})/11.09+1" | # 11.09=ln(65536)
-         bc -l                           |
-         sed 's/\..*$//'                 )
+         bc -l                                       |
+         sed 's/\..*$//'                             )
     # make a random hexadecimal digit
     if [ -c /dev/urandom ]; then
       hstr=$(dd if=/dev/urandom bs=2 count=$nw 2>/dev/null |
@@ -152,11 +152,7 @@ mktempf() {
     break
   done
   # --- print error message when failed to make a file ---------------
-  case "${n}" in
-    1) printf '%s\n' "${0##*/}: failed on $Path_target" 1>&2
-       return 1
-       ;;
-  esac
+  case "$n" in -1) return 1;; esac
   # --- print the path of the file -----------------------------------
   printf '%s\n' "$Path_target"
   # --- return successfully ------------------------------------------
@@ -221,9 +217,13 @@ while :; do
                ;;
            -*) break
                ;;
-           l*) srcfile=$(file "$file"                                  |
-                         sed 's/^.\{'${#file}'\}: symbolic link to //' |
-                         sed 's/^`\(.*\)'"'"'$/\1/'                    )
+           l*) s=$(printf '%s' "$file"         |
+                   sed 's/\([].\*/[]\)/\\\1/g' |
+                   sed 's/^\^/\\^/'            |
+                   sed 's/\$$/\\$/'            )
+               srcfile=$(file "$file"                              |
+                         sed 's/^.\{'"$s"'\}: symbolic link to //' |
+                         sed 's/^`\(.*\)'"'"'$/\1/'                )
                case "$srcfile" in
                  /*) file=$srcfile             ;;
                   *) file="${file%/*}/$srcfile";;
@@ -298,9 +298,13 @@ for file0 in "$@"; do
           ;;
       -*) break
           ;;
-      l*) srcfile=$(file "$file"                                  |
-                    sed 's/^.\{'${#file}'\}: symbolic link to //' |
-                    sed 's/^`\(.*\)'"'"'$/\1/'                    )
+      l*) s=$(printf '%s' "$file"         |
+              sed 's/\([].\*/[]\)/\\\1/g' |
+              sed 's/^\^/\\^/'            |
+              sed 's/\$$/\\$/'            )
+          srcfile=$(file "$file"                              |
+                    sed 's/^.\{'"$s"'\}: symbolic link to //' |
+                    sed 's/^`\(.*\)'"'"'$/\1/'                )
           case "$srcfile" in
             /*) file=$srcfile             ;;
              *) file="${file%/*}/$srcfile";;
@@ -343,7 +347,7 @@ for file0 in "$@"; do
           0) : > "$file0"
              ;;
           *) case "${tmpf:-}" in
-               '') tmpf=$(mktempf) || {
+               '') tmpf=$(mktempf0) || {
                      printf '%s: %s: Failed to truncate\n' "${0##*/}" "$file0"
                      err=1
                      continue

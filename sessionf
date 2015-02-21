@@ -39,7 +39,7 @@
 # * On "validate", "reuse" and "remove" subcommands, you can set the session
 #   file directory in the <id> argument instead of the "at" argument.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/13
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/22
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -50,20 +50,96 @@
 # --- initalization --------------------------------------------------
 set -u
 PATH=/usr/bin:/bin
-Homedir=$(cd $(dirname "$0") && pwd)
-#
-if [ \( -f "${0%/*}/mkstemp" \) -a \( -x "${0%/*}/mkstemp" \) ]; then
-  CMD_MKTEMP="${0%/*}/mkstemp"
-else
-  CMD_MKTEMP='mktemp'
-fi
 #
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} <subcommand> [argument] ...
-	Version : Fri Feb 13 15:35:17 JST 2015
+	Version : Sun Feb 22 02:28:31 JST 2015
 __USAGE
   exit 1
+}
+
+# --- FUNC: Make a Temporary File ------------------------------------
+# $1    : template filepath
+# ret   : 0 when succeeded
+# stdout: path of the generated temporary file
+mktempf1() {
+  # --- parameters, etc. ---------------------------------------------
+  n=10              # Max Times of Retrying
+  chrs='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_'
+                    # Available letters
+  LF=$(printf '\\\n_');LF=${LF%_}
+  # --- call built-in mktemp if exists -------------------------------
+  type mktemp >/dev/null 2>&1 && {
+    mktemp "$1"
+    return $?
+  }
+  # --- Count the numner of "X" --------------------------------------
+  Path_target_base=$(printf '%s' "$1" | sed 's/X*$//')
+  num_of_digits=$((${#1}-${#Path_target_base}))
+  # --- mktemp loop --------------------------------------------------
+  while [ $n -ge 0 ]; do
+    case $num_of_digits in
+      0) Path_target=$Path_target_base
+         n=0
+         ;;
+      *) # --- Generate Ramdom string --------------------------------
+         # calculate the number of words which required
+         nw=$(echo "${num_of_digits}*l(${#chrs})/11.09+1" | # 11.09=ln(65536)
+              bc -l                                       |
+              sed 's/\..*$//'                             )
+         # make a random hexadecimal digit
+         if [ -c /dev/urandom ]; then
+           hstr=$(dd if=/dev/urandom bs=2 count=$nw 2>/dev/null |
+                  od -A n -t x2 -v                              |
+                  tr 'abcdef ' 'ABCDEF\n'                       |
+                  tr -Cd 0123456789ABCDEF                       )
+         else
+           hstr=$( (ps -Ao pid,etime,pcpu,vsz; date)         |
+                  od -t d4 -A n -v                           |
+                  sed 's/[^0-9]\{1,\}/'"$LF"'/g'             |
+                  grep '[0-9]'                               |
+                  tail -n 42                                 |
+                  sed 's/.*\(.\{8\}\)$/\1/g'                 |
+                  awk 'BEGIN{a=-2147483648;}                 #
+                            {a+=$1;        }                 #
+                       END  {                                #
+                         srand(a);                           #
+                         for(i=0;i<'$nw';i++){               #
+                           printf("%02X",int(rand()*65536)); #
+                         }                                   #
+                       }'                                    )
+         fi
+         # make a random string from the hexadecimal digit
+         s=$(echo "obase=${#chrs};ibase=16;$hstr"                     |
+             bc                                                       |
+             tr -d '\\\n'                                             |
+             tr ' ' '\n'                                              |
+             awk 'BEGIN  {for(i=1;i<'$num_of_digits';i++){print 0;}}  #
+                  /[0-9]/{print;                                   }' |
+             awk 'BEGIN  {ORS="";                                     #
+                          s="'"$chrs"'";                              #
+                          for(i=0;i<length(s);i++){                   #
+                            c[i]=substr(s,i+1,1);                     #
+                          }                        }                  #
+                  /[0-9]/{print c[$0*1];           }'                 |
+             tail -c $num_of_digits                                   )
+         Path_target="$Path_target_base$s"
+         ;;
+    esac
+    # --- Making the file --------------------------------------------
+    (set -C; umask 177; : > "$Path_target") 2>/dev/null || {
+      [ -f "$Path_target" ] && { n=$((n-1)); continue; }
+      n=-1; break;
+    }
+    break
+  done
+  # --- print error message when failed to make a file ---------------
+  case "$n" in -1) return 1;; esac
+  # --- print the path of the file -----------------------------------
+  printf '%s\n' "$Path_target"
+  # --- return successfully ------------------------------------------
+  return 0
 }
 
 # --- parse arguments ------------------------------------------------
@@ -115,7 +191,7 @@ case "$dir" in -|/*|./*|../*) :;; *) dir="./$dir";; esac
 case $subcmd in
   create)
     [ -n "$idtmpl"  ] || print_usage_and_exit
-    exec $CMD_MKTEMP "$dir/$idtmpl"
+    { mktempf1 "$dir/$idtmpl"; exit $?; }
     ;;
   validate)
     [ -n "$lifemin" ] || print_usage_and_exit
@@ -135,9 +211,9 @@ case $subcmd in
   avail)
     [ -n "$lifemin" ] || print_usage_and_exit
     [ -n "$idtmpl"  ] || exit 1
-    [ -f "$dir/$id" ] || exec $CMD_MKTEMP "$dir/$idtmpl"
+    [ -f "$dir/$id" ] || { mktempf1 "$dir/$idtmpl"; exit $?; }
     find "$dir" -name "$id" -mmin +$lifemin | awk 'END{exit (NR>0) ? 1 : 0;}'
-    [ $? -eq 0      ] || exec $CMD_MKTEMP "$dir/$idtmpl"
+    [ $? -eq 0      ] || { mktempf1 "$dir/$idtmpl"; exit $?; }
     touch "$dir/$id"
     printf '%s\n' "$dir/$id"
     exit 0
@@ -148,7 +224,7 @@ case $subcmd in
     [ -f "$dir/$id" ] || exit 1
     find "$dir" -name "$id" -mmin +$lifemin | awk 'END{exit (NR>0) ? 1 : 0;}'
     [ $? -eq 0      ] || exit 2
-    check=$($CMD_MKTEMP "$dir/$idtmpl" 2>/dev/null)
+    check=$(mktempf1 "$dir/$idtmpl")
     [ $? -eq 0      ] || exit 3
     mv -f "$dir/$id" "$check"
     [ $? -eq 0      ] || exit 4
