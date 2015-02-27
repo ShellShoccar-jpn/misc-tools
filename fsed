@@ -1,4 +1,4 @@
-#! /bin/sh -u
+#! /bin/sh
 
 ######################################################################
 #
@@ -11,7 +11,7 @@
 #   expression has, so that you can very easily substitute strings
 #   include various meta-characters, e.g. ^, $, \, /, &, and so on.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/13
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/27
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -23,10 +23,17 @@
 print_usage_and_exit () {
   cat <<__USAGE 1>&2
 Usage   : ${0##*/} <pattern_str> <substitute_str>
-Version : Fri Feb 13 15:15:59 JST 2015
+Version : Fri Feb 27 15:22:11 JST 2015
 __USAGE
   exit 1
 }
+
+# initalize
+set -u
+umask 0022
+PATH='/usr/bin:/bin'
+IFS=$(printf ' \t\n_'); IFS=${IFS%_}
+export IFS LC_ALL=C LANG=C PATH
 
 # parse the arguments
 case $# in
@@ -48,7 +55,9 @@ pat=$(printf '%s' "$1"            |
       sed 's/^\^/\\^/'            |
       sed 's/\$$/\\$/'            )
 sub=$(printf '%s' "$2"         |
-      sed 's/\([\&/]\)/\\\1/g' )
+      sed 's/\([\&/]\)/\\\1/g' |
+      sed 's/$/\\/'            |
+      sed '$s/\\$//'           )
 
 # transformation
 case "$file" in
