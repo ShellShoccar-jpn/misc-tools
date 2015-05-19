@@ -1,4 +1,4 @@
-#! /bin/sh -u
+#! /bin/sh
 
 ######################################################################
 #
@@ -15,7 +15,7 @@
 #
 # Return : $?に判定結果
 #
-# Written by Rich Mikan(richmikan@richlab.org) at 2015/02/13
+# Written by Rich Mikan(richmikan@richlab.org) at 2015/02/23
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -27,10 +27,17 @@
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} <file>
-	Version : Fri Feb 13 15:19:38 JST 2015
+	Version : Mon Feb 23 15:14:20 JST 2015
 __USAGE
   exit 1
 }
+
+# initalize
+set -u
+umask 0022
+PATH='/usr/bin:/bin'
+IFS=$(printf ' \t\n_'); IFS=${IFS%_}
+export IFS LC_ALL=C LANG=C PATH
 
 if [ \( -f "${1:-}"      \) -o \
      \( -c "${1:-}"      \) -o \
@@ -49,7 +56,7 @@ fi
 case "$file" in -|/*|./*|../*) :;; *) file="./$file";; esac
 
 # main
-exec env - awk '
+exec awk '
 BEGIN {
   # register all character codes
   for(i=1;i<=255;i++){asc[sprintf("%c",i)]=i;}

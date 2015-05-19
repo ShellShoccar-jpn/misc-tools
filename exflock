@@ -1,4 +1,4 @@
-#! /bin/sh -u
+#! /bin/sh
 
 ######################################################################
 #
@@ -44,7 +44,7 @@
 #              :
 #          kill $flock_pid
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/21
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/23
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -65,7 +65,7 @@ print_usage_and_exit () {
 	         <file> ......... the path of the file you want to lock
 	         [maxlifetime] .. the maximum life of the locking process (sec)
 	                          (0 means infinity, and default=$DEFAULT_MAXLIFETIME)
-	Version : Sat Feb 21 22:14:37 JST 2015
+	Version : Mon Feb 23 15:00:38 JST 2015
 __USAGE
   exit 1
 }
@@ -155,8 +155,12 @@ mktempf0() {
 
 # ===== PREPARATION ==================================================
 
-# --- set the command path -------------------------------------------
+# --- initialize -----------------------------------------------------
+set -u
 PATH='/usr/bin:/bin'
+IFS=$(printf ' \t\n_'); IFS=${IFS%_}
+export IFS LC_ALL=C LANG=C PATH
+umask 0022
 
 # --- judge which is my flock command --------------------------------
 case $(uname) in

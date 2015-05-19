@@ -1,0 +1,491 @@
+#! /bin/sh
+
+######################################################################
+#
+# PSHLOCK : A Shared Lock (and Semaphore) Command within POSIX
+#
+# Usage  : ${0##*/} [options] <lockname> [lockname ...]
+#          -n <maxsharing> ... the maximum number of sharing lock
+#                              This option is for using as a semaphore.
+#                              The default value is -1.
+#                              (-1 means infinity that is sharing lock)
+#          -d <lockdir> ...... the directory for lockfiles.
+#                              The lockfile directory will be decided
+#                              as the following rule.
+#                              1) this option "-d" if specified
+#                              2) the environment varriable "PLOCKDIR"
+#                                 if specified
+#                              3) if the environment varriable "TMPDIR"
+#                                 specified, "$TMPDIR/plock.<username>"
+#                              4) "/tmp/plock.<username>" (default)
+#          -w <maxwaiting> ... maximum waiting seconds to succeed locking
+#                              (-1 means waiting infinitely)
+#                              The default value is 10.
+#          -l <lifetime> ..... the maximum lifetime of the lockfile (sec)
+#                              The default value is 600.
+#                              Older lockfiles than that will be ignored
+#                              and removed.
+#
+# Return : ==0 ... success to locking
+#          !=0 ... failure
+#
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/05/19
+#
+# This is a public-domain software. It measns that all of the people
+# can use this with no restrictions at all. By the way, I am fed up
+# the side effects which are broght about by the major licenses.
+#
+######################################################################
+
+
+# ===== FUNCTIONS ====================================================
+
+# --- FUNC: print the usage and exit ---------------------------------
+print_usage_and_exit () {
+  cat <<-__USAGE 1>&2
+	Usage  : ${0##*/} [options] <lockname> [lockname ...]
+	         -n <maxsharing> ... the maximum number of sharing lock
+	                             This option is for using as a semaphore.
+	                             The default value is -1.
+	                             (-1 means infinity that is sharing lock)
+	         -d <lockdir> ...... the directory for lockfiles.
+	                             The lockfile directory will be decided
+	                             as the following rule.
+	                             1) this option "-d" if specified
+	                             2) the environment varriable "PLOCKDIR"
+	                                if specified
+	                             3) if the environment varriable "TMPDIR"
+	                                specified, "\$TMPDIR/plock.<username>"
+	                             4) "/tmp/plock.<username>" (default)
+	         -w <maxwaiting> ... maximum waiting seconds to succeed locking
+	                             (-1 means waiting infinitely)
+	                             The default value is 10.
+	         -l <lifetime> ..... the maximum lifetime of the lockfile (sec)
+	                             The default value is 600.
+	                             Older lockfiles than that will be ignored
+	                             and removed.
+	Version : Tue May 19 12:11:07 JST 2015
+__USAGE
+  exit 1
+}
+
+# --- FUNC: exit-trap ------------------------------------------------
+# arg   : [return code]
+# ret   : (not return)
+exit_trap () {
+  trap EXIT HUP INT QUIT PIPE ALRM TERM
+  rm -rf "${Dir_prelk:-}" "${File_modlk:-}" >/dev/null 2>&1
+  exit ${1:-0}
+}
+
+# --- FUNC: Make a Temporary Directory -------------------------------
+# arg   : base pathname of the temporary directory
+# ret   : 0 when succeeded
+# stdout: path of the generated temporary file
+mktempd() {
+  # --- call built-in mktemp if available ----------------------------
+  type mktemp >/dev/null 2>&1 && {
+    mktemp -d "$1"
+    return $?
+  }
+  # --- parameters, etc. ---------------------------------------------
+  Path_target_base=$(printf '%s' "$1" | sed 's/X*$//')
+  num_of_digits=$((${#1}-${#Path_target_base})) # Length of Random String
+  n=10                                          # Max Times of Retrying
+  chrs='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_'
+                                                # Available letters
+  LF=$(printf '\\\n_');LF=${LF%_}
+  # --- set the temporary directory ----------------------------------
+  case "$1" in
+    /*) :;;
+     *) s=$(pwd)
+        Path_target_base="${s%/}/$Path_target_base"
+        ;;
+  esac
+  # --- mktemp loop --------------------------------------------------
+  while [ $n -ge 0 ]; do
+    # --- Generate Ramdom string -------------------------------------
+    # calculate the number of words which required
+    nw=$(echo "${num_of_digits}*l(${#chrs})/11.09+1" | # 11.09=ln(65536)
+         bc -l                                       |
+         sed 's/\..*$//'                             )
+    # make a random hexadecimal digit
+    if [ -c /dev/urandom ]; then
+      hstr=$(dd if=/dev/urandom bs=2 count=$nw 2>/dev/null |
+             od -A n -t x2 -v                              |
+             tr 'abcdef ' 'ABCDEF\n'                       |
+             tr -Cd 0123456789ABCDEF                       )
+    else
+      hstr=$( (ps -Ao pid,etime,pcpu,vsz; date)         |
+             od -t d4 -A n -v                           |
+             sed 's/[^0-9]\{1,\}/'"$LF"'/g'             |
+             grep '[0-9]'                               |
+             tail -n 42                                 |
+             sed 's/.*\(.\{8\}\)$/\1/g'                 |
+             awk 'BEGIN{a=-2147483648;}                 #
+                       {a+=$1;        }                 #
+                  END  {                                #
+                    srand(a);                           #
+                    for(i=0;i<'$nw';i++){               #
+                      printf("%02X",int(rand()*65536)); #
+                    }                                   #
+                  }'                                    )
+    fi
+    # make a random string from the hexadecimal digit
+    s=$(echo "obase=${#chrs};ibase=16;$hstr"                     |
+        bc                                                       |
+        tr -d '\\\n'                                             |
+        tr ' ' '\n'                                              |
+        awk 'BEGIN  {for(i=1;i<'$num_of_digits';i++){print 0;}}  #
+             /[0-9]/{print;                                   }' |
+        awk 'BEGIN  {ORS="";                                     #
+                     s="'"$chrs"'";                              #
+                     for(i=0;i<length(s);i++){                   #
+                       c[i]=substr(s,i+1,1);                     #
+                     }                        }                  #
+             /[0-9]/{print c[$0*1];           }'                 |
+        tail -c $num_of_digits                                   )
+    # --- Making the file path ---------------------------------------
+    Path_target="${Path_target_base}$s"
+    # --- Making the directory ---------------------------------------
+    (umask 077; mkdir "$Path_target" >/dev/null 2>&1) || {
+      [ -f "$Path_target" ] && { n=$((n-1)); continue; }
+      n=-1; break;
+    }
+    break
+  done
+  # --- print error message when failed to make a file ---------------
+  case "$n" in -1) return 1;; esac
+  # --- print the path of the file -----------------------------------
+  printf '%s\n' "$Path_target"
+  # --- return successfully ------------------------------------------
+  return 0
+}
+
+# --- FUNC: Remove the too old directories in the specified directory 
+# arg #1: directory path which it be removed the old files
+# arg #2: lifetime in seconds
+# ret   : 0 when succeeded
+rmdir_if_too_old() {
+  [ -d "$1" ] || return 1
+
+  # --- Calculate the date and time of the border --------------------
+  borderdatetime=$(awk '
+    BEGIN {
+      now_gm="'$(TZ=UTC+0 date '+%Y%m%d%H%M%S')'";
+      now_lo="'$(         date '+%Y%m%d%H%M%S')'";
+      unixtime2YYYYMMDDhhmmss_init("LOCALTIME");
+      now_ut = YYYYMMDDhhmmss2unixtime(now_lo);
+      bor_rt = unixtime2YYYYMMDDhhmmss(now_ut-'"$2"'-1);
+      print substr(bor_rt,1,12) "." substr(bor_rt,13);
+    }
+    function YYYYMMDDhhmmss2unixtime(YYYYMMDDhhmmss, Y,M,D,h,m,s,l) {
+      # 1) seperate the units
+      l = length(YYYYMMDDhhmmss);
+      if        (l <  5) { # invalid
+        return -1;
+      } else if (l <  8) { # YYMMMDD only
+        Y = substr(YYYYMMDDhhmmss,  1,l-4)*1+substr(now_lo,1,2)*100;
+        M = substr(YYYYMMDDhhmmss,l-3,  2)*1;
+        D = substr(YYYYMMDDhhmmss,l-1,  2)*1;
+        h = 0; m = 0; s = 0;
+      } else if (l < 12) { # YYYYMMDD only
+        Y = substr(YYYYMMDDhhmmss,  1,l-4)*1;
+        M = substr(YYYYMMDDhhmmss,l-3,  2)*1;
+        D = substr(YYYYMMDDhhmmss,l-1    )*1;
+        h = 0; m = 0; s = 0;
+      } else {             # YYYYMMDDhhmmss
+        Y = substr(YYYYMMDDhhmmss,  1,l-10)*1;
+        M = substr(YYYYMMDDhhmmss,l-9,   2)*1;
+        D = substr(YYYYMMDDhhmmss,l-7,   2)*1;
+        h = substr(YYYYMMDDhhmmss,l-5,   2)*1;
+        m = substr(YYYYMMDDhhmmss,l-3,   2)*1;
+        s = substr(YYYYMMDDhhmmss,l-1     )*1;
+      }
+      # 2) validate
+      if ((s>60) || (m>59) || (h>23) || (M>12)) {return -1;}
+      days_of_month[2] = (Y%4!=0)?28:(Y%100!=0)?29:(Y%400!=0)?28:29;
+      if (D > days_of_month[M]                ) {return -1;}
+      # 3) adjust the value of year and month
+      if (M<3) {M+=12; Y--;}
+      # 4) calculate unixtime
+      return (365*Y+int(Y/4)-int(Y/100)+int(Y/400)+int(306*(M+1)/10)-428+D-719163)*86400+(h*3600)+(m*60)+s-offset;
+    }
+    function unixtime2YYYYMMDDhhmmss_init(localtime_flag, gm,lo) {
+      max_calced_year = 1970;              # To remember everydays on Jan.1 from
+      days_on_Jan1st_from_epoch[1970] = 0; # the Epoch which was calculated once
+      split("31 0 31 30 31 30 31 31 30 31 30 31", days_of_month);
+      if (localtime_flag == "LOCALTIME") {
+        gm      = YYYYMMDDhhmmss2unixtime(now_gm);
+        lo      = YYYYMMDDhhmmss2unixtime(now_lo);
+        offset  = lo - gm;
+        offset -= (offset%2); # cancel the timelag of the two date starting time
+      } else {
+        offset  = 0;
+      }
+    }
+    function unixtime2YYYYMMDDhhmmss(ut, Y,M,D,h,m,s,t,i,j) {
+      # 0) timezone adjustment
+      ut += offset;
+      if (ut < 0) {return -1;}
+      # 1) calculate hour,minute,second and number of days from the Epoch
+      s = ut % 60;  t = int(ut/60);
+      m =  t % 60;  t = int( t/60);
+      h =  t % 24;
+      days_from_epoch = int( t/24);
+      # 2) calculate year
+      Y = int(days_from_epoch/365.2425)+1970+1;
+      if (Y > max_calced_year) {
+         i = days_on_Jan1st_from_epoch[max_calced_year];
+         for (j=max_calced_year; j<Y; j++) {
+           i += (j%4!=0)?365:(j%100!=0)?366:(j%400!=0)?365:366;
+           days_on_Jan1st_from_epoch[j+1] = i;
+         }
+         max_calced_year = Y;
+      }
+      for (;;Y--) {
+        if (days_from_epoch >= days_on_Jan1st_from_epoch[Y]) {
+          break;
+        }
+      }
+      # 3) calculate month,day
+      days_of_month[2] = (Y%4!=0)?28:(Y%100!=0)?29:(Y%400!=0)?28:29;
+      D = days_from_epoch - days_on_Jan1st_from_epoch[Y] + 1;
+      for (M=1; ; M++) {
+        if (D > days_of_month[M]) {
+          D -= days_of_month[M];
+        } else {
+          break;
+        }
+      }
+      return sprintf("%04d%02d%02d%02d%02d%02d",Y,M,D,h,m,s);
+    }
+  ')
+  # --- Make a file for comparing timestamps -------------------------
+  touch -t $borderdatetime "${1%/}/.border_date_and_time.tmp"
+  # --- Find and rmdir the too old files -----------------------------
+  s=$(printf '%s' "${1%/}"'/'    | # to avoid removing the directory $1
+      sed 's/\([].\*[]\)/\\\1/g' |
+      sed 's/^\^/^\\^/'          |
+      sed 's/^/^/'               |
+      sed 's/$/\\{0,1\\}$/'      )
+  find "$1" -type d \( \! -newer "${1%/}/.border_date_and_time.tmp" \) |
+  grep -v "$s"                                                         |
+  xargs rm -rf
+  rm -f "${1%/}/.border_date_and_time.tmp"
+}
+
+
+
+# ===== PREPARATION ==================================================
+
+# --- initialize -----------------------------------------------------
+set -u
+PATH='/usr/bin:/bin'
+IFS=$(printf ' \t\n_'); IFS=${IFS%_}
+export IFS LC_ALL=C LANG=C PATH
+umask 0022
+
+# --- parse the arguments --------------------------------------------
+max_num_of_sharing=-1
+dopt=''
+max_waiting_secs=10
+max_lifetime_secs=600
+optmode=''
+while [ $# -gt 0 ]; do
+  case "$optmode" in
+    '') case "$1" in
+          --)       shift
+                    break
+                    ;;
+          -[hv]|--help|--version)
+                    print_usage_and_exit
+                    ;;
+          -[ndwl]*) ret=$(printf '%s\n' "${1#-}"                              |
+                          awk '{opt     = substr($0,1,1);                     #
+                                opt_str = (length($0)>1) ? substr($0,2) : ""; #
+                                printf("%s %s", opt, opt_str);              }')
+                    ret1=${ret%% *}
+                    ret2=${ret#* }
+                    case "$ret1$ret2" in
+                      n)  optmode='n'             ;;
+                      n*) max_num_of_sharing=$ret2;;
+                      d)  optmode='d'             ;;
+                      d*) dopt=$ret2              ;;
+                      w)  optmode='w'             ;;
+                      w*) max_waiting_secs=$ret2  ;;
+                      l)  optmode='l'             ;;
+                      l*) max_lifetime_secs=$ret2 ;;
+                    esac
+                    ;;
+          -*)       print_usage_and_exit
+                    ;;
+          *)        break
+                    ;;
+        esac
+        ;;
+    n)  max_num_of_sharing=$1
+        optmode=''
+        ;;
+    d)  dopt=$1
+        optmode=''
+        ;;
+    w)  max_waiting_secs=$1
+        optmode=''
+        ;;
+    l)  max_lifetime_secs=$1
+        optmode=''
+        ;;
+  esac
+  shift
+done
+case $# in 0) print_usage_and_exit;; esac
+echo "_$max_num_of_sharing" | grep -Eq '^_-?[0-9]+$' || {
+  echo "${0##*/}: Maximum number of sharing parameter is invalid" 1>&2
+  exit 1
+}
+echo "_$max_waiting_secs"   | grep -Eq '^_-?[0-9]+$' || {
+  echo "${0##*/}: Maximum waiting seconds parameter is invalid" 1>&2
+  exit 1
+}
+echo "_$max_lifetime_secs"  | grep -Eq '^_[0-9]+$'   || {
+  echo "${0##*/}: Maximum lifetime parameter is invalid" 1>&2
+  exit 1
+}
+Dir_lock=''
+while :; do
+  case "$dopt"         in '') :;; *) Dir_lock="${dopt%/}/"
+                                     break                             ;; esac
+  case "${PLOCKDIR:-}" in '') :;; *) Dir_lock="${PLOCKDIR%/}/"
+                                     break                             ;; esac
+  case "${TMPDIR:-}"   in '') :;; *) Dir_lock="${TMPDIR%/}/plock.$(id -un)/"
+                                     mkdir -p "$Dir_lock" 2>/dev/null
+                                     break                             ;; esac
+  case 'default'       in         *) Dir_lock="/tmp/plock.$(id -un)/"
+                                     mkdir -p "$Dir_lock" 2>/dev/null
+                                     break                             ;; esac
+done
+case $? in
+  [^0]*) echo "${0##*/}: Failed to make the lockfile directory" 1>&2;exit 1;;
+esac
+[ \( -z "$dopt" \) -o \( -d "$dopt" \) ] || {
+  echo "${0##*/}: \"$Dir_lock\": No such directory or permission denied" 1>&2
+  exit 1
+}
+case "$Dir_lock" in [^/]*) s=$(pwd);Dir_lock="${s%/}/$Dir_lock";; esac
+
+
+
+# ===== MAIN =========================================================
+
+trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM
+count_all=0
+count_success=0
+for lockname in "$@"; do
+  count_all=$((count_all+1))
+
+  # --- Validate the lockname  ---------------------------------------
+  case "$lockname" in '.border_date_and_time.tmp')
+    echo "${0##*/}: \".border_date_and_time.tmp\" is reserved, skipped" 1>&2
+    continue
+    ;;
+  esac
+  echo "_$lockname" | grep -q '/' && {
+    echo "${0##*/}: \"$lockname\": '/' cannot be used in lockname, skipped" 1>&2
+    continue
+    ;;
+  }
+
+  # --- Prepare the pre-lock directory -------------------------------
+  # 1) make a temp-dir
+  Dir_prelk=$(mktempd "${Dir_lock}XXXXXXXXXXXXXXXX")
+  case $? in
+     [^0]*) echo "${0##*/}: Failed to make a temp-dir #1 for \"$lockname\"" 1>&2
+            continue
+            ;;
+  esac
+  case "$Dir_prelk" in
+    '') echo "${0##*/}: Failed to make a temp-dir #2 for \"$lockname\"" 1>&2
+        continue
+        ;;
+  esac
+  # 2) make a samename dir into the temp-dir to prevent from double-locking
+  mkdir -p "$Dir_prelk/$lockname/$lockname"
+  # 3) make the "1" which means the 1st process of the shared-lock
+  :      > "$Dir_prelk/$lockname/$lockname/1"
+
+  # --- Try to set shared-lock ---------------------------------------
+  # 1) trying loop
+  if [ $max_waiting_secs -ge 0 ]; then
+    try=$((max_waiting_secs+1))
+  else
+    try=1
+  fi
+  while [ $try -gt 0 ]; do
+    [ $max_waiting_secs -ge 0 ] && try=$((try-1))
+    # 1-0) remove the wreckage directories if exist
+    rmdir_if_too_old "${Dir_lock}" "$max_lifetime_secs"
+    # 1-1) refresh the lockdirectory
+    touch "$Dir_prelk/$lockname/$lockname" \
+          "$Dir_prelk/$lockname"           \
+          "$Dir_prelk"                     >/dev/null 2>&1
+    # 1-2) try to mv and if success, it means success to lock
+    mv "$Dir_prelk/$lockname" "$Dir_lock$lockname" >/dev/null 2>&1 && break
+    # 1-3) if failure, try to add the next numberfile into the lockdirectory
+    cd "$Dir_lock$lockname/$lockname" >/dev/null 2>&1 || { try=-1; break; }
+    rmdir_if_too_old "$Dir_lock$lockname/$lockname" "$max_lifetime_secs"
+    File_modlk="$Dir_lock$lockname/$lockname/modifying"
+    mkdir "$File_modlk" >/dev/null 2>&1 || {
+      # (will try again later)
+      case $try in 0) try=-2;; *) sleep 1;; esac
+      continue
+    }
+    set -- $(ls -l 1 2>/dev/null)
+    case $# in
+      0) cd "$Dir_lock";rm -rf "$Dir_lock$lockname";try=-3 ;continue;;
+    esac
+    case "${max_num_of_sharing},$try" in
+      -*)     :                                   ;; # shared-lock mode
+      ${2},0) rmdir "$File_modlk";try=-4 ;continue;; # semaphore mode (nolonger)
+      ${2},*) rmdir "$File_modlk";sleep 1;continue;; # semaphore mode (retry)
+      *)      :                                   ;; # semaphore mode
+    esac
+    ln 1 $(($2+1))
+    # 1-4) refresh the timestamp of the lockdirectory again
+    touch "${Dir_lock}${lockname}"
+    # 1-5) release the modifying right
+    rmdir "$File_modlk"
+    File_modlk=''
+    break
+  done
+  # 2) remove the pre-lock directory if remained
+  rm -rf "${Dir_prelk:-}" >/dev/null 2>&1
+  Dir_prelk=''
+  # 3) Is the locking success or not?
+  case $try in
+    -1) echo "${0##*/}: Failed to lock for \"$lockname\"" 1>&2
+        continue
+        ;;
+    -2) echo "${0##*/}: Failed to lock for \"$lockname\" try later" 1>&2
+        continue
+        ;;
+    -3) echo "${0##*/}: Invalid lockdirectory \"$lockname\", try later" 1>&2
+        continue
+        ;;
+    -4) echo "${0##*/}: Reached the limit for \"$lockname\", try later" 1>&2
+        continue
+        ;;
+  esac
+
+  count_success=$((count_success+1))
+done
+
+
+
+# ===== FINISH =======================================================
+
+# --- Return 1 if all locking failed ---------------------------------
+case "$count_success:$count_all" in
+  0:[^0]*) exit_trap 1;;
+        *) exit_trap 0;;
+esac

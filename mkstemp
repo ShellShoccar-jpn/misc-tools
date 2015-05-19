@@ -8,7 +8,7 @@
 #
 # * "mktemp(1) options" depend on mktemp(1) on the host
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/13
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/23
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -21,7 +21,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [mktemp(1)options] <template>
 	          "mktemp(1) options" depend on mktemp(1) on the host.
-	Version : Fri Feb 13 15:23:09 JST 2015
+	Version : Mon Feb 23 15:18:40 JST 2015
 __USAGE
   exit 1
 }
@@ -31,8 +31,10 @@ __USAGE
 
 # --- initialization -------------------------------------------------
 set -u
+umask 0022
 PATH='/usr/bin:/bin'
-
+IFS=$(printf ' \t\n_'); IFS=${IFS%_}
+export IFS LC_ALL=C LANG=C PATH
 
 # --- use the built-in mktemp command if not need to do by myself ----
 type mktemp >/dev/null 2>&1

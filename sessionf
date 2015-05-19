@@ -39,7 +39,7 @@
 # * On "validate", "reuse" and "remove" subcommands, you can set the session
 #   file directory in the <id> argument instead of the "at" argument.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/22
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/23
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -47,17 +47,31 @@
 #
 ######################################################################
 
-# --- initalization --------------------------------------------------
-set -u
-PATH=/usr/bin:/bin
-#
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} <subcommand> [argument] ...
-	Version : Sun Feb 22 02:28:31 JST 2015
+	Version : Mon Feb 23 15:21:55 JST 2015
 __USAGE
   exit 1
 }
+
+# --- initalization --------------------------------------------------
+set -u
+umask 0022
+IFS=$(PATH='/usr/bin:/bin' printf ' \t\n_'); IFS=${IFS%_}
+which which >/dev/null 2>&1 || {
+  which () {
+    (
+      PATH='/usr/bin:/bin'
+      ans=$(LANG=C LC_ALL=C type "$1") || exit $?
+      case "$1"   in */*) printf '%s\n' "$1"        ; exit;; esac
+      case "$ans" in */*) printf '%s\n' "/${ans#*/}"; exit;; esac
+      printf '%s\n' "$1"
+    )
+  }
+}
+CMD_MKTEMP=$(which mktemp)
+export IFS LC_ALL=C LANG=C PATH='/usr/bin:/bin'
 
 # --- FUNC: Make a Temporary File ------------------------------------
 # $1    : template filepath
@@ -70,10 +84,13 @@ mktempf1() {
                     # Available letters
   LF=$(printf '\\\n_');LF=${LF%_}
   # --- call built-in mktemp if exists -------------------------------
-  type mktemp >/dev/null 2>&1 && {
-    mktemp "$1"
-    return $?
-  }
+  case "$CMD_MKTEMP" in
+    '') :
+        ;;
+     *) mktemp "$1"
+        return $?
+        ;;
+  esac
   # --- Count the numner of "X" --------------------------------------
   Path_target_base=$(printf '%s' "$1" | sed 's/X*$//')
   num_of_digits=$((${#1}-${#Path_target_base}))

@@ -1,4 +1,4 @@
-#! /bin/sh -u
+#! /bin/sh
  
 ######################################################################
 #
@@ -18,7 +18,7 @@
 # Return: $?=0 (when all of the arguments are valid)
 #         stdout : encoded CGI variables for HTTP POST(GET)
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/13
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/23
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -26,16 +26,20 @@
 #
 ######################################################################
  
-# --- initalization --------------------------------------------------
-PATH=/usr/bin:/bin
-
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} <file>
-	Version : Fri Feb 13 15:21:08 JST 2015
+	Version : Mon Feb 23 15:16:43 JST 2015
 __USAGE
   exit 1
 }
+
+# --- initalization --------------------------------------------------
+set -u
+umask 0022
+PATH='/usr/bin:/bin'
+IFS=$(printf ' \t\n_'); IFS=${IFS%_}
+export IFS LC_ALL=C LANG=C PATH
 
 # --- parse arguments ------------------------------------------------
 case $# in
@@ -55,7 +59,7 @@ esac
 
 
 # --- generate HTTP POST string --------------------------------------
-exec env - awk '
+exec awk '
   BEGIN {
     # --- prepare
     LF = sprintf("\n");

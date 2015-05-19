@@ -1,4 +1,4 @@
-#! /bin/sh -u
+#! /bin/sh
  
 ######################################################################
 #
@@ -39,7 +39,7 @@
 # Return: $?=0 (when all of the options are valid)
 #         stdout : HTTP Cookie string
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/07
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/23
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -47,9 +47,6 @@
 #
 ######################################################################
  
-# --- initalization --------------------------------------------------
-PATH=/usr/bin:/bin
-#
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [options] [<name>=<value>]
@@ -65,10 +62,17 @@ print_usage_and_exit () {
 	          -h <"Y"|"N">       : for JavaScript restriction (HttpOnly)
 	                               "Y" is HttpOnly ON.
 	                               "N" is HttpOnly OFF (default).
-	Version : Sat Feb  7 01:09:45 JST 2015
+	Version : Mon Feb 23 15:17:18 JST 2015
 __USAGE
   exit 1
 }
+
+# --- initalization --------------------------------------------------
+set -u
+umask 0022
+PATH='/usr/bin:/bin'
+IFS=$(printf ' \t\n_'); IFS=${IFS%_}
+export IFS LC_ALL=C LANG=C PATH
 
 # --- parse arguments ------------------------------------------------
 var=''
@@ -206,7 +210,7 @@ case "$var" in                                                                 #
   '') cat                                                                     ;;
    *) printf '%s %s\n' "${var%%=*}" "${var#*=}"                               ;;
 esac                                                                           |
-env - path="${path:-}" awk '                                                   #
+path="${path:-}" awk '                                                         #
   BEGIN {                                                                      #
     # --- prepare                                                              #
     LF = sprintf("\n");                                                        #
