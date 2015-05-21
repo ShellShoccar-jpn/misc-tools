@@ -4,28 +4,37 @@
 #
 # PEXLOCK : A Exclusive Lock Command within POSIX
 #
-# Usage  : ${0##*/} [options] <lockname> [lockname ...]
-#          -d <lockdir> ...... the directory for lockfiles.
-#                              The lockfile directory will be decided
-#                              as the following rule.
-#                              1) this option "-d" if specified
-#                              2) the environment varriable "PLOCKDIR"
-#                                 if specified
-#                              3) if the environment varriable "TMPDIR"
-#                                 specified, "$TMPDIR/plock.<username>"
-#                              4) "/tmp/plock.<username>" (default)
-#          -w <maxwaiting> ... maximum waiting seconds to succeed locking
-#                              (-1 means waiting infinitely)
-#                              The default value is 10.
-#          -l <lifetime> ..... the maximum lifetime of the lockfile (sec)
-#                              The default value is 600.
-#                              Older lockfiles than that will be ignored
-#                              and removed.
+# Usage   : ${0##*/} [options] <lockname> [lockname ...]
+#           -d <lockdir> ...... the directory for lockfiles.
+#                               The lockfile directory will be decided
+#                               as the following rule.
+#                               1) this option "-d" if specified
+#                               2) the environment varriable "PLOCKDIR"
+#                                  if specified
+#                               3) if the environment varriable "TMPDIR"
+#                                  specified, "$TMPDIR/plock.<username>"
+#                               4) "/tmp/plock.<username>" (default)
+#           -w <maxwaiting> ... maximum waiting seconds to succeed locking
+#                               (-1 means waiting infinitely)
+#                               The default value is 10.
+#           -l <lifetime> ..... the maximum lifetime of the lockfile (sec)
+#                               The default value is 600.
+#                               Older lockfiles than that will be ignored
+#                               and removed.
+#                               (-1 means infinitely)
+# Return  : $?     ==0 ... one or more locking were success
+#                  !=0 ... all failure
+#           stdout ....... generated path of the lockfile
 #
-# Return : ==0 ... success to locking
-#          !=0 ... failure
+# Example : lockid=$(pexlock -d /tmp/plock -w 10) || exit 1 # do ex-lock
+#              :
+#           (do something requires exclusive lock)
+#              :
+#           touch -c "$lockid"    # extend lifetime if you want
+#              :                  # (but it needs to remain SUFFICIENT LIFETIME)
+#           punlock "$lockid"                               # release the lock
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/05/19
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/05/21
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -39,24 +48,25 @@
 # --- FUNC: print the usage and exit ---------------------------------
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
-	Usage  : ${0##*/} [options] <lockname> [lockname ...]
-	         -d <lockdir> ...... the directory for lockfiles.
-	                             The lockfile directory will be decided
-	                             as the following rule.
-	                             1) this option "-d" if specified
-	                             2) the environment varriable "PLOCKDIR"
-	                                if specified
-	                             3) if the environment varriable "TMPDIR"
-	                                specified, "\$TMPDIR/plock.<username>"
-	                             4) "/tmp/plock.<username>" (default)
-	         -w <maxwaiting> ... maximum waiting seconds to succeed locking
-	                             (-1 means waiting infinitely)
-	                             The default value is 10.
-	         -l <lifetime> ..... the maximum lifetime of the lockfile (sec)
-	                             The default value is 600.
-	                             Older lockfiles than that will be ignored
-	                             and removed.
-	Version : Tue May 19 12:11:25 JST 2015
+	Usage   : ${0##*/} [options] <lockname> [lockname ...]
+	          -d <lockdir> ...... the directory for lockfiles.
+	                              The lockfile directory will be decided
+	                              as the following rule.
+	                              1) this option "-d" if specified
+	                              2) the environment varriable "PLOCKDIR"
+	                                 if specified
+	                              3) if the environment varriable "TMPDIR"
+	                                 specified, "\$TMPDIR/plock.<username>"
+	                              4) "/tmp/plock.<username>" (default)
+	          -w <maxwaiting> ... maximum waiting seconds to succeed locking
+	                              (-1 means waiting infinitely)
+	                              The default value is 10.
+	          -l <lifetime> ..... the maximum lifetime of the lockfile (sec)
+	                              The default value is 600.
+	                              Older lockfiles than that will be ignored
+	                              and removed.
+	                              (-1 means infinitely)
+	Version : Thu May 21 13:12:29 JST 2015
 __USAGE
   exit 1
 }
@@ -66,7 +76,8 @@ __USAGE
 # arg #2: lifetime in seconds
 # ret   : 0 when succeeded
 rm_if_too_old() {
-  [ -d "$1" ] || return 1
+  [ -d "$1"    ] || return 1
+  [ "$2" -lt 0 ] && return 0
 
   # --- Calculate the date and time of the border --------------------
   borderdatetime=$(awk '
@@ -182,6 +193,7 @@ umask 0022
 dopt=''
 max_waiting_secs=10
 max_lifetime_secs=600
+ppid=$(ps -Ao pid,ppid | awk '$1=='$$'{print $2;exit}')
 optmode=''
 while [ $# -gt 0 ]; do
   case "$optmode" in
@@ -274,7 +286,6 @@ for lockname in "$@"; do
   echo "_$lockname" | grep -q '/' && {
     echo "${0##*/}: \"$lockname\": '/' cannot be used in lockname, skipped" 1>&2
     continue
-    ;;
   }
 
   # --- Try to set exclusive-lock ------------------------------------
@@ -285,19 +296,25 @@ for lockname in "$@"; do
     try=1
   fi
   while [ $try -gt 0 ]; do
-    [ $max_waiting_secs -ge 0 ] && try=$((try-1))
-    # 1-0) Remove the wreckage files if exist
-    rm_if_too_old "${Dir_lock}" "$max_lifetime_secs"
-    # 1-1) Try to create a file
-    (set -C; : >"$Dir_lock$lockname") >/dev/null 2>&1 && break
-    case $try in 0) try=-1;; *) sleep 1;; esac
-    continue
+    # 1-1) Remove the wreckage files if exist
+    rm_if_too_old "$Dir_lock" "$max_lifetime_secs"
+    # 1-2) Try to create a file
+    (set -C; echo $ppid >"$Dir_lock$lockname") 2>/dev/null || {
+      sleep 1                                         # retry if already exists
+      [ $max_waiting_secs -ge 0 ] && try=$((try-1))   
+      continue
+    }
+    # 1-7) finish the loop successfully
+    break
   done
-  # 2) Is the locking success or not?
+  # 2) $try > 0 : success and print the path of the generated lockfile
+  #         ==0 : now fully locked
+  #         < 0 : abnormally exit
+  #    otherwise, it means some error happened
   case $try in
-    -1) echo "${0##*/}: Failed to lock for \"$lockname\" try later" 1>&2
-        continue
-        ;;
+    [1-9]*) echo "$Dir_lock${lockname}"                                  ;;
+         0) echo "${0##*/}: \"$lockname\": timeout, try again later" 1>&2;;
+        -*) echo "${0##*/}: \"$lockname\": unexpedter error!"        1>&2;;
   esac
 
   count_success=$((count_success+1))

@@ -4,32 +4,41 @@
 #
 # PSHLOCK : A Shared Lock (and Semaphore) Command within POSIX
 #
-# Usage  : ${0##*/} [options] <lockname> [lockname ...]
-#          -n <maxsharing> ... the maximum number of sharing lock
-#                              This option is for using as a semaphore.
-#                              The default value is -1.
-#                              (-1 means infinity that is sharing lock)
-#          -d <lockdir> ...... the directory for lockfiles.
-#                              The lockfile directory will be decided
-#                              as the following rule.
-#                              1) this option "-d" if specified
-#                              2) the environment varriable "PLOCKDIR"
-#                                 if specified
-#                              3) if the environment varriable "TMPDIR"
-#                                 specified, "$TMPDIR/plock.<username>"
-#                              4) "/tmp/plock.<username>" (default)
-#          -w <maxwaiting> ... maximum waiting seconds to succeed locking
-#                              (-1 means waiting infinitely)
-#                              The default value is 10.
-#          -l <lifetime> ..... the maximum lifetime of the lockfile (sec)
-#                              The default value is 600.
-#                              Older lockfiles than that will be ignored
-#                              and removed.
+# Usage   : ${0##*/} [options] <lockname> [lockname ...]
+#           -n <maxsharing> ... the maximum number of sharing lock
+#                               This option is for using as a semaphore.
+#                               The default value is -1.
+#                               (-1 means infinity that is sharing lock)
+#           -d <lockdir> ...... the directory for lockfiles.
+#                               The lockfile directory will be decided
+#                               as the following rule.
+#                               1) this option "-d" if specified
+#                               2) the environment varriable "PLOCKDIR"
+#                                  if specified
+#                               3) if the environment varriable "TMPDIR"
+#                                  specified, "$TMPDIR/plock.<username>"
+#                               4) "/tmp/plock.<username>" (default)
+#           -w <maxwaiting> ... maximum waiting seconds to succeed locking
+#                               (-1 means waiting infinitely)
+#                               The default value is 10.
+#           -l <lifetime> ..... the maximum lifetime of the lockfile (sec)
+#                               The default value is 600.
+#                               Older lockfiles than that will be ignored
+#                               and removed.
+#                               (-1 means infinitely)
+# Return  : $?     ==0 ... one or more locking were success
+#                  !=0 ... all failure
+#           stdout ....... enerated path of the lockfile (just lock-id)
 #
-# Return : ==0 ... success to locking
-#          !=0 ... failure
+# Example : lockid=$(pshlock -n 5 -d /tmp/plock -w 10) || exit 1 # do sh-lock
+#              :
+#           (do something requires shared lock among up to 5 processes)
+#              :
+#           touch -c "$lockid"    # extend lifetime if you want
+#              :                  # (but it needs to remain SUFFICIENT LIFETIME)
+#           punlock "$lockid"                               # release the lock
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/05/19
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/05/21
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -43,28 +52,32 @@
 # --- FUNC: print the usage and exit ---------------------------------
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
-	Usage  : ${0##*/} [options] <lockname> [lockname ...]
-	         -n <maxsharing> ... the maximum number of sharing lock
-	                             This option is for using as a semaphore.
-	                             The default value is -1.
-	                             (-1 means infinity that is sharing lock)
-	         -d <lockdir> ...... the directory for lockfiles.
-	                             The lockfile directory will be decided
-	                             as the following rule.
-	                             1) this option "-d" if specified
-	                             2) the environment varriable "PLOCKDIR"
-	                                if specified
-	                             3) if the environment varriable "TMPDIR"
-	                                specified, "\$TMPDIR/plock.<username>"
-	                             4) "/tmp/plock.<username>" (default)
-	         -w <maxwaiting> ... maximum waiting seconds to succeed locking
-	                             (-1 means waiting infinitely)
-	                             The default value is 10.
-	         -l <lifetime> ..... the maximum lifetime of the lockfile (sec)
-	                             The default value is 600.
-	                             Older lockfiles than that will be ignored
-	                             and removed.
-	Version : Tue May 19 12:11:07 JST 2015
+	Usage   : ${0##*/} [options] <lockname> [lockname ...]
+	          -n <maxsharing> ... the maximum number of sharing lock
+	                              This option is for using as a semaphore.
+	                              The default value is -1.
+	                              (-1 means infinity that is sharing lock)
+	          -d <lockdir> ...... the directory for lockfiles.
+	                              The lockfile directory will be decided
+	                              as the following rule.
+	                              1) this option "-d" if specified
+	                              2) the environment varriable "PLOCKDIR"
+	                                 if specified
+	                              3) if the environment varriable "TMPDIR"
+	                                 specified, "\$TMPDIR/plock.<username>"
+	                              4) "/tmp/plock.<username>" (default)
+	          -w <maxwaiting> ... maximum waiting seconds to succeed locking
+	                              (-1 means waiting infinitely)
+	                              The default value is 10.
+	          -l <lifetime> ..... the maximum lifetime of the lockfile (sec)
+	                              The default value is 600.
+	                              Older lockfiles than that will be ignored
+	                              and removed.
+	                              (-1 means infinitely)
+	Return  : $?     ==0 ... one or more locking were success
+	                 !=0 ... all failure
+	          stdout ....... enerated path of the lockfile (just lock-id)
+	Version : Thu May 21 13:12:56 JST 2015
 __USAGE
   exit 1
 }
@@ -75,99 +88,18 @@ __USAGE
 exit_trap () {
   trap EXIT HUP INT QUIT PIPE ALRM TERM
   rm -rf "${Dir_prelk:-}" "${File_modlk:-}" >/dev/null 2>&1
-  exit ${1:-0}
-}
-
-# --- FUNC: Make a Temporary Directory -------------------------------
-# arg   : base pathname of the temporary directory
-# ret   : 0 when succeeded
-# stdout: path of the generated temporary file
-mktempd() {
-  # --- call built-in mktemp if available ----------------------------
-  type mktemp >/dev/null 2>&1 && {
-    mktemp -d "$1"
-    return $?
-  }
-  # --- parameters, etc. ---------------------------------------------
-  Path_target_base=$(printf '%s' "$1" | sed 's/X*$//')
-  num_of_digits=$((${#1}-${#Path_target_base})) # Length of Random String
-  n=10                                          # Max Times of Retrying
-  chrs='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_'
-                                                # Available letters
-  LF=$(printf '\\\n_');LF=${LF%_}
-  # --- set the temporary directory ----------------------------------
-  case "$1" in
-    /*) :;;
-     *) s=$(pwd)
-        Path_target_base="${s%/}/$Path_target_base"
-        ;;
-  esac
-  # --- mktemp loop --------------------------------------------------
-  while [ $n -ge 0 ]; do
-    # --- Generate Ramdom string -------------------------------------
-    # calculate the number of words which required
-    nw=$(echo "${num_of_digits}*l(${#chrs})/11.09+1" | # 11.09=ln(65536)
-         bc -l                                       |
-         sed 's/\..*$//'                             )
-    # make a random hexadecimal digit
-    if [ -c /dev/urandom ]; then
-      hstr=$(dd if=/dev/urandom bs=2 count=$nw 2>/dev/null |
-             od -A n -t x2 -v                              |
-             tr 'abcdef ' 'ABCDEF\n'                       |
-             tr -Cd 0123456789ABCDEF                       )
-    else
-      hstr=$( (ps -Ao pid,etime,pcpu,vsz; date)         |
-             od -t d4 -A n -v                           |
-             sed 's/[^0-9]\{1,\}/'"$LF"'/g'             |
-             grep '[0-9]'                               |
-             tail -n 42                                 |
-             sed 's/.*\(.\{8\}\)$/\1/g'                 |
-             awk 'BEGIN{a=-2147483648;}                 #
-                       {a+=$1;        }                 #
-                  END  {                                #
-                    srand(a);                           #
-                    for(i=0;i<'$nw';i++){               #
-                      printf("%02X",int(rand()*65536)); #
-                    }                                   #
-                  }'                                    )
-    fi
-    # make a random string from the hexadecimal digit
-    s=$(echo "obase=${#chrs};ibase=16;$hstr"                     |
-        bc                                                       |
-        tr -d '\\\n'                                             |
-        tr ' ' '\n'                                              |
-        awk 'BEGIN  {for(i=1;i<'$num_of_digits';i++){print 0;}}  #
-             /[0-9]/{print;                                   }' |
-        awk 'BEGIN  {ORS="";                                     #
-                     s="'"$chrs"'";                              #
-                     for(i=0;i<length(s);i++){                   #
-                       c[i]=substr(s,i+1,1);                     #
-                     }                        }                  #
-             /[0-9]/{print c[$0*1];           }'                 |
-        tail -c $num_of_digits                                   )
-    # --- Making the file path ---------------------------------------
-    Path_target="${Path_target_base}$s"
-    # --- Making the directory ---------------------------------------
-    (umask 077; mkdir "$Path_target" >/dev/null 2>&1) || {
-      [ -f "$Path_target" ] && { n=$((n-1)); continue; }
-      n=-1; break;
-    }
-    break
-  done
-  # --- print error message when failed to make a file ---------------
-  case "$n" in -1) return 1;; esac
-  # --- print the path of the file -----------------------------------
-  printf '%s\n' "$Path_target"
-  # --- return successfully ------------------------------------------
-  return 0
+  case $# in 0) exit $?;; *) exit ${1:-0};; esac
 }
 
 # --- FUNC: Remove the too old directories in the specified directory 
 # arg #1: directory path which it be removed the old files
+#         if the end of the string is "/", the directory itself will not
+#         be removed
 # arg #2: lifetime in seconds
 # ret   : 0 when succeeded
 rmdir_if_too_old() {
-  [ -d "$1" ] || return 1
+  [ -d "$1"    ] || return 1
+  [ "$2" -lt 0 ] && return 0
 
   # --- Calculate the date and time of the border --------------------
   borderdatetime=$(awk '
@@ -270,7 +202,11 @@ rmdir_if_too_old() {
       sed 's/^/^/'               |
       sed 's/$/\\{0,1\\}$/'      )
   find "$1" -type d \( \! -newer "${1%/}/.border_date_and_time.tmp" \) |
-  grep -v "$s"                                                         |
+  if [ "_$1" == "_${1%/}" ]; then                                      #
+    grep -v "$s"                                                       #
+  else                                                                 #
+    cat                                                                #
+  fi                                                                   |
   xargs rm -rf
   rm -f "${1%/}/.border_date_and_time.tmp"
 }
@@ -291,6 +227,7 @@ max_num_of_sharing=-1
 dopt=''
 max_waiting_secs=10
 max_lifetime_secs=600
+ppid=$(ps -Ao pid,ppid | awk '$1=='$$'{print $2;exit}')
 optmode=''
 while [ $# -gt 0 ]; do
   case "$optmode" in
@@ -385,34 +322,42 @@ for lockname in "$@"; do
   count_all=$((count_all+1))
 
   # --- Validate the lockname  ---------------------------------------
-  case "$lockname" in '.border_date_and_time.tmp')
-    echo "${0##*/}: \".border_date_and_time.tmp\" is reserved, skipped" 1>&2
-    continue
-    ;;
+  case "$lockname" in
+    '.border_date_and_time.tmp')
+      echo "${0##*/}: \".border_date_and_time.tmp\" is reserved, skip" 1>&2
+      continue
+      ;;
+    */*)
+      echo "${0##*/}: \"$lockname\": '/' cannot be used in lockname, skip" 1>&2
+      continue
+      ;;
   esac
-  echo "_$lockname" | grep -q '/' && {
-    echo "${0##*/}: \"$lockname\": '/' cannot be used in lockname, skipped" 1>&2
+  echo "_$lockname" | grep -Eq '^_\.preshlock\.[0-9]{14}\.[0-9]+\.[0-9]+$' && {
+    echo "${0##*/}: \"$lockname\": '/' is reserved, skip" 1>&2
     continue
-    ;;
   }
 
   # --- Prepare the pre-lock directory -------------------------------
-  # 1) make a temp-dir
-  Dir_prelk=$(mktempd "${Dir_lock}XXXXXXXXXXXXXXXX")
-  case $? in
-     [^0]*) echo "${0##*/}: Failed to make a temp-dir #1 for \"$lockname\"" 1>&2
-            continue
-            ;;
+  # 1) decide a lock-procid(yyyymmddhhmmss.uniqid.pid)
+  s=$(ps -o pid,ppid | awk '$2=='$$'{print $1;exit}')
+  sublockname="$(date '+%Y%m%d%H%M%S').${s}.$ppid"
+  # 2) make a temp-dir
+  Dir_prelk="${Dir_lock}.preshlock.$sublockname"
+  mkdir "$Dir_prelk"
+  case $? in [^0]*)
+    echo "${0##*/}: \"$lockname\": Failed to make a pre-lock dir #1" 1>&2
+    continue
+    ;;
   esac
-  case "$Dir_prelk" in
-    '') echo "${0##*/}: Failed to make a temp-dir #2 for \"$lockname\"" 1>&2
-        continue
-        ;;
+  # 3) make the 1st lockproc-id directory "into and into" the lockname directory
+  #    (The reason of "into and into" is to prevent from succeeding mv command
+  #     when the samenamed lock directory already exists.)
+  mkdir -p "$Dir_prelk/$lockname/$lockname/$sublockname"
+  case $? in [^0]*)
+    echo "${0##*/}: \"$lockname\": Failed to make a pre-lock dir #2" 1>&2
+    continue
+    ;;
   esac
-  # 2) make a samename dir into the temp-dir to prevent from double-locking
-  mkdir -p "$Dir_prelk/$lockname/$lockname"
-  # 3) make the "1" which means the 1st process of the shared-lock
-  :      > "$Dir_prelk/$lockname/$lockname/1"
 
   # --- Try to set shared-lock ---------------------------------------
   # 1) trying loop
@@ -422,60 +367,66 @@ for lockname in "$@"; do
     try=1
   fi
   while [ $try -gt 0 ]; do
-    [ $max_waiting_secs -ge 0 ] && try=$((try-1))
-    # 1-0) remove the wreckage directories if exist
-    rmdir_if_too_old "${Dir_lock}" "$max_lifetime_secs"
-    # 1-1) refresh the lockdirectory
-    touch "$Dir_prelk/$lockname/$lockname" \
-          "$Dir_prelk/$lockname"           \
-          "$Dir_prelk"                     >/dev/null 2>&1
-    # 1-2) try to mv and if success, it means success to lock
-    mv "$Dir_prelk/$lockname" "$Dir_lock$lockname" >/dev/null 2>&1 && break
-    # 1-3) if failure, try to add the next numberfile into the lockdirectory
-    cd "$Dir_lock$lockname/$lockname" >/dev/null 2>&1 || { try=-1; break; }
-    rmdir_if_too_old "$Dir_lock$lockname/$lockname" "$max_lifetime_secs"
+    # 1-1) remove the wreckage "modifying" if exist
+    rmdir_if_too_old "$Dir_lock$lockname/$lockname/modifying" \
+                     "$max_lifetime_secs"
+    # 1-2) try to "mv" if the normal lockdir does not exist
+    cd "$Dir_lock$lockname/$lockname" 2>/dev/null || {
+      touch -c "$Dir_prelk/$lockname/$lockname/$sublockname"
+      mv "$Dir_prelk/$lockname" "$Dir_lock$lockname" 2>/dev/null || {
+        sleep 1                                       # retry  if failed  to mv
+        [ $max_waiting_secs -ge 0 ] && try=$((try-1))
+        continue
+      }
+      break                                           # finish if succeed to mv
+    }
+    # 1-3) try to create the accesing right token file "modifying"
     File_modlk="$Dir_lock$lockname/$lockname/modifying"
-    mkdir "$File_modlk" >/dev/null 2>&1 || {
-      # (will try again later)
-      case $try in 0) try=-2;; *) sleep 1;; esac
+    mkdir 'modifying' || {
+      File_modlk=''                                   # retry  if already exists
+      sleep 1
+      [ $max_waiting_secs -ge 0 ] && try=$((try-1))
       continue
     }
-    set -- $(ls -l 1 2>/dev/null)
-    case $# in
-      0) cd "$Dir_lock";rm -rf "$Dir_lock$lockname";try=-3 ;continue;;
-    esac
-    case "${max_num_of_sharing},$try" in
-      -*)     :                                   ;; # shared-lock mode
-      ${2},0) rmdir "$File_modlk";try=-4 ;continue;; # semaphore mode (nolonger)
-      ${2},*) rmdir "$File_modlk";sleep 1;continue;; # semaphore mode (retry)
-      *)      :                                   ;; # semaphore mode
-    esac
-    ln 1 $(($2+1))
-    # 1-4) refresh the timestamp of the lockdirectory again
-    touch "${Dir_lock}${lockname}"
-    # 1-5) release the modifying right
-    rmdir "$File_modlk"
+    # 1-4) remove the wreckage directories if exist
+    rmdir_if_too_old "$Dir_lock$lockname/$lockname/" "$max_lifetime_secs"
+    # 1-5) check the current number of the locking processes
+    n=$(ls -ld . 2>/dev/null | awk '{print $2-3;}')
+    [ \( $max_num_of_sharing -lt 0 \) -o \( $n -lt $max_num_of_sharing \) ] || {
+      rmdir 'modifying'                               # retry  if reached limit
+      File_modlk=''
+      sleep 1
+      [ $max_waiting_secs -ge 0 ] && try=$((try-1))
+      continue
+    }
+    # 1-6) create a lockproc-id directory
+    s=$(ps -o pid,ppid | awk '$2=='$$'{print $1;exit}')
+    sublockname="$(date '+%Y%m%d%H%M%S').${s}.$ppid"
+    mkdir $sublockname || {
+      try=-1                                          # exit loop abnormally
+      rmdir 'modifying'
+      File_modlk=''
+      break
+    }
+    # 1-7) finish the loop successfully
+    rmdir 'modifying'
     File_modlk=''
     break
   done
-  # 2) remove the pre-lock directory if remained
+  # 2) $try > 0 : success and print the path of the generated lockfile
+  #         ==0 : now fully locked
+  #         < 0 : abnormally exit
+  #    otherwise, it means some error happened
+  case $try in
+    [1-9]*) echo "$Dir_lock${lockname}/${lockname}/$sublockname"         ;;
+         0) echo "${0##*/}: \"$lockname\": timeout, try again later" 1>&2;;
+        -1) echo "${0##*/}: \"$lockname\": the lock-dir is broken!"  1>&2;;
+        -*) echo "${0##*/}: \"$lockname\": unexpedter error!"        1>&2;;
+  esac
+
+  # --- Remove the pre-lock directory --------------------------------
   rm -rf "${Dir_prelk:-}" >/dev/null 2>&1
   Dir_prelk=''
-  # 3) Is the locking success or not?
-  case $try in
-    -1) echo "${0##*/}: Failed to lock for \"$lockname\"" 1>&2
-        continue
-        ;;
-    -2) echo "${0##*/}: Failed to lock for \"$lockname\" try later" 1>&2
-        continue
-        ;;
-    -3) echo "${0##*/}: Invalid lockdirectory \"$lockname\", try later" 1>&2
-        continue
-        ;;
-    -4) echo "${0##*/}: Reached the limit for \"$lockname\", try later" 1>&2
-        continue
-        ;;
-  esac
 
   count_success=$((count_success+1))
 done
