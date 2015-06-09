@@ -17,11 +17,6 @@
 #           -w <maxwaiting> ... maximum waiting seconds to succeed locking
 #                               (-1 means waiting infinitely)
 #                               The default value is 10.
-#           -l <lifetime> ..... the maximum lifetime of the lockfile (sec)
-#                               The default value is 600.
-#                               Older lockfiles than that will be ignored
-#                               and removed.
-#                               (-1 means infinitely)
 # Return  : $?     ==0 ... one or more locking were success
 #                  !=0 ... all failure
 #           stdout ....... generated path of the lockfile
@@ -34,7 +29,7 @@
 #              :                  # (but it needs to remain SUFFICIENT LIFETIME)
 #           punlock "$lockid"                               # release the lock
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/05/21
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/06/09
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -61,121 +56,9 @@ print_usage_and_exit () {
 	          -w <maxwaiting> ... maximum waiting seconds to succeed locking
 	                              (-1 means waiting infinitely)
 	                              The default value is 10.
-	          -l <lifetime> ..... the maximum lifetime of the lockfile (sec)
-	                              The default value is 600.
-	                              Older lockfiles than that will be ignored
-	                              and removed.
-	                              (-1 means infinitely)
-	Version : Thu May 21 13:12:29 JST 2015
+	Version : Tue Jun  9 05:02:41 JST 2015
 __USAGE
   exit 1
-}
-
-# --- FUNC: Remove the too old files in the specified directory ------
-# arg #1: directory path which it be removed the old files
-# arg #2: lifetime in seconds
-# ret   : 0 when succeeded
-rm_if_too_old() {
-  [ -d "$1"    ] || return 1
-  [ "$2" -lt 0 ] && return 0
-
-  # --- Calculate the date and time of the border --------------------
-  borderdatetime=$(awk '
-    BEGIN {
-      now_gm="'$(TZ=UTC+0 date '+%Y%m%d%H%M%S')'";
-      now_lo="'$(         date '+%Y%m%d%H%M%S')'";
-      unixtime2YYYYMMDDhhmmss_init("LOCALTIME");
-      now_ut = YYYYMMDDhhmmss2unixtime(now_lo);
-      bor_rt = unixtime2YYYYMMDDhhmmss(now_ut-'"$2"'-1);
-      print substr(bor_rt,1,12) "." substr(bor_rt,13);
-    }
-    function YYYYMMDDhhmmss2unixtime(YYYYMMDDhhmmss, Y,M,D,h,m,s,l) {
-      # 1) seperate the units
-      l = length(YYYYMMDDhhmmss);
-      if        (l <  5) { # invalid
-        return -1;
-      } else if (l <  8) { # YYMMMDD only
-        Y = substr(YYYYMMDDhhmmss,  1,l-4)*1+substr(now_lo,1,2)*100;
-        M = substr(YYYYMMDDhhmmss,l-3,  2)*1;
-        D = substr(YYYYMMDDhhmmss,l-1,  2)*1;
-        h = 0; m = 0; s = 0;
-      } else if (l < 12) { # YYYYMMDD only
-        Y = substr(YYYYMMDDhhmmss,  1,l-4)*1;
-        M = substr(YYYYMMDDhhmmss,l-3,  2)*1;
-        D = substr(YYYYMMDDhhmmss,l-1    )*1;
-        h = 0; m = 0; s = 0;
-      } else {             # YYYYMMDDhhmmss
-        Y = substr(YYYYMMDDhhmmss,  1,l-10)*1;
-        M = substr(YYYYMMDDhhmmss,l-9,   2)*1;
-        D = substr(YYYYMMDDhhmmss,l-7,   2)*1;
-        h = substr(YYYYMMDDhhmmss,l-5,   2)*1;
-        m = substr(YYYYMMDDhhmmss,l-3,   2)*1;
-        s = substr(YYYYMMDDhhmmss,l-1     )*1;
-      }
-      # 2) validate
-      if ((s>60) || (m>59) || (h>23) || (M>12)) {return -1;}
-      days_of_month[2] = (Y%4!=0)?28:(Y%100!=0)?29:(Y%400!=0)?28:29;
-      if (D > days_of_month[M]                ) {return -1;}
-      # 3) adjust the value of year and month
-      if (M<3) {M+=12; Y--;}
-      # 4) calculate unixtime
-      return (365*Y+int(Y/4)-int(Y/100)+int(Y/400)+int(306*(M+1)/10)-428+D-719163)*86400+(h*3600)+(m*60)+s-offset;
-    }
-    function unixtime2YYYYMMDDhhmmss_init(localtime_flag, gm,lo) {
-      max_calced_year = 1970;              # To remember everydays on Jan.1 from
-      days_on_Jan1st_from_epoch[1970] = 0; # the Epoch which was calculated once
-      split("31 0 31 30 31 30 31 31 30 31 30 31", days_of_month);
-      if (localtime_flag == "LOCALTIME") {
-        gm      = YYYYMMDDhhmmss2unixtime(now_gm);
-        lo      = YYYYMMDDhhmmss2unixtime(now_lo);
-        offset  = lo - gm;
-        offset -= (offset%2); # cancel the timelag of the two date starting time
-      } else {
-        offset  = 0;
-      }
-    }
-    function unixtime2YYYYMMDDhhmmss(ut, Y,M,D,h,m,s,t,i,j) {
-      # 0) timezone adjustment
-      ut += offset;
-      if (ut < 0) {return -1;}
-      # 1) calculate hour,minute,second and number of days from the Epoch
-      s = ut % 60;  t = int(ut/60);
-      m =  t % 60;  t = int( t/60);
-      h =  t % 24;
-      days_from_epoch = int( t/24);
-      # 2) calculate year
-      Y = int(days_from_epoch/365.2425)+1970+1;
-      if (Y > max_calced_year) {
-         i = days_on_Jan1st_from_epoch[max_calced_year];
-         for (j=max_calced_year; j<Y; j++) {
-           i += (j%4!=0)?365:(j%100!=0)?366:(j%400!=0)?365:366;
-           days_on_Jan1st_from_epoch[j+1] = i;
-         }
-         max_calced_year = Y;
-      }
-      for (;;Y--) {
-        if (days_from_epoch >= days_on_Jan1st_from_epoch[Y]) {
-          break;
-        }
-      }
-      # 3) calculate month,day
-      days_of_month[2] = (Y%4!=0)?28:(Y%100!=0)?29:(Y%400!=0)?28:29;
-      D = days_from_epoch - days_on_Jan1st_from_epoch[Y] + 1;
-      for (M=1; ; M++) {
-        if (D > days_of_month[M]) {
-          D -= days_of_month[M];
-        } else {
-          break;
-        }
-      }
-      return sprintf("%04d%02d%02d%02d%02d%02d",Y,M,D,h,m,s);
-    }
-  ')
-  # --- Make a file for comparing timestamps -------------------------
-  touch -t $borderdatetime "${1%/}/.border_date_and_time.tmp"
-  # --- Find and rmdir the too old files -----------------------------
-  find "$1" -type f \( \! -newer "${1%/}/.border_date_and_time.tmp" \) |
-  xargs rm -rf
 }
 
 
@@ -192,7 +75,7 @@ umask 0022
 # --- parse the arguments --------------------------------------------
 dopt=''
 max_waiting_secs=10
-max_lifetime_secs=600
+max_lifetime_secs=''
 ppid=$(ps -Ao pid,ppid | awk '$1=='$$'{print $2;exit}')
 optmode=''
 while [ $# -gt 0 ]; do
@@ -239,13 +122,13 @@ while [ $# -gt 0 ]; do
 done
 case $# in 0) print_usage_and_exit;; esac
 echo "_$max_waiting_secs"   | grep -Eq '^_-?[0-9]+$' || {
-  echo "${0##*/}: Maximum waiting seconds parameter is invalid" 1>&2
+  printf '%s: Maximum waiting seconds parameter is invalid\n' "${0##*/}" 1>&2
   exit 1
 }
-echo "_$max_lifetime_secs"  | grep -Eq '^_[0-9]+$'   || {
-  echo "${0##*/}: Maximum lifetime parameter is invalid" 1>&2
-  exit 1
-}
+case "$max_lifetime_secs" in
+  '') :                                                                       ;;
+   *) printf '%s: option "-l" could not use in this command\n' "${0##*/}" 1>&2;;
+esac
 Dir_lock=''
 while :; do
   case "$dopt"         in '') :;; *) Dir_lock="${dopt%/}/"
@@ -279,12 +162,14 @@ for lockname in "$@"; do
 
   # --- Validate the lockname  ---------------------------------------
   case "$lockname" in '.border_date_and_time.tmp')
-    echo "${0##*/}: \".border_date_and_time.tmp\" is reserved, skipped" 1>&2
+    printf '%s: ".border_date_and_time.tmp" is reserved, skipped\n' \
+           "${0##*/}" 1>&2
     continue
     ;;
   esac
-  echo "_$lockname" | grep -q '/' && {
-    echo "${0##*/}: \"$lockname\": '/' cannot be used in lockname, skipped" 1>&2
+  echo "_$lockname" | grep -q '[/:]' && {
+    printf '%s: "%s": Neither "/" nor ":" can be used in lockname, skipped\n' \
+           "${0##*/}" "$lockname" 1>&2
     continue
   }
 
@@ -296,15 +181,13 @@ for lockname in "$@"; do
     try=1
   fi
   while [ $try -gt 0 ]; do
-    # 1-1) Remove the wreckage files if exist
-    rm_if_too_old "$Dir_lock" "$max_lifetime_secs"
-    # 1-2) Try to create a file
+    # 1-1) Try to create a file
     (set -C; echo $ppid >"$Dir_lock$lockname") 2>/dev/null || {
-      sleep 1                                         # retry if already exists
-      [ $max_waiting_secs -ge 0 ] && try=$((try-1))   
+      [ $max_waiting_secs -ge 0 ] && try=$((try-1))   # retry if already exists
+      case $try in 0) :;; *) sleep 1;; esac
       continue
     }
-    # 1-7) finish the loop successfully
+    # 1-2) finish the loop successfully
     break
   done
   # 2) $try > 0 : success and print the path of the generated lockfile
@@ -312,9 +195,13 @@ for lockname in "$@"; do
   #         < 0 : abnormally exit
   #    otherwise, it means some error happened
   case $try in
-    [1-9]*) echo "$Dir_lock${lockname}"                                  ;;
-         0) echo "${0##*/}: \"$lockname\": timeout, try again later" 1>&2;;
-        -*) echo "${0##*/}: \"$lockname\": unexpedter error!"        1>&2;;
+    [1-9]*) printf '%s%s\n' "$Dir_lock" "${lockname}"
+            ;;
+         0) printf '%s: "%s": timeout, try again later\n' \
+                   "${0##*/}" "$lockname" 1>&2
+            ;;
+        -*) printf '%s: "%s": unexpedter error!\n' "${0##*/}" "$lockname" 1>&2
+            ;;
   esac
 
   count_success=$((count_success+1))
