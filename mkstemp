@@ -21,7 +21,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [mktemp(1)options] <template>
 	          "mktemp(1) options" depend on mktemp(1) on the host.
-	Version : Mon Feb 23 15:18:40 JST 2015
+	Version : Thu Jun 25 15:17:57 JST 2015
 __USAGE
   exit 1
 }
@@ -49,8 +49,9 @@ esac
 
 
 # --- call the bult-in mktemp if do_by_myself==0 ---------------------
-case $do_by_myself in
-  0) exec mktemp "$@";;
+case "$do_by_myself-$#" in
+  0-0) exec mktemp     ;;
+  0-*) exec mktemp "$@";;
 esac
 
 
@@ -84,7 +85,7 @@ optq=0
 optt=0
 opts=''
 optmode=''
-while :; do
+while [ $# -gt 0 ]; do
   case "$optmode" in
     '') case "$1" in
           -[duqtp]*)   s=$(printf '%s\n' "${1#-}"                        |

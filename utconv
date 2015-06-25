@@ -23,7 +23,7 @@
 #
 # * Any invalid time make me return the text "-1" with the return code 0.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/23
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/06/25
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -37,7 +37,7 @@ case "${1:-}" in
     cat <<-__USAGE 1>&2
 	USAGE: ${0##*/} [datetime_text_or_file]    # for Real-datetime -> Unixtime
 	       ${0##*/} -r [unixtime_text_or_file] # for Unixtime      -> Real-datetime
-	Version : Mon Feb 23 15:38:11 JST 2015
+	Version : Thu Jun 25 15:32:33 JST 2015
 __USAGE
     exit 1
     ;;
@@ -51,6 +51,7 @@ IFS=$(printf ' \t\n_'); IFS=${IFS%_}
 export IFS LC_ALL=C LANG=C PATH
 
 # --- conversion -----------------------------------------------------
+case $# in 0) set -- '-';; esac
 awk '
 BEGIN {
   # 1) initialize

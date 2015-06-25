@@ -32,7 +32,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [options] [template [...]]
 	        : "-d" "-p [DIR]" "-q" "-u" "-t" "--suffix=<suff>"
-	Version : Mon Feb 23 15:21:16 JST 2015
+	Version : Thu Jun 25 15:22:24 JST 2015
 __USAGE
   exit 1
 }
@@ -75,7 +75,7 @@ optq=0
 optt=0
 opts=''
 optmode=''
-while :; do
+while [ $# -gt 0 ]; do
   case $# in 0) break;; esac
   case "$optmode" in
     '') case "$1" in

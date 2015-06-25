@@ -12,7 +12,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [+<n>h] <f1> <f2> ... <file>
 	        : ${0##*/} -d <string>
-	Version : Fri Feb 13 15:19:58 JST 2015
+	Version : Thu Jun 25 15:16:09 JST 2015
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands/UTF-8)
 __USAGE
   exit 1
@@ -38,53 +38,56 @@ hopt=0
 case "$#${1:-}" in
   1-h|1--help|1--version) print_usage_and_exit;;
 esac
-i=0
-for arg in "$@"; do
-  i=$((i+1))
-  fldnum=''
-  # direct mode processing
-  if   [ \( $opt_part -ne 0 \) -a \( "_$arg" = '_-d'        \) ]; then
-    directmode=1
-    continue
-  elif [ \( $opt_part -ne 0 \) -a \( "_$arg" != "_${arg#+}" \) ]; then
-    s=$(printf '%s\n' "$arg" | sed 's/^+\([0-9]*\)h$/\1/')
-    case "$s" in "$arg") print_usage_and_exit;; esac
-    case "$s" in     '') hopt=1; continue    ;; esac
-    hopt=$(expr $s + 0)
-    continue
-  fi
-  opt_part=0
-  case "$i$directmode" in "${#}1") directstr=$arg; break;; esac
-  # separate arg to arg1, arg2
-  arg1=${arg%%/*}
-  arg2=${arg##*/}
-  if [ \( "_${arg1}/${arg2}" = "_$arg"   \) -a \
-       \( -n "$arg1" \) -a \( -n "$arg2" \)    ]
-  then
-    :
-  else
-    arg1=$arg
-    arg2=''
-  fi
-  # check both
-  j=0
-  for s in $arg1 $arg2; do
-    if printf '%s\n' "$s" | grep -q '^[0-9]\{1,\}$'; then
-      j=$((j+1))
-      case "$s" in 0) all_fields=1;; esac
-    elif printf '%s\n' "$s" | grep -Eq '^(NF|NF-[0-9]+)$'; then
-      j=$((j+1))
+case $# in [^0]*)
+  i=0
+  for arg in "$@"; do
+    i=$((i+1))
+    fldnum=''
+    # direct mode processing
+    if   [ \( $opt_part -ne 0 \) -a \( "_$arg" = '_-d'        \) ]; then
+      directmode=1
+      continue
+    elif [ \( $opt_part -ne 0 \) -a \( "_$arg" != "_${arg#+}" \) ]; then
+      s=$(printf '%s\n' "$arg" | sed 's/^+\([0-9]*\)h$/\1/')
+      case "$s" in "$arg") print_usage_and_exit;; esac
+      case "$s" in     '') hopt=1; continue    ;; esac
+      hopt=$(expr $s + 0)
+      continue
     fi
+    opt_part=0
+    case "$i$directmode" in "${#}1") directstr=$arg; break;; esac
+    # separate arg to arg1, arg2
+    arg1=${arg%%/*}
+    arg2=${arg##*/}
+    if [ \( "_${arg1}/${arg2}" = "_$arg"   \) -a \
+         \( -n "$arg1" \) -a \( -n "$arg2" \)    ]
+    then
+      :
+    else
+      arg1=$arg
+      arg2=''
+    fi
+    # check both
+    j=0
+    for s in $arg1 $arg2; do
+      if printf '%s\n' "$s" | grep -q '^[0-9]\{1,\}$'; then
+        j=$((j+1))
+        case "$s" in 0) all_fields=1;; esac
+      elif printf '%s\n' "$s" | grep -Eq '^(NF|NF-[0-9]+)$'; then
+        j=$((j+1))
+      fi
+    done
+    if [ \( $j -eq 2 \) -o \( \( $j -eq 1 \) -a \( -z "$arg2" \) \) ]; then
+      fldnums="$fldnums $arg"
+      continue
+    fi
+    # perhaps, this argument is a filename
+    case $# in $i) file=$arg; continue;; esac
+    # otherwise, it is a invalid argument
+    print_usage_and_exit
   done
-  if [ \( $j -eq 2 \) -o \( \( $j -eq 1 \) -a \( -z "$arg2" \) \) ]; then
-    fldnums="$fldnums $arg"
-    continue
-  fi
-  # perhaps, this argument is a filename
-  case $# in $i) file=$arg; continue;; esac
-  # otherwise, it is a invalid argument
-  print_usage_and_exit
-done
+  ;;
+esac
 # (if you want to regard no fldnums as all, set all_fields=1 instead of exit)
 case "$fldnums" in '') all_fields=1;; esac
 case $directmode in
