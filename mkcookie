@@ -39,7 +39,7 @@
 # Return: $?=0 (when all of the options are valid)
 #         stdout : HTTP Cookie string
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/23
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/06/25
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -62,7 +62,7 @@ print_usage_and_exit () {
 	          -h <"Y"|"N">       : for JavaScript restriction (HttpOnly)
 	                               "Y" is HttpOnly ON.
 	                               "N" is HttpOnly OFF (default).
-	Version : Mon Feb 23 15:17:18 JST 2015
+	Version : Thu Jun 25 13:23:51 JST 2015
 __USAGE
   exit 1
 }
@@ -162,28 +162,28 @@ done
 printf '%s\n' "$var" | grep -Eq "$(printf '^([^ \t=]+=)?')" || print_usage_and_exit
 case "$eopt" in
   '') ;;
-   *) check=$(printf '%s\n' "$eopt"                                                                   |
-             awk '                                                                                    #
-               /^_[0-9]+[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$/ {         #
-                 print substr($0,2), 0;                                                               #
-                 exit;                                                                                #
-               }                                                                                      #
-               /^_\+[0-9]+$/ {                                                                        #
-                 print "_", substr($0,3);                                                             #
-                 exit;                                                                                #
-               }                                                                                      #
-               /^_[0-9]+[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]\+[0-9]+$/ { #
-                 pos = index($0,"+");                                                                 #
-                 print substr($0,2,pos-2), substr($0,pos+1);                                          #
-                 exit;                                                                                #
-               }                                                                                      #
-               {                                                                                      #
-                 print "!";                                                                           #
-                 exit;                                                                                #
-               }'                                                                                     )
-     case "$check"    in '!') print_usage_and_exit               ;; esac
+   *) check=$(printf '%s\n' "$eopt"                                                                  |
+             awk '                                                                                   #
+               /^[0-9]+[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$/ {         #
+                 print $0, 0;                                                                        #
+                 exit;                                                                               #
+               }                                                                                     #
+               /^\+[0-9]+$/ {                                                                        #
+                 print "_", substr($0,2);                                                            #
+                 exit;                                                                               #
+               }                                                                                     #
+               /^[0-9]+[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]\+[0-9]+$/ { #
+                 pos = index($0,"+");                                                                #
+                 print substr($0,1,pos-2), substr($0,pos+1);                                         #
+                 exit;                                                                               #
+               }                                                                                     #
+               {                                                                                     #
+                 print "!";                                                                          #
+                 exit;                                                                               #
+               }'                                                                                    )
+     case "$check"    in '!') print_usage_and_exit            ;; esac
      datetime=${check% *}
-     case "$datetime" in '_') datetime=$(date -u '+%Y%m%d%H%M%S');; esac
+     case "$datetime" in '_') datetime=$(date '+%Y%m%d%H%M%S');; esac
      lifetime=${check#* }
      ;;
 esac
@@ -257,11 +257,11 @@ path="${path:-}" awk '                                                         #
     split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec",monthname);        #
     split("Sun Mon Tue Wed Thu Fri Sat",weekname);                             #
     #                                                                          #
-    gm      = YYYYMMDDhhmmss2unixtime('$(TZ=UTC+0 date '+%Y%m%d%H%M%S')');     #
-    lo      = YYYYMMDDhhmmss2unixtime('$(         date '+%Y%m%d%H%M%S')');     #
+    gm      = YYYYMMDDhhmmss2unixtime('$(date -u '+%Y%m%d%H%M%S')');           #
+    lo      = YYYYMMDDhhmmss2unixtime('$(date    '+%Y%m%d%H%M%S')');           #
     offset  = lo - gm;                                                         #
-    offset -= (offset%2); # calcell the time lag of the two date starting time #
-    ut1     = YYYYMMDDhhmmss2unixtime(datetime) + offset;                      #
+    offset -= (offset%2); # calcel the time lag of the two date starting time  #
+    ut1     = YYYYMMDDhhmmss2unixtime(datetime) - offset;                      #
     ut2     = ut1 + lifetime;                                                  #
     dt      = unixtime2YYYYMMDDhhmmss(ut2);                                    #
     return sprintf("; expires=%s", rfc850form(dt));                            #
