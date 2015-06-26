@@ -50,7 +50,7 @@
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} <subcommand> [argument] ...
-	Version : Fri Jun 26 10:22:38 JST 2015
+	Version : Fri Jun 26 10:37:44 JST 2015
 __USAGE
   exit 1
 }
@@ -63,7 +63,7 @@ which which >/dev/null 2>&1 || {
   which () {
     (
       PATH='/usr/bin:/bin'
-      ans=$(LANG=C LC_ALL=C type "$1") || return $?
+      ans=$(LANG=C LC_ALL=C type "$1" 2>/dev/null) || return $?
       case "$1"   in */*) printf '%s\n' "$1"        ; return;; esac
       case "$ans" in */*) printf '%s\n' "/${ans#*/}"; return;; esac
       printf '%s\n' "$1"

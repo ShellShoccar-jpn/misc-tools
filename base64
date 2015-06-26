@@ -31,7 +31,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [-w <COLS>] <file>
 	          ${0##*/} [--by-myself] -d [-i] <file>
-	Version : Fri Jun 26 10:20:58 JST 2015
+	Version : Fri Jun 26 10:38:10 JST 2015
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
 	        :   * Although the bult-in base64 command or GNU AWK produces
 	        :     better performance than the POSIX command set
@@ -46,7 +46,7 @@ which which >/dev/null 2>&1 || {
   which () {
     (
       PATH='/usr/bin:/bin'
-      ans=$(LANG=C LC_ALL=C type "$1") || return $?
+      ans=$(LANG=C LC_ALL=C type "$1" 2>/dev/null) || return $?
       case "$1"   in */*) printf '%s\n' "$1"        ; return;; esac
       case "$ans" in */*) printf '%s\n' "/${ans#*/}"; return;; esac
       printf '%s\n' "$1"

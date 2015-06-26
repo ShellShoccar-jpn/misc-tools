@@ -35,7 +35,7 @@
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} <mailfile>
-	Version : Fri Jun 26 10:21:47 JST 2015
+	Version : Fri Jun 26 10:38:38 JST 2015
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands/sendmail command/UTF-8)
 __USAGE
   exit 1
@@ -48,7 +48,7 @@ __USAGE
 which which >/dev/null 2>&1 || {
   which () {
     (
-      ans=$(LANG=C LC_ALL=C type "$1") || return $?
+      ans=$(LANG=C LC_ALL=C type "$1" 2>/dev/null) || return $?
       case "$1"   in */*) printf '%s\n' "$1"        ; return;; esac
       case "$ans" in */*) printf '%s\n' "/${ans#*/}"; return;; esac
       printf '%s\n' "$1"
