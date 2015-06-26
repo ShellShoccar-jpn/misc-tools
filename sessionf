@@ -39,7 +39,7 @@
 # * On "validate", "reuse" and "remove" subcommands, you can set the session
 #   file directory in the <id> argument instead of the "at" argument.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/06/15
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/06/26
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -50,7 +50,7 @@
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} <subcommand> [argument] ...
-	Version : Mon Jun 15 02:15:20 JST 2015
+	Version : Fri Jun 26 10:22:38 JST 2015
 __USAGE
   exit 1
 }
@@ -63,9 +63,9 @@ which which >/dev/null 2>&1 || {
   which () {
     (
       PATH='/usr/bin:/bin'
-      ans=$(LANG=C LC_ALL=C type "$1") || exit $?
-      case "$1"   in */*) printf '%s\n' "$1"        ; exit;; esac
-      case "$ans" in */*) printf '%s\n' "/${ans#*/}"; exit;; esac
+      ans=$(LANG=C LC_ALL=C type "$1") || return $?
+      case "$1"   in */*) printf '%s\n' "$1"        ; return;; esac
+      case "$ans" in */*) printf '%s\n' "/${ans#*/}"; return;; esac
       printf '%s\n' "$1"
     )
   }
