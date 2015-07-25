@@ -19,7 +19,7 @@
 #                            in front of the filepath
 #        "--suffix=<suff>" . Add the suffix behind the filename
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/23
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/07/25
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -32,7 +32,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [options] [template [...]]
 	        : "-d" "-p [DIR]" "-q" "-u" "-t" "--suffix=<suff>"
-	Version : Thu Jun 25 15:22:24 JST 2015
+	Version : Sat Jul 25 17:53:48 JST 2015
 __USAGE
   exit 1
 }
@@ -48,7 +48,7 @@ IFS=$(printf ' \t\n_'); IFS=${IFS%_}
 export IFS LC_ALL=C LANG=C PATH
 
 # --- set the temporary directory ------------------------------------
-Dir_tmp=$(set | grep -q ^TMPDIR= | sed 's/^[^=]\{1,\}=//');
+Dir_tmp=$(set | grep ^TMPDIR= | sed 's/^[^=]\{1,\}=//');
 case "$Dir_tmp" in
   '') Dir_tmp='/tmp'      ;;
   /)  Dir_tmp='/.'        ;;
