@@ -4,9 +4,12 @@
 #
 # URLENCODE - URL encoder on the basis of RFC 3986
 #
-# USAGE: urlencode <file> ...
+# USAGE: urlencode [-r|--raw] <file> ...
+#        -r ...... RAW MODE : when this option is set, all of " " are
+#                  replaced with "%20" instead of "+".
+#        --raw ... same as the "-r" option
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/23
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/09/21
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -16,8 +19,8 @@
  
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
-	Usage   : ${0##*/} <file> ...
-	Version : Mon Feb 23 15:37:34 JST 2015
+	Usage   : ${0##*/} [-r|--raw] <file> ...
+	Version : Mon Sep 21 20:09:32 JST 2015
 __USAGE
   exit 1
 }
@@ -33,6 +36,14 @@ export IFS LC_ALL=C LANG=C PATH
 case "${1:-}" in
   --help|--version|-h) print_usage_and_exit;;
 esac
+instead_of_spc='+';
+for arg in "$@"; do
+  case "$arg" in
+    -r|--raw) instead_of_spc='%20'; shift;break;;
+    --)                             shift;break;;
+    *)        :                                ;;
+  esac
+done
 
 # --- main -----------------------------------------------------------
 case $# in
@@ -55,7 +66,7 @@ BEGIN {
   ORS = "";
   # --- prepare encoding
   for(i= 0;i<256;i++){c2p[sprintf("%c",i)]=sprintf("%%%02X",i);}
-  c2p[" "]="+";
+  c2p[" "]="'"$instead_of_spc"'";
   for(i=48;i< 58;i++){c2p[sprintf("%c",i)]=sprintf("%c",i);    }
   for(i=65;i< 91;i++){c2p[sprintf("%c",i)]=sprintf("%c",i);    }
   for(i=97;i<123;i++){c2p[sprintf("%c",i)]=sprintf("%c",i);    }
