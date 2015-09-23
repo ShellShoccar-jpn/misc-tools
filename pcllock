@@ -28,7 +28,7 @@
 # Example : write the following line into the crontab file someone owned
 #           * * * * * pcllock -l 300 -w 10 /PATH/TO/LOCKDIR
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/06/09
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/09/23
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -61,7 +61,7 @@ print_usage_and_exit () {
 	                              and removed.
 	                              (-1 means infinitely, so this program do
 	                              nothing)
-	Version : Tue Jun  9 04:57:10 JST 2015
+	Version : Wed Sep 23 17:44:43 JST 2015
 __USAGE
   exit 1
 }
@@ -314,7 +314,7 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-case $# in [^1]) print_usage_and_exit;; esac
+case $# in [!1]) print_usage_and_exit;; esac
 echo "_$max_waiting_secs"   | grep -Eq '^_-?[0-9]+$' || {
   printf '%s: Maximum waiting seconds parameter is invalid\n' "${0##*/}" 1>&2
   exit 1
@@ -334,7 +334,7 @@ while :; do
                                      Dir_lock=${Dir_lock%/}
                                      break                             ;; esac
 done
-case "$Dir_lock" in [^/]*) s=$(pwd);Dir_lock="${s%/}/$Dir_lock";; esac
+case "$Dir_lock" in [!/]*) s=$(pwd);Dir_lock="${s%/}/$Dir_lock";; esac
 
 # --- Decide the target directory and change to there ----------------
 case "$1" in

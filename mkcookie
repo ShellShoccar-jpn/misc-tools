@@ -39,7 +39,7 @@
 # Return: $?=0 (when all of the options are valid)
 #         stdout : HTTP Cookie string
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/06/25
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/09/23
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -62,7 +62,7 @@ print_usage_and_exit () {
 	          -h <"Y"|"N">       : for JavaScript restriction (HttpOnly)
 	                               "Y" is HttpOnly ON.
 	                               "N" is HttpOnly OFF (default).
-	Version : Thu Jun 25 13:23:51 JST 2015
+	Version : Wed Sep 23 17:43:52 JST 2015
 __USAGE
   exit 1
 }
@@ -82,105 +82,108 @@ dopt=''
 sopt=''
 hopt=''
 optmode=''
-i=0
-for arg in "$@"; do
-  i=$((i+1))
-  if [ -z "$optmode" ]; then
-    case "$arg" in
-      -[epdsh]*)
-        ret=$(printf '%s\n' "${arg#-}"                            |
-              awk '{opt     = substr($0,1,1);                     #
-                    opt_str = (length($0)>1) ? substr($0,2) : ""; #
-                    printf("%s %s", opt, opt_str);              }')
-        ret1=${ret%% *}
-        ret2=${ret#* }
-        if [ "$ret1" = 'e' ]; then
-          if [ -n "$ret2" ]; then
-            eopt=$ret2
-          else
-            optmode='e'
+case $# in [!0]*)
+  i=0
+  for arg in "$@"; do
+    i=$((i+1))
+    if [ -z "$optmode" ]; then
+      case "$arg" in
+        -[epdsh]*)
+          ret=$(printf '%s\n' "${arg#-}"                            |
+                awk '{opt     = substr($0,1,1);                     #
+                      opt_str = (length($0)>1) ? substr($0,2) : ""; #
+                      printf("%s %s", opt, opt_str);              }')
+          ret1=${ret%% *}
+          ret2=${ret#* }
+          if [ "$ret1" = 'e' ]; then
+            if [ -n "$ret2" ]; then
+              eopt=$ret2
+            else
+              optmode='e'
+            fi
           fi
-        fi
-        if [ "$ret1" = 'p' ]; then
-          if [ -n "$ret2" ]; then
-            popt=$ret2
-          else
-            optmode='p'
+          if [ "$ret1" = 'p' ]; then
+            if [ -n "$ret2" ]; then
+              popt=$ret2
+            else
+              optmode='p'
+            fi
           fi
-        fi
-        if [ "$ret1" = 'd' ]; then
-          if [ -n "$ret2" ]; then
-            dopt=$ret2
-          else
-            optmode='d'
+          if [ "$ret1" = 'd' ]; then
+            if [ -n "$ret2" ]; then
+              dopt=$ret2
+            else
+              optmode='d'
+            fi
           fi
-        fi
-        if [ "$ret1" = 's' ]; then
-          if [ -n "$ret2" ]; then
-            sopt=$ret2
-          else
-            optmode='s'
+          if [ "$ret1" = 's' ]; then
+            if [ -n "$ret2" ]; then
+              sopt=$ret2
+            else
+              optmode='s'
+            fi
           fi
-        fi
-        if [ "$ret1" = 'h' ]; then
-          if [ -n "$ret2" ]; then
-            hopt=$ret2
-          else
-            optmode='h'
+          if [ "$ret1" = 'h' ]; then
+            if [ -n "$ret2" ]; then
+              hopt=$ret2
+            else
+              optmode='h'
+            fi
           fi
-        fi
-        ;;
-      *)
-        if printf '%s' "$arg" | grep '^[^;.[:blank:]=]\{1,\}=.*$' >/dev/null; then
-          var=$arg
-        else
-          print_usage_and_exit
-        fi
-        ;;
-    esac
-  elif [ "$optmode" = 'e' ]; then
-    eopt=$arg
-    optmode=''
-  elif [ "$optmode" = 'p' ]; then
-    popt=$arg
-    optmode=''
-  elif [ "$optmode" = 'd' ]; then
-    dopt=$arg
-    optmode=''
-  elif [ "$optmode" = 's' ]; then
-    sopt=$arg
-    optmode=''
-  elif [ "$optmode" = 'h' ]; then
-    hopt=$arg
-    optmode=''
-  else
-    print_usage_and_exit
-  fi
-done
+          ;;
+        *)
+          if printf '%s' "$arg" | grep '^[^;.[:blank:]=]\{1,\}=.*$' >/dev/null; then
+            var=$arg
+          else
+            print_usage_and_exit
+          fi
+          ;;
+      esac
+    elif [ "$optmode" = 'e' ]; then
+      eopt=$arg
+      optmode=''
+    elif [ "$optmode" = 'p' ]; then
+      popt=$arg
+      optmode=''
+    elif [ "$optmode" = 'd' ]; then
+      dopt=$arg
+      optmode=''
+    elif [ "$optmode" = 's' ]; then
+      sopt=$arg
+      optmode=''
+    elif [ "$optmode" = 'h' ]; then
+      hopt=$arg
+      optmode=''
+    else
+      print_usage_and_exit
+    fi
+  done
+  ;;
+esac
 
 # --- validate the arguments -----------------------------------------
 printf '%s\n' "$var" | grep -Eq "$(printf '^([^ \t=]+=)?')" || print_usage_and_exit
 case "$eopt" in
   '') ;;
-   *) check=$(printf '%s\n' "$eopt"                                                                  |
-             awk '                                                                                   #
-               /^[0-9]+[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$/ {         #
-                 print $0, 0;                                                                        #
-                 exit;                                                                               #
-               }                                                                                     #
-               /^\+[0-9]+$/ {                                                                        #
-                 print "_", substr($0,2);                                                            #
-                 exit;                                                                               #
-               }                                                                                     #
-               /^[0-9]+[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]\+[0-9]+$/ { #
-                 pos = index($0,"+");                                                                #
-                 print substr($0,1,pos-2), substr($0,pos+1);                                         #
-                 exit;                                                                               #
-               }                                                                                     #
-               {                                                                                     #
-                 print "!";                                                                          #
-                 exit;                                                                               #
-               }'                                                                                    )
+   *) check=$(printf '%s\n' "$eopt"                                                                   |
+              awk '                                                                                   #
+                /^[0-9]+[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$/ {         #
+                  print $0, 0;                                                                        #
+                  exit;                                                                               #
+                }                                                                                     #
+                /^\+[0-9]+$/ {                                                                        #
+                  print "_", substr($0,2);                                                            #
+                  exit;                                                                               #
+                }                                                                                     #
+                /^[0-9]+[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]\+[0-9]+$/ { #
+                  pos = index($0,"+");                                                                #
+                  print substr($0,1,pos-1), substr($0,pos+1);                                         #
+                  exit;                                                                               #
+                }                                                                                     #
+                {                                                                                     #
+                  print "!";                                                                          #
+                  exit;                                                                               #
+                }'                                                                                    )
      case "$check"    in '!') print_usage_and_exit            ;; esac
      datetime=${check% *}
      case "$datetime" in '_') datetime=$(date '+%Y%m%d%H%M%S');; esac

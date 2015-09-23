@@ -33,7 +33,7 @@
 #              :                  # (but it needs to remain SUFFICIENT LIFETIME)
 #           punlock "$lockid"                               # release the lock
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/06/09
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/09/23
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -67,7 +67,7 @@ print_usage_and_exit () {
 	Return  : $?     ==0 ... one or more locking were success
 	                 !=0 ... all failure
 	          stdout ....... enerated path of the lockfile (just lock-id)
-	Version : Tue Jun  9 07:16:06 JST 2015
+	Version : Wed Sep 23 17:46:46 JST 2015
 __USAGE
   exit 1
 }
@@ -173,13 +173,13 @@ while :; do
                                      break                             ;; esac
 done
 case $? in
-  [^0]*) echo "${0##*/}: Failed to make the lockfile directory" 1>&2;exit 1;;
+  [!0]*) echo "${0##*/}: Failed to make the lockfile directory" 1>&2;exit 1;;
 esac
 [ \( -z "$dopt" \) -o \( -d "$dopt" \) ] || {
   echo "${0##*/}: \"$Dir_lock\": No such directory or permission denied" 1>&2
   exit 1
 }
-case "$Dir_lock" in [^/]*) s=$(pwd);Dir_lock="${s%/}/$Dir_lock";; esac
+case "$Dir_lock" in [!/]*) s=$(pwd);Dir_lock="${s%/}/$Dir_lock";; esac
 
 
 
@@ -215,7 +215,7 @@ for lockname in "$@"; do
   # 2) make a temp-dir
   Dir_prelk="${Dir_lock}.preshlock.$sublockname"
   mkdir "$Dir_prelk"
-  case $? in [^0]*)
+  case $? in [!0]*)
     echo "${0##*/}: \"$lockname\": Failed to make a pre-lock dir #1" 1>&2
     continue
     ;;
@@ -224,7 +224,7 @@ for lockname in "$@"; do
   #    (The reason of "into and into" is to prevent from succeeding mv command
   #     when the samenamed lock directory already exists.)
   mkdir -p "$Dir_prelk/$lockname/$lockname/$sublockname"
-  case $? in [^0]*)
+  case $? in [!0]*)
     echo "${0##*/}: \"$lockname\": Failed to make a pre-lock dir #2" 1>&2
     continue
     ;;
@@ -310,6 +310,6 @@ done
 
 # --- Return 1 if all locking failed ---------------------------------
 case "$count_success:$count_all" in
-  0:[^0]*) exit_trap 1;;
+  0:[!0]*) exit_trap 1;;
         *) exit_trap 0;;
 esac

@@ -12,7 +12,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [+<n>h] <f1> <f2> ... <file>
 	        : ${0##*/} -d <string>
-	Version : Thu Jun 25 15:16:09 JST 2015
+	Version : Wed Sep 23 17:43:16 JST 2015
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands/UTF-8)
 __USAGE
   exit 1
@@ -38,7 +38,7 @@ hopt=0
 case "$#${1:-}" in
   1-h|1--help|1--version) print_usage_and_exit;;
 esac
-case $# in [^0]*)
+case $# in [!0]*)
   i=0
   for arg in "$@"; do
     i=$((i+1))

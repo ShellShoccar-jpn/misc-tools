@@ -47,7 +47,7 @@
 #   That means, you can join various filters to fd=2 (stderr). Although
 #   it is very tricky. ;-)
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/05/19
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/09/23
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -64,7 +64,7 @@ DEFAULT_TIMEOUT=600
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [-t timeout] <named_pipe_to_use> [output_file]
-	Version : Tue May 19 23:10:56 JST 2015
+	Version : Wed Sep 23 17:41:56 JST 2015
 __USAGE
   exit 1
 }
@@ -230,7 +230,7 @@ case $check in 'p')
        esac
        namedpipe_to_del_by_myself=$pipe
        ;;
-    0[^0-9]*)                         # $?==0 && $check!=''
+    0[!0-9]*)                         # $?==0 && $check!=''
        case "$check" in
          p*) :                                                          ;;
          *) printf '%s\n' "${0##*/}: \"$pipe\" exists as another attribute" 1>&2

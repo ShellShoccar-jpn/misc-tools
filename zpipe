@@ -224,7 +224,7 @@ case $check in 'p')
        esac
        namedpipe_to_del_by_myself=$pipe
        ;;
-    0[^0-9]*)                         # $?==0 && $check!=''
+    0[!0-9]*)                         # $?==0 && $check!=''
        case "$check" in
          p*) :                                                          ;;
          *) printf '%s\n' "${0##*/}: \"$pipe\" exists as another attribute" 1>&2
