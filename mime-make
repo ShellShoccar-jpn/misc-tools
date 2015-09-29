@@ -2,37 +2,43 @@
 
 ######################################################################
 #
-# MIME-MAKE - MIME Multipart Formatted Formdata Generator
+# MIME-MAKE - MIME Multipart Formatted Data Maker
 #
-# USAGE: mime-make <-M|--generatemimeboundary>
-#        mime-make [-B] [-b <mimeboundary>] <form_args#1> [<form_args#2> ...]
+# USAGE: mime-make <-m|--generatemimeboundary>
+#        mime-make [options] <arg_group#1> [<arg_group#2> ...]
 #
-# * Only generate MIME boundary string if -M option is specified.
-#
-# * One of the <form_args>s consists of one of the following formats :
-#   (a) -T <name> <value>
-#       formdata <name> is as a text string <vaule>.
+# * Only generate MIME boundary string if -m option is specified.
+# * One of the <arg_group>s consists of one of the following formats.
+#   For HTML form:
+#   (a) -T  <name> <value>
 #   (b) -Tf <name> <file>
-#       formdata <name> is as a text string in the <file>.
-#   (c) -F <name> <file>
-#       formdata <name> is as an attached file <file>.
-#       And type field is decided by extension of the <file>.
-#   (d) -Ff <name> <filename_str> <file>
-#       formdata <name> is as an attached file <file>.
-#       type field is decided by extension of the <file>.
-#       And filename field is as a string <filename_str>.
-#   (e) -Ft <name> <type_str> <file>
-#       formdata <name> is as an attached file <file>.
-#       And type field is as a string <type_str>.
+#       <name> is as a text string <vaule> or in the <file>.
+#   (c) -F   <name>                           <file>
+#   (d) -Ff  <name>            <filename_str> <file>
+#   (e) -Ft  <name> <type_str>                <file>
 #   (f) -Ftf <name> <type_str> <filename_str> <file>
-#       formdata <name> is as an attached file <file>.
-#       type field is as a string <type_str>.
-#       And filename field is as a string <filename_str>.
+#       <name> is as an attached file <file>. (default is standard input)
+#       filetype is <type_str> (default is auto-detected by the file extension)
+#       filename is <filename_str> (default is same as the <file>)
+#   For mail with attached files:
+#   (g) -M <file>
+#       mail-bodypart is read from <file>. (default is standard input)
+#   (h) -A                             <file>
+#   (i) -Af             <filename_str> <file>
+#   (j) -At  <type_str>                <file>
+#   (k) -Atf <type_str> <filename_str> <file>
+#       mail-attached-filepart is read from <file>. (default is standard input)
+#       (every parameter is same as in (c)-(f))
+#   OPTIONS:
+#   -b <mimeboundary> : MIME boundary string (default is auto-generated)
+#   --crlf/--lf : Use CR+LF or LF when line feeding (default is --crlf)
+#   --b64/--raw : switch about applying or not Base64 to the <file> of (c)-(f)
+#                 (default is --raw)
 #
 # Return: $?=0 (when all of the arguments are valid)
-#         stdout : generated MIME formatted formdata
+#         stdout : generated MIME formatted data
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/09/27
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/09/29
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -44,28 +50,37 @@
 # print the usage and exit
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
-	Usage   : ${0##*/} <-M|--generatemimeboundary>
-	        : ${0##*/} [-B] [-b <mimeboundary>] <form_args#1> [<form_args#2> ...]
-	          * One of the <form_args>s consists of one of the following formats.
-	            (a) -T <name> <value>
-	                formdata <name> is as a text string <vaule>.
-	            (b) -Tf <name> <file>
-	                formdata <name> is as a text string in the <file>.
-	            (c) -F <name> <file>
-	                formdata <name> is as an attached file <file>.
-	                And type field is decided by extension of the <file>.
-	            (d) -Ff <name> <filename_str> <file>
-	                formdata <name> is as an attached file <file>.
-	                type field is decided by extension of the <file>.
-	                And filename field is as a string <filename_str>.
-	            (e) -Ft <name> <type_str> <file>
-	                formdata <name> is as an attached file <file>.
-	                And type field is as a string <type_str>.
-	            (f) -Ftf <name> <type_str> <filename_str> <file>
-	                formdata <name> is as an attached file <file>.
-	                type field is as a string <type_str>.
-	                And filename field is as a string <filename_str>.
-	Version : Mon Sep 28 04:29:56 JST 2015
+	USAGE: ${0##*/} <-m|--generatemimeboundary>
+	       ${0##*/} [options] <arg_group#1> [<arg_group#2> ...]
+
+	* Only generate MIME boundary string if -m option is specified.
+	* One of the <arg_group>s consists of one of the following formats.
+	  For HTML form:
+	  (a) -T  <name> <value>
+	  (b) -Tf <name> <file>
+	      <name> is as a text string <vaule> or in the <file>.
+	  (c) -F   <name>                           <file>
+	  (d) -Ff  <name>            <filename_str> <file>
+	  (e) -Ft  <name> <type_str>                <file>
+	  (f) -Ftf <name> <type_str> <filename_str> <file>
+	      <name> is as an attached file <file>. (default is standard input)
+	      filetype is <type_str> (default is auto-detected by the file extension)
+	      filename is <filename_str> (default is same as the <file>)
+	  For mail with attached files:
+	  (g) -M <file>
+	      mail-bodypart is read from <file>. (default is standard input)
+	  (h) -A                             <file>
+	  (i) -Af             <filename_str> <file>
+	  (j) -At  <type_str>                <file>
+	  (k) -Atf <type_str> <filename_str> <file>
+	      mail-attached-filepart is read from <file>. (default is standard input)
+	      (every parameter is same as in (c)-(f))
+	  OPTIONS:
+	  -b <mimeboundary> : MIME boundary string (default is auto-generated)
+	  --crlf/--lf : Use CR+LF or LF when line feeding (default is --crlf)
+	  --b64/--raw : switch about applying or not Base64 to the <file> of (c)-(f)
+	                (default is --raw)
+	Version : Tue Sep 29 23:48:39 JST 2015
 __USAGE
   exit 1
 }
@@ -127,6 +142,50 @@ randstr() {
                       }                        }      #
               /[0-9]/{print c[$0*1];           }'     |
          tail -c $1                                   )
+}
+# escape the string in header if necessary ($1:string for in-header)
+escape_for_header_string() {
+  printf '%s\n' "$1"                      |
+  awk 'index($0,"=?")        >0{exit 1;}  # # when contain "=?"
+       sub(/[\200-\377]/,"")==1{exit 1;}'   # when contain 8-bit chars
+  case $? in
+    0) printf '%s\n' "$1"                                                 |
+       sed 's/"/\\"/g'                                                    ;;
+    *) printf '%s\n' "$1"                                                 |
+       awk -v maxbytes=40 '# UTF-8 string cutter within required bytes    #
+         BEGIN {                                                          #
+           OFS = ""; ORS = "";                                            #
+           while (getline str) {                                          #
+             bytes_thisline = 0;                                          #
+             len = length(str);                                           #
+             for (pos=1; pos<=len; pos+=bytes_a_letter) {                 #
+               c = substr(str, pos, 1);                                   #
+               if      (c < "\200") {bytes_a_letter=1;}                   #
+               else if (c < "\300") {bytes_a_letter=1;} # invalid pattern!#
+               else if (c < "\340") {bytes_a_letter=2;}                   #
+               else if (c < "\360") {bytes_a_letter=3;}                   #
+               else if (c < "\370") {bytes_a_letter=4;}                   #
+               else if (c < "\374") {bytes_a_letter=5;}                   #
+               else if (c < "\376") {bytes_a_letter=6;}                   #
+               else                 {bytes_a_letter=1;} # invalid pattern!#
+               if (bytes_thisline+bytes_a_letter > maxbytes) {            #
+                 print "\n", substr(str, pos, bytes_a_letter);            #
+                 bytes_thisline  = bytes_a_letter;                        #
+               } else                               {                     #
+                 print     substr(str, pos, bytes_a_letter);              #
+                 bytes_thisline += bytes_a_letter;                        #
+               }                                                          #
+             }                                                            #
+             print "\n";                                                  #
+           }                                                              #
+         }'                                                               |
+       while IFS=$LF read -r line; do                                     #
+         printf '%s' "$line" | base64 --wrap=0                            #
+       done                                                               |
+       sed "s/.*/=?UTF-8?B?&?=/"                                          |
+       sed "1!s/^/$TAB/"                                                  |
+       sed "\$!s/\$/$CR/"                                                 ;;
+  esac
 }
 # Base64 Encoder ($1:width a line)
 base64 () {
@@ -1016,6 +1075,10 @@ PATH='/usr/bin:/bin'
 IFS=$(printf ' \t\n_'); IFS=${IFS%_}
 export IFS LANG=C LC_ALL=C PATH
 #
+TAB=$(printf '\t')
+CR=$(printf '\r_'); CR=${CR%_}
+LF=$(printf '\n_'); LF=${LF%_}
+#
 use_stdin=0
 validate_file() {
   case $1 in
@@ -1040,20 +1103,23 @@ validate_file() {
 
 
 # --- parse options --------------------------------------------------
-# parse the -M option and only generate a mime boundary string if exists
+# parse the -m option and only generate a mime boundary string if exists
 case "${1:-}" in
-  '-M'|'--generatemimeboundary') echo "MimeBoundary-$(randstr 61)"; exit 0;;
+  '-m'|'--generatemimeboundary') echo "MimeBoundary-$(randstr 61)"; exit 0;;
 esac
 #
-# parse and validate the -B and -b option
+# parse and validate the some kinds of options
 base64=0
 mime_b_is_set=0
 while :; do
-  [ $# -ge 3 ] || print_usage_and_exit
+  [ $# -ge 2 ] || print_usage_and_exit
   case "$1" in
-    '-B') base64=1                  ; shift  ; continue;;
-    '-b') mime_b=$2; mime_b_is_set=1; shift 2; continue;;
-       *)                                      break   ;;
+    --crlf) CR=$(printf '\r_'); CR=${CR%_}; shift  ; continue;;
+    --lf)   CR=''                         ; shift  ; continue;;
+    --b64)  base64=1                      ; shift  ; continue;;
+    --raw)  base64=0                      ; shift  ; continue;;
+    -b)     mime_b=$2; mime_b_is_set=1    ; shift 2; continue;;
+     *)                                           break   ;;
   esac
 done
 case $mime_b_is_set in 0) mime_b="MimeBoundary-$(randstr 61)";; esac
@@ -1062,14 +1128,18 @@ case $mime_b_is_set in 0) mime_b="MimeBoundary-$(randstr 61)";; esac
 # --- main loop ------------------------------------------------------
 while [ $# -gt 0 ]; do
   # 1) parse arguments for a form
-  type=''; text=''; file=''; filename=''
+  mode=''; name=''; type=''; text=''; file=''; filename=''
   case $1 in
-    -T)   case $# in [12]) print_usage_and_exit;; esac
+    --b64) base64=1; shift; continue;; # switch to Base64 Encoding mode
+    --raw) base64=0; shift; continue;; # switch to RAW mode
+    -T)   mode='textform'
+          case $# in [12]) print_usage_and_exit;; esac
           text=$3
           name=$2
           shift 3
           ;;
-    -Tf)  case $# in
+    -Tf)  mode='textform'
+          case $# in
             1) print_usage_and_exit;;
             2) file='-'            ;;
             *) file=$3             ;;
@@ -1079,7 +1149,8 @@ while [ $# -gt 0 ]; do
           name=$2
           case $# in 2) shift 2;; *) shift 3;; esac
           ;;
-    -F)   case $# in
+    -F)   mode='fileform'
+          case $# in
             1) print_usage_and_exit         ;;
             2) file='-'                     ;;
             *) file=$3; filename=${file##*/};;
@@ -1090,7 +1161,8 @@ while [ $# -gt 0 ]; do
           name=$2
           case $# in 2) shift 2;; *) shift 3;; esac
           ;;
-    -Ff)  case $# in
+    -Ff)  mode='fileform'
+          case $# in
             [12]) print_usage_and_exit;;
                3) file='-'            ;;
                *) file=$4             ;;
@@ -1102,7 +1174,8 @@ while [ $# -gt 0 ]; do
           name=$2
           case $# in 3) shift 3;; *) shift 4;; esac
           ;;
-    -Ft)  case $# in
+    -Ft)  mode='fileform'
+          case $# in
             [12]) print_usage_and_exit         ;;
                3) file='-'                     ;;
                *) file=$4; filename=${file##*/};;
@@ -1112,7 +1185,8 @@ while [ $# -gt 0 ]; do
           name=$2
           case $# in 3) shift 3;; *) shift 4;; esac
           ;;
-    -Ftf) case $# in
+    -Ftf) mode='fileform'
+          case $# in
             [123]) print_usage_and_exit;;
                 4) file='-'            ;;
                 *) file=$5             ;;
@@ -1123,45 +1197,147 @@ while [ $# -gt 0 ]; do
           name=$2
           case $# in 4) shift 4;; *) shift 5;; esac
           ;;
+    -M)   mode='mailbody'
+          case $# in
+            1) file='-'            ;;
+            *) file=$2             ;;
+          esac
+          validate_file "$file"
+          case $# in 1) shift  ;; *) shift 2;; esac
+          ;;
+    -A)   mode='mailatch'
+          case $# in
+            1) file='-'                     ;;
+            *) file=$2; filename=${file##*/};;
+          esac
+          name=$filename
+          validate_file "$file"
+          ext=${file##*/};case "${ext##*.}" in "$ext") ext='';; esac
+          type=$(decide_type "${ext##*.}")
+          case $# in 1) shift 1;; *) shift 2;; esac
+          ;;
+    -Af)  mode='mailatch'
+          case $# in
+            1) print_usage_and_exit;;
+            2) file='-'            ;;
+            *) file=$3             ;;
+          esac
+          validate_file "$file"
+          filename=$2
+          name=$filename
+          ext=${file##*/};case "${ext##*.}" in "$ext") ext='';; esac
+          type=$(decide_type "${ext##*.}")
+          case $# in 2) shift 2;; *) shift 3;; esac
+          ;;
+    -At)  mode='mailatch'
+          case $# in
+            1) print_usage_and_exit         ;;
+            2) file='-'                     ;;
+            *) file=$3; filename=${file##*/};;
+          esac
+          validate_file "$file"
+          name=$filename
+          type=$2
+          case $# in 2) shift 2;; *) shift 3;; esac
+          ;;
+    -Atf) mode='mailatch'
+          case $# in
+            [12]) print_usage_and_exit;;
+               3) file='-'            ;;
+               *) file=$4             ;;
+          esac
+          validate_file "$file"
+          filename=$3
+          name=$filename
+          type=$2
+          case $# in 3) shift 3;; *) shift 4;; esac
+          ;;
     *)    print_usage_and_exit;;
   esac
-  name=$(    printf '%s' "$name"     | tr -d '\r\n' | sed 's/"/\\"/g')
-  type=$(    printf '%s' "$type"     | tr -d '\r\n' | sed 's/"/\\"/g')
-  filename=$(printf '%s' "$filename" | tr -d '\r\n' | sed 's/"/\\"/g')
+  name=$(    escape_for_header_string "$name"    )
+  type=$(    escape_for_header_string "$type"    )
+  filename=$(escape_for_header_string "$filename")
 
   # 2) output
-  printf '%s\r\n' "--$mime_b"
-  case "$file" in
+  printf '%s%s\n' "--$mime_b" "$CR"
+  case "$mode" in
     # a) a text string
-    '') printf 'Content-Disposition: form-data; name="%s"\r\n\r\n' "$name"
-        printf '%s\r\n'                                            "$text"
-        ;;
+    'textform') printf 'Content-Disposition: form-data; name="%s"%s\n%s\n' \
+                       "$name" "$CR" "$CR"
+                printf '%s%s\n'                                            \
+                       "$text" "$CR"
+                ;;
     # b) an attached file
-    *)  printf 'Content-Disposition: form-data; name="%s"' "$name"
-        case "$filename" in
-          '') printf '\r\n'                           ;;
-           *) printf '; filename="%s"\r\n' "$filename";;
-        esac
-        case "$base64" in
-           0) :                                             ;;
-           *) printf 'Content-Transfer-Encoding: base64\r\n';;
-        esac
-        case "$type" in
-          '') :                                    ;;
-           *) printf 'Content-Type: %s\r\n' "$type";;
-        esac
-        printf '\r\n'
-        case "$base64" in
-           0) cat "$file"     ;;
-           *) cat "$file"      |
-              base64 --wrap=76 |
-              sed '$!s/$/@ /'  |
-              tr -d '\n'       |
-              tr '@ ' '\r\n'  ;;
-        esac
-        printf '\r\n'
-        ;;
+    'fileform') printf 'Content-Disposition: form-data; name="%s"' "$name"
+                case "$filename" in
+                  '') printf '%s\n'                            "$CR";;
+                   *) printf '; filename="%s"%s\n' "$filename" "$CR";;
+                esac
+                case "$base64" in
+                   0) :                                                   ;;
+                   *) printf 'Content-Transfer-Encoding: base64%s\n' "$CR";;
+                esac
+                case "$type" in
+                  '') :                                          ;;
+                   *) printf 'Content-Type: %s%s\n' "$type" "$CR";;
+                esac
+                printf '%s\n' "$CR"
+                case "$base64" in
+                   0) cat "$file"           ;;
+                   *) cat "$file"           |
+                      base64 --wrap=76      |
+                      sed '$!s/$/@ /'       |
+                      tr -d '\n'            |
+                      tr '@ ' '\r\n'        |
+                      if [ -n "$CR" ]; then #
+                        cat                 #
+                      else                  #
+                        tr -d "$CR"         #
+                      fi                    ;;
+                esac
+                printf '%s\n' "$CR"
+                ;;
+    # c) a mail body
+    'mailbody') printf 'Content-Transfer-Encoding: base64%s\n'           \
+                       "$CR"
+                printf 'Content-Type: text/plain; charset=UTF-8%s\n%s\n' \
+                       "$CR" "$CR"
+                
+                cat "$file"                                        |
+                if [ -n "$CR" ]; then                              #
+                  sed "/^\$/s/\$/$CR/" | sed "/[^$CR]\$/s/\$/$CR/" #
+                else                                               #
+                  tr -d '\r'                                       #
+                fi                                                 |
+                base64 --wrap=76                                   |
+                sed '$!s/$/@ /'                                    |
+                tr -d '\n'                                         |
+                tr '@ ' '\r\n'                                     |
+                if [ -n "$CR" ]; then                              #
+                  cat                                              #
+                else                                               #
+                  tr -d "$CR"                                      #
+                fi
+                printf '%s\n' "$CR"
+                ;;
+    'mailatch') printf 'Content-Disposition: attachment; filename="%s"%s\n' \
+                       "$filename" "$CR"
+                printf 'Content-Transfer-Encoding: base64%s\n'              \
+                       "$CR"
+                printf 'Content-Type: %s; name="%s"%s\n%s\n'                \
+                       "$type" "$name" "$CR" "$CR"
+                cat "$file"           |
+                base64 --wrap=76      |
+                sed '$!s/$/@ /'       |
+                tr -d '\n'            |
+                tr '@ ' '\r\n'        |
+                if [ -n "$CR" ]; then #
+                  cat                 #
+                else                  #
+                  tr -d "$CR"         #
+                fi
+                printf '%s\n' "$CR"
+                ;;
   esac
-
 done
-printf '%s\r\n' "--$mime_b"
+printf '%s--%s\n' "--$mime_b" "$CR"
