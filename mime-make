@@ -41,7 +41,7 @@
 # Return: $?=0 (when all of the arguments are valid)
 #         stdout : generated MIME formatted data
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/10/04
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/10/07
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -86,7 +86,7 @@ print_usage_and_exit () {
 	                (default is --crlf when form-mode, --lf when mail-mode)
 	  --b64/--raw : switch about applying or not Base64 to the <file> of (c)-(f)
 	                (default is --raw)
-	Version : Sun Oct  4 18:11:14 JST 2015
+	Version : Wed Oct  7 21:56:54 JST 2015
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands/UTF-8)
 __USAGE
   exit 1
@@ -1123,9 +1123,9 @@ esac
 # decide that line-feed default whether --crlf or --lf
 s=$(printf '%s\n' "$*" | awk 'match($0,/-[TFMA]/){print substr($0,RSTART+1,1)}')
 case "$s" in
-  [TF]) cr=$CR              ;;
-  [MA]) cr=''               ;;
-     *) print_usage_and_exit;;
+  [TF]) cr=$CR; mpart_subtype='form-data';;
+  [MA]) cr='' ; mpart_subtype='mixed'    ;;
+     *) print_usage_and_exit             ;;
 esac
 #
 # parse and validate the some kinds of options
@@ -1149,8 +1149,8 @@ case $mime_b_is_set in 0) mime_b="MimeBoundary-$(randstr 61)";; esac
 
 # --- main loop ------------------------------------------------------
 case $header in 1)
-  printf 'Content-Type: multipart/mixed; boundary="%s"%s\n%s\n' \
-         "$mime_b" "$cr" "$cr"
+  printf 'Content-Type: multipart/%s; boundary="%s"%s\n%s\n' \
+         "$mpart_subtype" "$mime_b" "$cr" "$cr"
   ;;
 esac
 while [ $# -gt 0 ]; do
