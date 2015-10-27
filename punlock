@@ -4,7 +4,7 @@
 #
 # PUNLOCK : A Unlock Command for "pexlock" and "pshlock"
 #
-# Usage   : ${0##*/} [options] <lockname> [lockname ...]
+# Usage   : punlock [options] <lockname> [lockname ...]
 #           -d <lockdir> ...... the directory for lockfiles.
 #                               The lockfile directory will be decided
 #                               as the following rule.
@@ -21,7 +21,7 @@
 #
 # Example : See the header comments of "pexlock" and "pshlock"
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/09/23
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/10/27
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -47,7 +47,7 @@ print_usage_and_exit () {
 	                              maximum waiting seconds to succeed locking
 	                              (-1 means waiting infinitely)
 	                              The default value is 10.
-	Version : Wed Sep 23 17:47:45 JST 2015
+	Version : Tue Oct 27 11:56:44 JST 2015
 __USAGE
   exit 1
 }
@@ -160,6 +160,8 @@ for lockname in "$@"; do
   count_all=$((count_all+1))
 
   # --- Validate the lockname  ---------------------------------------
+  # 0) trim "/" at the end of argument
+  lockname=${lockname%/}
   # 1) if the argument is as a sh-lock, separate lock-id from the argument
   sublockname=''
   echo "_$lockname" | grep -Eq '^_.+/[0-9]{14}\.[0-9]+\.[0-9]+$' && {
@@ -182,8 +184,8 @@ for lockname in "$@"; do
   Dir_path="${lockname%/*}/"
   lockname="${lockname##*/}"
   # 3) skip if the argument is a sh-lock without sublock-id
-  [ \( -d "$Dir_path" \) -a \( -z "$sublockname" \) ] && {
-    printf '%s: "%s": That is a sh-lockfile, but without sublock-id\n' \
+  [ \( -d "$Dir_path$lockname" \) -a \( -z "$sublockname" \) ] && {
+    printf '%s: "%s": It is a sh-lockfile, but without sublock-id\n' \
            "${0##*/}" "$lockname" 1>&2
     continue
   }

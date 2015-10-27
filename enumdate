@@ -1,0 +1,169 @@
+#! /bin/sh
+ 
+######################################################################
+#
+# ENUMDATE - Enumerate dates from arg#1 to arg#2
+#
+# USAGE: enumdate <yyyymmdd1> <yyyymmdd2>
+#
+# Return: $?=0 (when all of the options are valid)
+#         stdout : HTTP Cookie string
+#
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/10/18
+#
+# This is a public-domain software. It measns that all of the people
+# can use this with no restrictions at all. By the way, I am fed up
+# the side effects which are broght about by the major licenses.
+#
+######################################################################
+ 
+print_usage_and_exit () {
+  cat <<-__USAGE 1>&2
+	Usage   : ${0##*/} <yyyymmdd1> <yyyymmdd2>
+	Version : Sun Oct 18 23:19:22 JST 2015
+__USAGE
+  exit 1
+}
+
+# --- initalization --------------------------------------------------
+set -u
+umask 0022
+PATH='/usr/bin:/bin'
+IFS=$(printf ' \t\n_'); IFS=${IFS%_}
+export IFS LC_ALL=C LANG=C PATH
+
+# --- parse arguments ------------------------------------------------
+case $# in
+  2) :                   ;;
+  *) print_usage_and_exit;;
+esac
+printf '%s' "$1" | grep -Eq '^[0-9]{5,8}$' || print_usage_and_exit
+printf '%s' "$2" | grep -Eq '^[0-9]{5,8}$' || print_usage_and_exit
+
+
+# --- main -----------------------------------------------------------
+MYNAME="${0##*/}" awk -v d1=$1 -v d2=$2 '
+BEGIN {
+  i = length(d2);
+  date_y = substr(d2, 1  , i-4) * 1;
+  date_m = substr(d2, i-3,   2) * 1;
+  date_d = substr(d2, i-1     ) * 1;
+  if (! valdate()) {
+    printf("%s: Invalid date: %s\n",ENVIRON["MYNAME"],d2) > "/dev/stderr";
+    exit 1;
+  }
+  date_Y=date_y; date_M=date_m; date_D=date_d; YMD = d2*1;
+  i = length(d1);
+  date_y = substr(d1, 1  , i-4) * 1;
+  date_m = substr(d1, i-3,   2) * 1;
+  date_d = substr(d1, i-1     ) * 1;
+  if (! valdate()) {
+    printf("%s: Invalid date: %s\n",ENVIRON["MYNAME"],d2) > "/dev/stderr";
+    exit 1;
+  }
+
+  if        (d1*1 < d2*1) {
+    while (date_y*10000+date_m*100+date_d < YMD) {
+      printf("%d%02d%02d\n",date_y,date_m,date_d);
+      incdate();
+    }
+  } else if (d1*1 > d2*1) {
+    while (date_y*10000+date_m*100+date_d > YMD) {
+      printf("%d%02d%02d\n",date_y,date_m,date_d);
+      decdate();
+    }
+  }
+  printf("%d%02d%02d\n",date_y,date_m,date_d);
+}
+
+# INPUT : date_y, date_m, date_d
+# OUTPUT: date_y, date_m, date_d
+function incdate() {
+  if        (date_d < 28      ) {
+    date_d++;
+  } else if (date_d ==31      ) {
+    if (date_m <12) {
+      date_m++;
+    } else          {
+      date_y++;
+      date_m = 1;
+      date_d = 1;
+    }
+    date_d = 1;
+  } else if (date_d ==30      ) {
+    if ((date_m == 4) || (date_m == 6) || (date_m == 9) || (date_m ==11)) {
+      date_d = 1;
+      date_m++;
+    } else                                                                {
+      date_d = 31;
+    }
+  } else if (date_d ==29      ) {
+    if (date_m == 2) {
+      date_m = 3;
+      date_d = 1;
+    } else           {
+      date_d++;
+    }
+  } else if (date_m != 2      ) {
+    date_d = 29;
+  } else if (date_y % 400 == 0) {
+    date_d = 29;
+  } else if (date_y % 100 == 0) {
+    date_m = 3;
+    date_d = 1;
+  } else if (date_y %   4 == 0) {
+    date_d = 29;
+  } else                        {
+    date_m = 3;
+    date_d = 1;
+  }
+}
+
+# INPUT : date_y, date_m, date_d
+# OUTPUT: date_y, date_m, date_d
+function decdate() {
+  if        (date_d >    1                                                   ) {
+    date_d--;
+  } else if ((date_m == 5) || (date_m == 7) || (date_m ==10) || (date_m ==12)) {
+    date_m--;
+    date_d = 30;
+  } else if (date_m ==   1                                                   ) {
+    date_y--;
+    date_m = 12;
+    date_d = 31;
+  } else if (date_m !=   3                                                   ) {
+    date_m--;
+    date_d = 31;
+  } else if (date_y % 400 == 0                                               ) {
+    date_m =  2;
+    date_d = 29;
+  } else if (date_y % 100 == 0                                               ) {
+    date_m =  2;
+    date_d = 28;
+  } else if (date_y %   4 == 0                                               ) {
+    date_m =  2;
+    date_d = 29;
+  } else                                                                       {
+    date_m =  2;
+    date_d = 28;
+  }
+}
+
+# INPUT : date_y, date_m, date_d
+# OUTPUT: (return code)
+function valdate() {
+  if (date_y <   1                    ) {return 0;}
+  if ((date_m <   1) || (date_m >  12)) {return 0;}
+  if ((date_d <   1) || (date_d >  31)) {return 0;}
+  if (date_d == 31                    ) {
+    if ((date_m == 2) || (date_m == 4) || (date_m == 6)) {return 0;}
+    if ((date_m == 9) || (date_m ==11)                 ) {return 0;}
+  }
+  if ((date_d == 30) && (date_m ==  2)) {return 0;}
+  if ((date_d == 29) && (date_m ==  2)) {
+    if (date_y %   4 != 0                         ) {return 0;}
+    if ((date_y % 100 == 0) && (date_y % 400 != 0)) {return 0;}
+  }
+  return 1;
+}
+'

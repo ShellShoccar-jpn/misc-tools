@@ -4,7 +4,7 @@
 #
 # PEXLOCK : A Exclusive Lock Command within POSIX
 #
-# Usage   : ${0##*/} [options] <lockname> [lockname ...]
+# Usage   : pexlock [options] <lockname> [lockname ...]
 #           -d <lockdir> ...... the directory for lockfiles.
 #                               The lockfile directory will be decided
 #                               as the following rule.
@@ -21,7 +21,7 @@
 #                  !=0 ... all failure
 #           stdout ....... generated path of the lockfile
 #
-# Example : lockid=$(pexlock -d /tmp/plock -w 10) || exit 1 # do ex-lock
+# Example : lockid=$(pexlock -d /tmp/plock -w 10 foo) || exit 1 # do ex-lock
 #              :
 #           (do something requires exclusive lock)
 #              :
@@ -29,7 +29,7 @@
 #              :                  # (but it needs to remain SUFFICIENT LIFETIME)
 #           punlock "$lockid"                               # release the lock
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/09/23
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/10/27
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -56,7 +56,7 @@ print_usage_and_exit () {
 	          -w <maxwaiting> ... maximum waiting seconds to succeed locking
 	                              (-1 means waiting infinitely)
 	                              The default value is 10.
-	Version : Wed Sep 23 17:45:48 JST 2015
+	Version : Tue Oct 27 11:56:18 JST 2015
 __USAGE
   exit 1
 }
@@ -199,8 +199,10 @@ for lockname in "$@"; do
             ;;
          0) printf '%s: "%s": timeout, try again later\n' \
                    "${0##*/}" "$lockname" 1>&2
+            continue
             ;;
         -*) printf '%s: "%s": unexpedter error!\n' "${0##*/}" "$lockname" 1>&2
+            continue
             ;;
   esac
 

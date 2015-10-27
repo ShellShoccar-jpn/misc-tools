@@ -5,7 +5,7 @@
 # PCLLOCK : A Cleaner Command for "pexlock" and "pshlock"
 #           (remove the expired and orphaned lockfiles in the lockdirectory)
 #
-# Usage   : ${0##*/} [options] <lockdir>
+# Usage   : pcllock [options] <lockdir>
 #           -d <lockdir> ...... the directory for lockfiles.
 #                               The lockfile directory will be decided
 #                               as the following rule.
@@ -13,7 +13,8 @@
 #                               2) the environment varriable "PLOCKDIR"
 #                                  if specified
 #                               3) "$(pwd)" (default)
-#           -w <maxwaiting> ... maximum waiting seconds to succeed locking
+#           -w <maxwaiting> ... maximum waiting seconds to succeed unlocking
+#                               a shared lock
 #                               (-1 means waiting infinitely)
 #                               The default value is 10.
 #           -l <lifetime> ..... the maximum lifetime of the lockfile (sec)
@@ -72,7 +73,8 @@ __USAGE
 exit_trap () {
   trap EXIT HUP INT QUIT PIPE ALRM TERM
   rm -f "${tmpf_pids:-}" "${tmpf_time:-}" "${File_modlk:-}" >/dev/null 2>&1
-  case $# in 0) exit $?;; *) exit ${1:-0};; esac
+  i=$?
+  case $# in 0) exit $i;; *) exit ${1:-0};; esac
 }
 
 # --- FUNC: Calcurate the expire date-and-time (for touch command) ---
