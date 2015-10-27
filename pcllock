@@ -5,7 +5,7 @@
 # PCLLOCK : A Cleaner Command for "pexlock" and "pshlock"
 #           (remove the expired and orphaned lockfiles in the lockdirectory)
 #
-# Usage   : pcllock [options] <lockdir>
+# Usage   : pcllock [options]
 #           -d <lockdir> ...... the directory for lockfiles.
 #                               The lockfile directory will be decided
 #                               as the following rule.
@@ -27,9 +27,9 @@
 #           stdout ....... enerated path of the lockfile (just lock-id)
 #
 # Example : write the following line into the crontab file someone owned
-#           * * * * * pcllock -l 300 -w 10 /PATH/TO/LOCKDIR
+#           * * * * * pcllock -l 300 -w 10 -d /PATH/TO/LOCKDIR
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/09/23
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/10/27
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -43,7 +43,7 @@
 # --- FUNC: print the usage and exit ---------------------------------
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
-	Usage   : ${0##*/} [options] <lockdir> [lockdir ...]
+	Usage   : ${0##*/} [options]
 	          -d <lockdir> ...... the directory for lockfiles.
 	                              The lockfile directory will be decided
 	                              as the following rule.
@@ -62,7 +62,7 @@ print_usage_and_exit () {
 	                              and removed.
 	                              (-1 means infinitely, so this program do
 	                              nothing)
-	Version : Wed Sep 23 17:44:43 JST 2015
+	Version : Tue Oct 27 14:56:02 JST 2015
 __USAGE
   exit 1
 }
@@ -316,7 +316,7 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-case $# in [!1]) print_usage_and_exit;; esac
+case $# in [!0]*) print_usage_and_exit;; esac
 echo "_$max_waiting_secs"   | grep -Eq '^_-?[0-9]+$' || {
   printf '%s: Maximum waiting seconds parameter is invalid\n' "${0##*/}" 1>&2
   exit 1
@@ -339,10 +339,6 @@ done
 case "$Dir_lock" in [!/]*) s=$(pwd);Dir_lock="${s%/}/$Dir_lock";; esac
 
 # --- Decide the target directory and change to there ----------------
-case "$1" in
-  /*) Dir_lock=$1;;
-   *) Dir_lock="$Dir_lock/$1";Dir_lock="${Dir_lock%/}/";;
-esac
 cd "$Dir_lock" 2>/dev/null || {
   printf '%s: "%s": No such directory or permission denied\n' \
           "${0##*/}" "$Dir_lock" 1>&2
@@ -359,7 +355,7 @@ tmpf_pids=$(mktempf0) || {
   exit 1
 }
 trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM
-ps -Ao pid | sort -k1,1 > "$tmpf_pids"
+ps -Ao pid | tr -d ' ' | grep -E '^[0-9]+$' | sort -k1,1 > "$tmpf_pids"
 
 # --- make a temporary file for listing the too old files ------------
 tmpf_time=$(mktempf0) || {
@@ -368,6 +364,7 @@ tmpf_time=$(mktempf0) || {
 }
 
 # --- Remove the orphaned ex-lockfiles in the target directory -------
+# (And also remove the orphaned sh-lock access token file "modifying")
 touch -t $(expire_date_and_time $max_lifetime_secs) "$tmpf_time"
 find './' -type f \( \! -newer "$tmpf_time" \) |
 grep -E '^./[^/]+(|/[^/]+/modifying)$'         | # <- with sh-lock access
@@ -375,7 +372,7 @@ grep -E '^./[^/]+(|/[^/]+/modifying)$'         | # <- with sh-lock access
 xargs grep '^' /dev/null                       |
 grep ':[0-9]\{1,\}$'                           |
 # 1:old_ex-files 2:pid_of_owner                #
-sort -t : -k2,2                                |
+sort -t : -k 2,2                               |
 join -t : -1 1 -2 2 -v 2 "$tmpf_pids" -        |
 # 1:old_and_orphaned_ex-files 2:pid_of_owner   #
 sed 's/:[0-9]\{1,\}$//'                        |
@@ -386,9 +383,9 @@ xargs rm -f
 IFS0=$IFS
 IFS='
 '
-for lockdir in $(find './' -type d         |
-                 grep -E '^./[^/]+/{0,1}$' |
-                 sed '/[^/]$/s/$/\//'      )
+for lockdir in $(find './' -type d     |
+                 grep -E '^./[^/]+/?$' |
+                 sed '/[^/]$/s/$/\//'  )
 do
   lockdir=${lockdir%/}
   lockname=${lockdir#./}
