@@ -21,7 +21,11 @@
 #
 # Example : See the header comments of "pexlock" and "pshlock"
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/10/27
+# Notice  : The lockfile is written with rw-rw-rw for sharing.
+#           If you want not to share it with others,
+#           you have to give the lockdir rwxrwx--- or rwx------ permisson.
+#
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/10/30
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -47,7 +51,7 @@ print_usage_and_exit () {
 	                              maximum waiting seconds to succeed locking
 	                              (-1 means waiting infinitely)
 	                              The default value is 10.
-	Version : Tue Oct 27 11:56:44 JST 2015
+	Version : Fri Oct 30 16:21:36 JST 2015
 __USAGE
   exit 1
 }
@@ -70,7 +74,7 @@ set -u
 PATH='/usr/bin:/bin'
 IFS=$(printf ' \t\n_'); IFS=${IFS%_}
 export IFS LC_ALL=C LANG=C PATH
-umask 0022
+umask 0000
 
 # --- parse the arguments --------------------------------------------
 dopt=''

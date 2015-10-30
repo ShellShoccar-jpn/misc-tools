@@ -33,7 +33,11 @@
 #              :                  # (but it needs to remain SUFFICIENT LIFETIME)
 #           punlock "$lockid"                               # release the lock
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/10/27
+# Notice  : The lockfile is written with rw-rw-rw for sharing.
+#           If you want not to share it with others,
+#           you have to give the lockdir rwxrwx--- or rwx------ permisson.
+#
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/10/30
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -67,7 +71,7 @@ print_usage_and_exit () {
 	Return  : $?     ==0 ... one or more locking were success
 	                 !=0 ... all failure
 	          stdout ....... enerated path of the lockfile (just lock-id)
-	Version : Tue Oct 27 11:57:25 JST 2015
+	Version : Fri Oct 30 16:15:15 JST 2015
 __USAGE
   exit 1
 }
@@ -91,7 +95,7 @@ set -u
 PATH='/usr/bin:/bin'
 IFS=$(printf ' \t\n_'); IFS=${IFS%_}
 export IFS LC_ALL=C LANG=C PATH
-umask 0022
+umask 0000
 
 # --- parse the arguments --------------------------------------------
 max_num_of_sharing=-1

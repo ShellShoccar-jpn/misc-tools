@@ -29,7 +29,11 @@
 # Example : write the following line into the crontab file someone owned
 #           * * * * * pcllock -l 300 -w 10 -d /PATH/TO/LOCKDIR
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/10/27
+# Notice  : The lockfile is written with rw-rw-rw for sharing.
+#           If you want not to share it with others,
+#           you have to give the lockdir rwxrwx--- or rwx------ permisson.
+#
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/10/30
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -62,7 +66,7 @@ print_usage_and_exit () {
 	                              and removed.
 	                              (-1 means infinitely, so this program do
 	                              nothing)
-	Version : Tue Oct 27 14:56:02 JST 2015
+	Version : Fri Oct 30 16:26:46 JST 2015
 __USAGE
   exit 1
 }
@@ -397,7 +401,7 @@ do
   fi
   while [ $try -gt 0 ]; do
     File_modlk="${Dir_lock}$lockname/$lockname/modifying"
-    (set -C; echo $$ > "$File_modlk") 2>/dev/null || {
+    (set -C; umask 0000; echo $$ > "$File_modlk") 2>/dev/null || {
       [ $max_waiting_secs -ge 0 ] && try=$((try-1))   # retry if already exists
       case $try in 0) :;; *) sleep 1;; esac
       continue
