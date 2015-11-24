@@ -18,7 +18,7 @@
 #                         from wrapping.
 #        "-i" ........... When decoding, ignore non-alphabet characters.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/06/26
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/11/23
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -31,10 +31,10 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [-w <COLS>] <file>
 	          ${0##*/} [--by-myself] -d [-i] <file>
-	Version : Fri Jun 26 10:38:10 JST 2015
+	Version : Mon Nov 23 14:57:11 JST 2015
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
-	        :   * Although the bult-in base64 command or GNU AWK produces
-	        :     better performance than the POSIX command set
+	        :   * Although the bult-in base64, uuencode and uudecode command or
+	        :     GNU AWK produces better performance than the POSIX commands set
 __USAGE
   exit 1
 }
@@ -59,11 +59,15 @@ PATH='/usr/bin:/bin:/usr/local/bin'
 set -u
 umask 0022
 
-# --- exec the "bult-in" base64 command if exists --------------------
-case "${1:-}" in
-  --by-myself) shift                                                        ;;
-  *)           type base64 >/dev/null 2>&1 && { exec base64 "$@"; exit 1; } ;;
-esac
+# --- want to use "bult-in" base64, or not? --------------------------
+by_myself=0
+case "${1:-}" in '--by-myself') shift; by_myself=1;; esac
+
+# --- use "bult-in" base64 if available and wanted -------------------
+if [ $by_myself -eq 0 ] && type base64 >/dev/null 2>&1; then
+  exec base64 "$@"
+  exit 1
+fi
 
 # --- check whether this host has a "binarable" AWK command or not ---
 binarable_awk=1
@@ -176,6 +180,29 @@ esac
 
 # ===== ENCODING / DECODING ==========================================
 
+# --- use uu*code command if available and wanted --------------------
+if [ $by_myself -eq 0 ] && uuencode -m dummy </dev/null >/dev/null 2>&1; then
+  case "$mode" in
+    d) [ -w /dev/stdout ] && {
+         (echo 'begin-base64 644 dummy'; cat "$file"; echo '====') |
+         uudecode -o /dev/stdout
+         exit $?
+       }
+       ;;
+    e) cat "$file"                                  |
+       uuencode -m dummy                            |
+       sed '1d;$d'                                  |
+       case $width in                               #
+         76) cat                                 ;; #
+          0) tr -d '\n'                 ; echo '';; #
+          *) tr -d '\n' | fold -w $width; echo '';; #
+       esac
+       exit $?
+       ;;
+  esac
+fi
+
+# --- coding by myself -----------------------------------------------
 case $mode$binarable_awk in
   e*) cat "$file"                                                              |
       od -A n -t x1 -v                                                         |
@@ -245,7 +272,6 @@ case $mode$binarable_awk in
         BEGIN{                                                                #
           # 0) initialize                                                     #
           OFS = ""; ORS = "";                                                 #
-          LF=sprintf("\n");                                                   #
           maxarglen = '$max1line' - length("printf ");                        #
           o2b["0"]="000"; o2b["1"]="001"; o2b["2"]="010"; o2b["3"]="011";     #
           o2b["4"]="100"; o2b["5"]="101"; o2b["6"]="110"; o2b["7"]="111";     #
@@ -300,17 +326,17 @@ case $mode$binarable_awk in
               s = s b62b[substr(b,3,1)] b62b[substr(b,4,1)];                  #
               l2 = length(s);                                                 #
               if (l2 == 24) {                                                 #
-                if (arglen>(maxarglen-12)) {print LF; arglen=0;}              #
+                if (arglen>(maxarglen-12)) {print "\n"; arglen=0;}            #
                 t = substr(s,1,8); u = substr(s,9,8); v = substr(s,17,8);     #
                 print      fmt[t] ,fmt[u] ,fmt[v];                            #
                 arglen += fmtl[t]+fmtl[u]+fmtl[v];                            #
               } else if (l2 == 18) {                                          #
-                if (arglen>(maxarglen- 8)) {print LF; arglen=0;}              #
+                if (arglen>(maxarglen- 8)) {print "\n"; arglen=0;}            #
                 t=substr(s,1,8); u=substr(s,9,8);                             #
                 print      fmt[t] ,fmt[u];                                    #
                 arglen += fmtl[t]+fmtl[u];                                    #
               } else if (l2 == 12) {                                          #
-                if (arglen>(maxarglen- 4)) {print LF; arglen=0;}              #
+                if (arglen>(maxarglen- 4)) {print "\n"; arglen=0;}            #
                 t=substr(s,1,8);                                              #
                 print      fmt[t];                                            #
                 arglen += fmtl[t];                                            #
@@ -318,7 +344,7 @@ case $mode$binarable_awk in
             }                                                                 #
             buf = substr(buf, int(length(buf)/4)*4+1);                        #
           }                                                                   #
-          if (NR>0) {print LF;}                                               #
+          if (NR>0) {print "\n";}                                             #
         }'                                                                    |
       xargs -n 1 printf 2>/dev/null
       ;;
