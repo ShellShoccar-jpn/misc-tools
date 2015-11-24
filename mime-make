@@ -41,7 +41,7 @@
 # Return: $?=0 (when all of the arguments are valid)
 #         stdout : generated MIME formatted data
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/11/24
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/11/25
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -86,7 +86,7 @@ print_usage_and_exit () {
 	                (default is --crlf when form-mode, --lf when mail-mode)
 	  --b64/--raw : switch about applying or not Base64 to the <file> of (c)-(f)
 	                (default is --raw)
-	Version : Tue Nov 24 23:31:46 JST 2015
+	Version : Wed Nov 25 01:46:03 JST 2015
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands/UTF-8)
 __USAGE
   exit 1
@@ -152,9 +152,9 @@ randstr() {
 }
 # escape the string in header if necessary ($1:string for in-header)
 escape_for_header_string() {
-  printf '%s\n' "$1"                      |
-  awk 'index($0,"=?")        >0{exit 1;}  # # when contain "=?"
-       sub(/[\200-\377]/,"")==1{exit 1;}'   # when contain 8-bit chars
+  printf '%s\n' "$1"                  |
+  awk 'index($0,"=?")>0    {exit 1;}  # # when contain "=?"
+       $0!~/^[\001-\177]*$/{exit 1;}'   # when contain 8-bit chars
   case $? in
     0) printf '%s\n' "$1"                                                 |
        sed 's/"/\\"/g'                                                    ;;
