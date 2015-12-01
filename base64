@@ -18,7 +18,7 @@
 #                         from wrapping.
 #        "-i" ........... When decoding, ignore non-alphabet characters.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/11/23
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/12/01
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -31,7 +31,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [-w <COLS>] <file>
 	          ${0##*/} [--by-myself] -d [-i] <file>
-	Version : Mon Nov 23 14:57:11 JST 2015
+	Version : Tue Dec  1 15:35:00 JST 2015
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
 	        :   * Although the bult-in base64, uuencode and uudecode command or
 	        :     GNU AWK produces better performance than the POSIX commands set
@@ -297,6 +297,10 @@ case $mode$binarable_awk in
           fmt["00100010"]="\\\""    ; fmtl["00100010"]=2; # (double quot)     #
           fmt["00100111"]="\\'"'"'" ; fmtl["00100111"]=2; # (single quot)     #
           fmt["00101101"]="\\\\055" ; fmtl["00101101"]=5; # "-"               #
+          for (i=48; i<58; i++) {                         # "0"~"9"           #
+            fmt[sprintf("%02x",i)]=sprintf("\\\\%03o",i);                     #
+            fmtl[sprintf("%02x",i)]=5;                                        #
+          }                                                                   #
           # 2) make the table of Base64-character-to-binary-digits            #
           for(i=0;i<26;i++){                                                  #
             s = sprintf("%02o\n",i);                                          #
