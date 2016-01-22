@@ -37,7 +37,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/10/30
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2016/01/22
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -71,7 +71,7 @@ print_usage_and_exit () {
 	Return  : $?     ==0 ... one or more locking were success
 	                 !=0 ... all failure
 	          stdout ....... enerated path of the lockfile (just lock-id)
-	Version : Fri Oct 30 16:15:15 JST 2015
+	Version : Fri Jan 22 19:00:20 JST 2016
 __USAGE
   exit 1
 }
@@ -102,7 +102,7 @@ max_num_of_sharing=-1
 dopt=''
 max_waiting_secs=10
 max_lifetime_secs=''
-ppid=$(ps -Ao pid,ppid | awk '$1=='$$'{print $2;exit}')
+ppid=$(ps -Ao pid,ppid | awk '$1=='"$$"'{print $2;exit}')
 optmode=''
 while [ $# -gt 0 ]; do
   case "$optmode" in
@@ -215,7 +215,7 @@ for lockname in "$@"; do
 
   # --- Prepare the pre-lock directory -------------------------------
   # 1) decide a lock-procid(yyyymmddhhmmss.uniqid.pid)
-  s=$(ps -o pid,ppid | awk '$2=='$$'{print $1;exit}')
+  s=$(ps -o pid,ppid | awk '$2=='"$$"'{print $1;exit}')
   sublockname="$(date '+%Y%m%d%H%M%S').${s}.$ppid"
   # 2) make a temp-dir
   Dir_prelk="${Dir_lock}.preshlock.$sublockname"
@@ -271,7 +271,7 @@ for lockname in "$@"; do
       continue
     }
     # 1-4) create a sublock-id directory
-    s=$(ps -o pid,ppid | awk '$2=='$$'{print $1;exit}')
+    s=$(ps -o pid,ppid | awk '$2=='"$$"'{print $1;exit}')
     sublockname="$(date '+%Y%m%d%H%M%S').${s}.$ppid"
     mkdir $sublockname || {
       try=-1                                          # exit loop abnormally

@@ -33,7 +33,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/10/30
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2016/01/22
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -60,7 +60,7 @@ print_usage_and_exit () {
 	          -w <maxwaiting> ... maximum waiting seconds to succeed locking
 	                              (-1 means waiting infinitely)
 	                              The default value is 10.
-	Version : Fri Oct 30 16:09:46 JST 2015
+	Version : Fri Jan 22 18:59:37 JST 2016
 __USAGE
   exit 1
 }
@@ -80,7 +80,7 @@ umask 0000
 dopt=''
 max_waiting_secs=10
 max_lifetime_secs=''
-ppid=$(ps -Ao pid,ppid | awk '$1=='$$'{print $2;exit}')
+ppid=$(ps -Ao pid,ppid | awk '$1=='"$$"'{print $2;exit}')
 optmode=''
 while [ $# -gt 0 ]; do
   case "$optmode" in
