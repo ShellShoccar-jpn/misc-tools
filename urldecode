@@ -6,18 +6,19 @@
 #
 # USAGE: urldecode <file> ...
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/23
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2016/03/28
 #
-# This is a public-domain software. It measns that all of the people
-# can use this with no restrictions at all. By the way, I am fed up
-# the side effects which are broght about by the major licenses.
+# This is a public-domain software (CC0). It measns that all of the
+# people can use this for any purposes with no restrictions at all.
+# By the way, I am fed up the side effects which are broght about by
+# the major licenses.
 #
 ######################################################################
 
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} <file> ...
-	Version : Mon Feb 23 15:36:41 JST 2015
+	Version : Mon Mar 28 01:23:07 JST 2016
 __USAGE
   exit 1
 }
@@ -47,7 +48,7 @@ case $# in
      done                     ;;
 esac |
 (cat -; printf '\n') |
-exec env - awk '
+awk '
 BEGIN {
   # --- prepare
   LF  = sprintf("\n");

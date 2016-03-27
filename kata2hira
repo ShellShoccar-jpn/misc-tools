@@ -1,18 +1,19 @@
 #! /bin/sh
 
 # base designed by Nobuaki Tounaka
-# written by 321516
+# written by Rich Mikan
 #
-# This is a public-domain software. It measns that all of the people
-# can use this with no restrictions at all. By the way, I am fed up
-# the side effects which are broght about by the major licenses.
+# This is a public-domain software (CC0). It measns that all of the
+# people can use this for any purposes with no restrictions at all.
+# By the way, I am fed up the side effects which are broght about by
+# the major licenses.
 
 # print the usage and exit
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [+<n>h] <f1> <f2> ... <file>
 	        : ${0##*/} -d <string>
-	Version : Wed Sep 23 17:43:16 JST 2015
+	Version : Mon Mar 28 01:29:30 JST 2016
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands/UTF-8)
 __USAGE
   exit 1
@@ -351,7 +352,7 @@ function utf8kata2hira(s_in, i,s,s1,s2,utf8c,delta,s_out) {
 
 # main
 case $directmode in
-  0) exec env - awk -v hdr_skip=$hopt "$awkcode" "$file";;
-  *)      printf '%s' "$directstr"               |
-          env - awk -v hdr_skip=$hopt "$awkcode"        ;;
+  0) exec awk -v hdr_skip=$hopt "$awkcode" "$file";;
+  *)      printf '%s' "$directstr"                |
+          awk -v hdr_skip=$hopt "$awkcode"        ;;
 esac
