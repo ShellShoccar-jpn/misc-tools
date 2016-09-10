@@ -25,7 +25,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2016/01/22
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2016/09/10
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -51,7 +51,7 @@ print_usage_and_exit () {
 	                              maximum waiting seconds to succeed locking
 	                              (-1 means waiting infinitely)
 	                              The default value is 10.
-	Version : Fri Jan 22 19:00:54 JST 2016
+	Version : Sat Sep 10 15:29:27 JST 2016
 __USAGE
   exit 1
 }
@@ -60,7 +60,7 @@ __USAGE
 # arg   : [return code]
 # ret   : (not return)
 exit_trap () {
-  trap EXIT HUP INT QUIT PIPE ALRM TERM
+  trap - EXIT HUP INT QUIT PIPE ALRM TERM
   rm -rf "${File_modlk:-}" >/dev/null 2>&1
   case $# in 0) exit $?;; *) exit ${1:-0};; esac
 }

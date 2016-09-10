@@ -37,7 +37,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2016/01/22
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2016/09/10
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -71,7 +71,7 @@ print_usage_and_exit () {
 	Return  : $?     ==0 ... one or more locking were success
 	                 !=0 ... all failure
 	          stdout ....... enerated path of the lockfile (just lock-id)
-	Version : Fri Jan 22 19:00:20 JST 2016
+	Version : Sat Sep 10 15:28:58 JST 2016
 __USAGE
   exit 1
 }
@@ -80,7 +80,7 @@ __USAGE
 # arg   : [return code]
 # ret   : (not return)
 exit_trap () {
-  trap EXIT HUP INT QUIT PIPE ALRM TERM
+  trap - EXIT HUP INT QUIT PIPE ALRM TERM
   rm -rf "${Dir_prelk:-}" "${File_modlk:-}" >/dev/null 2>&1
   i=$?
   case $# in 0) exit $i;; *) exit ${1:-0};; esac

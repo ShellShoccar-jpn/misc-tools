@@ -47,7 +47,7 @@
 #   That means, you can join various filters to fd=2 (stderr). Although
 #   it is very tricky. ;-)
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/10/24
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2016/09/10
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -64,7 +64,7 @@ DEFAULT_TIMEOUT=600
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [-t timeout] <named_pipe_to_use> [output_file]
-	Version : Sat Oct 24 22:27:14 JST 2015
+	Version : Sat Sep 10 15:27:07 JST 2016
 __USAGE
   exit 1
 }
@@ -186,7 +186,7 @@ case $check in 'p')
 
   # --- exit trap (for parent) ---------------------------------------
   exit_trap() {
-    trap EXIT HUP INT QUIT PIPE ALRM TERM
+    trap - EXIT HUP INT QUIT PIPE ALRM TERM
     rm -f "${namedpipe_to_del_by_myself:-}"
     exit ${1:-0}
   }
@@ -302,7 +302,7 @@ case $check in 'p')
 
   # --- set exiting trap ---------------------------------------------
   exit_trap() {
-    trap EXIT HUP INT QUIT PIPE ALRM TERM
+    trap - EXIT HUP INT QUIT PIPE ALRM TERM
     ret=${1:-0}
     # --- the gzipped pipe has been used or not? ---
     while [ -f "${gz_file:-}" ]; do
