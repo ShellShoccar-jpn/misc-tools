@@ -1,0 +1,246 @@
+#! /bin/sh
+
+######################################################################
+#
+# SEQ - A POSIX Compatible Implementation Of The "seq" Command
+#          Also Works On Just A POSIX Environment
+#
+# USAGE: seq [options] last
+#        seq [options] first last
+#        seq [options] first increment last
+#
+#        --by-myself .... (write as the 1st argument when use)
+#                         Not use the "built-in" base64 command and
+#                         always do base64 by myself but it is inferior
+#                         to the built-in in performance
+#        -f <format> .... Print all numbers using format.
+#        -s <string> .... Separate numbers with string; default is a newline.
+#        -w ............. Print all numbers with the same width, by padding
+#                         with leading zeros.
+#
+# Written by 321516 (@shellshoccarjpn) at 2016/10/14
+#
+# This is a public-domain software (CC0). It measns that all of the
+# people can use this for any purposes with no restrictions at all.
+# By the way, I am fed up the side effects which are broght about by
+# the major licenses.
+#
+######################################################################
+
+######################################################################
+# Initial Configuration
+######################################################################
+
+# === Define the functions for printing usage and error message ======
+print_usage_and_exit () {
+  cat <<-__USAGE 1>&2
+	Usage   : ${0##*/} [options] last
+	          ${0##*/} [options] first last
+	          ${0##*/} [options] first increment last
+	Version : Fri Oct 14 03:23:39 JST 2016
+	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
+	        :   * Although the bult-in base64, uuencode and uudecode command or
+	        :     GNU AWK produces better performance than the POSIX commands set
+__USAGE
+  exit 1
+}
+error_exit() {
+  [ -n "$2"       ] && echo "${0##*/}: $2" 1>&2
+  exit $1
+}
+
+# ===== Prepare ======================================================
+
+# --- misc setting #1 ------------------------------------------------
+IFS=$(printf ' \t\n_'); IFS=${IFS%_}
+export IFS LC_ALL=C LANG=C PATH
+set -u
+umask 0022
+
+# --- want to use "bult-in" seq, or not? -----------------------------
+case "${1:-}" in
+  '--by-myself') shift                                            ;;
+              *) type seq >/dev/null 2>&1 && exec seq "$@"; exit 1;;
+esac
+
+# --- misc setting #2 ------------------------------------------------
+PATH='/usr/bin:/bin'
+
+
+######################################################################
+# Argument Parsing
+######################################################################
+
+# === set default values =============================================
+fopt=''
+sopt='\n'
+wopt=0
+n_1st=1
+n_inc=1
+n_lst=''
+
+# === parse arguments ================================================
+optmode=''
+while :; do
+  case $# in 0) break;; esac
+  case "$optmode" in
+    '') case "$1" in
+          -)       case $# in 1) break;; esac
+                   ;;
+          -[fsw]*) s=$(printf '%s\n' "${1#-}"                          |
+                       awk '{f = "_"; s = "_"; w = "_"; err="";        #
+                             l = length($0);                           #
+                             for (n=1;n<=l;n++) {                      #
+                               c = substr($0, n, 1);                   #
+                               if      (c=="f") { f   = "f"; break; }  #
+                               else if (c=="s") { s   = "s"; break; }  #
+                               else if (c=="w") { w   = "w";        }  #
+                               else             { err = "!";        }  #
+                             }                                         #
+                             arg = (n<l) ? substr($0,n+1) : "";        #
+                             printf("%s%s%s%s %s",err,f,s,w,arg);    }')
+                   arg=${s#* }
+                   s=${s%% *}
+                   case "$s" in '!'*) print_usage_and_exit;; esac
+                   case "$s" in  *w*) wopt=1              ;; esac
+                   case "$s" in  *f*) optmode='f'         ;; esac
+                   case "$s" in  *s*) optmode='s'         ;; esac
+                   shift;
+                   case "$arg" in '') continue;; esac
+                   ;;
+          --format=*)
+                   fopt=${s#--format=}
+                   shift
+                   continue
+                   ;;
+          --separator=*)
+                   sopt=${s#--format=}
+                   shift
+                   continue
+                   ;;
+          -[0-9]*) break
+                   ;;
+          -*)      print_usage_and_exit
+                   ;;
+          *)       break
+                   ;;
+        esac
+        ;;
+    *)  arg=$1
+        shift
+        ;;
+  esac
+  case "$optmode" in
+    f) fopt=$arg                ;;
+    s) sopt=$arg                ;;
+    *) echo 'ERROR' 1>&2; exit 1;;
+  esac
+  optmode=''
+done
+case "$#" in
+  1) n_lst=$1                    ;;
+  2) n_1st=$1; n_lst=$2          ;;
+  3) n_1st=$1; n_inc=$2; n_lst=$3;;
+  *) 
+esac
+
+# === vaidate arguments ==============================================
+[ $wopt -gt 0 ] && [ -n "$fopt" ] && {
+  error_exit 1 'format string may not be specified when printing equal width strings'
+}
+[ -n "$fopt" ] && {
+  printf '%s\n' "$fopt" | grep -Eq '%-?[0-9]+(\.[0-9]+)?[AaEeFfGg]' || {
+    error_exit 1 'The format you gave me has no % directive'
+  }
+  case "$(printf '%s\n' "$fopt" | sed 's/%-\{0,1\}[0-9]\{1,\}\(\.[0-9]\{1,\}\)\{0,1\}[AaEeFfGg%]//')" in
+    *%*) error_exit 1 'The format you gave me is invalid or has too many % directives';;
+    *)   :                                                                            ;;
+  esac
+}
+n_pattern='^[+-]?[0-9]+(\.[0-9]+)?([eE][+-][0-9]{1,2})?$'
+printf '%s\n' "$n_1st" | grep -Eq "$n_pattern" || {
+  error_exit 1 '"first" floating point argument is invalid'
+}
+printf '%s\n' "$n_inc" | grep -Eq "$n_pattern" || {
+  error_exit 1 '"increment" floating point argument is invalid'
+}
+printf '%s\n' "$n_lst" | grep -Eq "$n_pattern" || {
+  error_exit 1 '"last" floating point argument is invalid'
+}
+
+
+######################################################################
+# Make strings for AWK
+######################################################################
+
+# === Generate the format by "-w" ====================================
+[ $wopt -gt 0 ] && {
+  fopt=$(printf '%f %f %f' "$n_1st" "$n_inc" "$n_lst"               |
+         grep -v 'Ee'                                               |
+         tr   ' ' '\n'                                              |
+         sed  '/\./s/0\{1,\}$//'                                    |
+         sed  's/\.$//'                                             |
+         sed  's/^\([+-]\{0,1\}\)0\{1,\}/\1/'                       |
+         sed  's/^\([+-]\{0,1\}\)\./\10./'                          |
+         sed  's/^\([+-]\{0,1\}\)$/\10/'                            |
+         awk  'BEGIN {N=0; n=0;                                   } #
+               "NUM" {p=index($1,".");                              #
+                      i=length($0);                                 #
+                      if (p>0) {j=i-p; i=p-1;}                      #
+                      N=(i>N)?i:N; n=(j>n)?j:n;                   } #
+               END   {if      (n>0) {printf("%%0%d.%df",N+1+n,n);}  #
+                      else if (N>0) {printf("%%0%dd"   ,N      );}  #
+                      else          {printf("%%g"              );}}')
+}
+
+# === Generate the format if not specified ===========================
+[ -z "$fopt" ] && {
+  if printf '%s%s%s\n' "$n_1st" "$n_inc" "$n_lst" | grep -Eq '^[0-9]$'; then
+    fopt='%d'
+  else
+    fopt='%g'
+  fi
+}
+
+# === Convert the format string for AWK ==============================
+fopt=$( (printf '%s' "$fopt";echo) |
+        sed '$!s/$/\\n/'           |
+        tr -d '\n'                 |
+        sed 's/"/\\"/g'            )
+
+# === Convert the "-s" option string for AWK =========================
+sopt=$( (printf '%s' "$sopt";echo) |
+        sed '$!s/$/\\n/'           |
+        tr -d '\n'                 |
+        sed 's/"/\\"/g'            )
+
+# === Add a sign to the <increment> number ===========================
+case "$n_inc" in [0-9.]*) n_inc="+$n_inc";; esac
+
+
+######################################################################
+# Run "seq"-like script
+######################################################################
+
+awk 'BEGIN{                                                 #
+       if ('"$n_inc"' >= 0) {                               #
+         # --- increment routine -------------------------- #
+         if ('"$n_1st"' > '"$n_lst"') {exit;}               #
+         i='"$n_1st"';                                      #
+         printf("'"$fopt"'", i);                            #
+         i=i'"$n_inc"';                                     #
+         for (            ; i<='"$n_lst"'; i=i'"$n_inc"') { #
+           printf("%s'"$fopt"'", "'"$sopt"'", i);           #
+         }                                                  #
+       } else {                                             #
+         # --- decrement routine -------------------------- #
+         if ('"$n_1st"' < '"$n_lst"') {exit;}               #
+         i='"$n_1st"';                                      #
+         printf("'"$fopt"'", i);                            #
+         i=i'"$n_inc"';                                     #
+         for (            ; i>='"$n_lst"'; i=i'"$n_inc"') { #
+           printf("%s'"$fopt"'", "'"$sopt"'", i);           #
+         }                                                  #
+       }                                                    #
+     }'                                                     |
+grep ^
