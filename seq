@@ -3,7 +3,7 @@
 ######################################################################
 #
 # SEQ - A POSIX Compatible Implementation Of The "seq" Command
-#          Also Works On Just A POSIX Environment
+#       Also Works On Just A POSIX Environment
 #
 # USAGE: seq [options] last
 #        seq [options] first last
@@ -38,7 +38,7 @@ print_usage_and_exit () {
 	Usage   : ${0##*/} [options] last
 	          ${0##*/} [options] first last
 	          ${0##*/} [options] first increment last
-	Version : Fri Oct 14 03:33:42 JST 2016
+	Version : Fri Oct 14 03:45:42 JST 2016
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
 	        :   * Although the bult-in seq produces better performance
 	              than the POSIX commands set

@@ -8,17 +8,17 @@
 # USAGE: base64 [--by-myself] [-w <COLS>] <file>
 #        base64 [--by-myself] -d [-i] <file>
 #
-#        "--by-myself" .. (write as the 1st argument when use)
-#                         Not use the "built-in" base64 command and
-#                         always do base64 by myself but it is inferior
-#                         to the built-in in performance
-#        "-d" ........... Run as a Base64 decoder.
-#        "-w <COLS>" .... When encoding, wrap encoded lines after COLS
-#                         character (default 76). 0 means preventing
-#                         from wrapping.
-#        "-i" ........... When decoding, ignore non-alphabet characters.
+#        --by-myself .. (write as the 1st argument when use)
+#                       Not use the "built-in" base64 command and
+#                       always do base64 by myself but it is inferior
+#                       to the built-in in performance
+#        -d ........... Run as a Base64 decoder.
+#        -w <COLS> .... When encoding, wrap encoded lines after COLS
+#                       character (default 76). 0 means preventing
+#                       from wrapping.
+#        -i ........... When decoding, ignore non-alphabet characters.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2016/08/28
+# Written by 321516 (@shellshoccarjpn) at 2016/10/14
 #
 # This is a public-domain software (CC0). It measns that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -32,7 +32,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [-w <COLS>] <file>
 	          ${0##*/} [--by-myself] -d [-i] <file>
-	Version : Sun Aug 28 14:27:08 JST 2016
+	Version : Fri Oct 14 03:46:02 JST 2016
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
 	        :   * Although the bult-in base64, uuencode and uudecode command or
 	        :     GNU AWK produces better performance than the POSIX commands set
@@ -44,14 +44,10 @@ __USAGE
 
 # --- which command also works on Just a POSIX environment -----------
 which which >/dev/null 2>&1 || {
-  which () {
-    (
-      PATH='/usr/bin:/bin'
-      ans=$(LANG=C LC_ALL=C type "$1" 2>/dev/null) || return $?
-      case "$1"   in */*) printf '%s\n' "$1"        ; return;; esac
-      case "$ans" in */*) printf '%s\n' "/${ans#*/}"; return;; esac
-      printf '%s\n' "$1"
-    )
+  which() {
+    command -v "$1" 2>/dev/null |
+    awk 'match($0,/^\//){print; ok=1;}
+         END {if(ok==0){print "which: not found" > "/dev/stderr"; exit 1}}'
   }
 }
 
