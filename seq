@@ -27,6 +27,7 @@
 #
 ######################################################################
 
+
 ######################################################################
 # Initial Configuration
 ######################################################################
@@ -37,10 +38,10 @@ print_usage_and_exit () {
 	Usage   : ${0##*/} [options] last
 	          ${0##*/} [options] first last
 	          ${0##*/} [options] first increment last
-	Version : Fri Oct 14 03:23:39 JST 2016
+	Version : Fri Oct 14 03:33:42 JST 2016
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
-	        :   * Although the bult-in base64, uuencode and uudecode command or
-	        :     GNU AWK produces better performance than the POSIX commands set
+	        :   * Although the bult-in seq produces better performance
+	              than the POSIX commands set
 __USAGE
   exit 1
 }
@@ -149,10 +150,10 @@ esac
   error_exit 1 'format string may not be specified when printing equal width strings'
 }
 [ -n "$fopt" ] && {
-  printf '%s\n' "$fopt" | grep -Eq '%-?[0-9]+(\.[0-9]+)?[AaEeFfGg]' || {
+  printf '%s\n' "$fopt" | grep -Eq '%(-?[0-9]+(\.[0-9]+)?)?[AaEeFfGg]' || {
     error_exit 1 'The format you gave me has no % directive'
   }
-  case "$(printf '%s\n' "$fopt" | sed 's/%-\{0,1\}[0-9]\{1,\}\(\.[0-9]\{1,\}\)\{0,1\}[AaEeFfGg%]//')" in
+  case "$(printf '%s\n' "$fopt" | sed 's/\%\(-\{0,1\}[0-9]\{1,\}\(\.[0-9]\{1,\}\)\{0,1\}\)\{0,1\}[AaEeFfGg%]//')" in
     *%*) error_exit 1 'The format you gave me is invalid or has too many % directives';;
     *)   :                                                                            ;;
   esac
