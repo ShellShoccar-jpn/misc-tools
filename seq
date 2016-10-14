@@ -10,9 +10,9 @@
 #        seq [options] first increment last
 #
 #        --by-myself .... (write as the 1st argument when use)
-#                         Not use the "built-in" base64 command and
-#                         always do base64 by myself but it is inferior
-#                         to the built-in in performance
+#                         Not use the "built-in" seq command and always
+#                         do seq by myself but it is inferior to the
+#                         built-in in performance
 #        -f <format> .... Print all numbers using format.
 #        -s <string> .... Separate numbers with string; default is a newline.
 #        -w ............. Print all numbers with the same width, by padding
@@ -38,7 +38,7 @@ print_usage_and_exit () {
 	Usage   : ${0##*/} [options] last
 	          ${0##*/} [options] first last
 	          ${0##*/} [options] first increment last
-	Version : Fri Oct 14 03:45:42 JST 2016
+	Version : Fri Oct 14 09:44:11 JST 2016
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
 	        :   * Although the bult-in seq produces better performance
 	              than the POSIX commands set
