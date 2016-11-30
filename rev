@@ -1,0 +1,94 @@
+#! /bin/sh
+
+######################################################################
+#
+# REV - A POSIX Compatible Implementation Of The "rev" Command
+#       Also Works On Just A POSIX Environment
+#
+# USAGE: rev [--by-myself] [filename ...]
+#
+#        --by-myself .... (write as the 1st argument when use)
+#                         Not use the "built-in" rev command and always
+#                         do seq by myself but it is inferior to the
+#                         built-in in performance
+#                         with leading zeros.
+#
+# Written by 321516 (@shellshoccarjpn) at 2016/11/30
+#
+# This is a public-domain software (CC0). It measns that all of the
+# people can use this for any purposes with no restrictions at all.
+# By the way, I am fed up the side effects which are broght about by
+# the major licenses.
+#
+######################################################################
+
+
+######################################################################
+# Initial Configuration
+######################################################################
+
+# === Define the functions for printing usage and error message ======
+print_usage_and_exit () {
+  cat <<-__USAGE 1>&2
+	Usage   : ${0##*/} [--by-myself] [filename ...]
+	Version : Wed Nov 30 16:50:47 JST 2016
+	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
+	        :   * Although the bult-in rev produces better performance
+	              than the POSIX commands set
+__USAGE
+  exit 1
+}
+error_exit() {
+  [ -n "$2"       ] && echo "${0##*/}: $2" 1>&2
+  exit $1
+}
+
+# ===== Prepare ======================================================
+
+# --- misc setting #1 ------------------------------------------------
+IFS=$(printf ' \t\n_'); IFS=${IFS%_}
+export IFS PATH
+set -u
+umask 0022
+
+# --- print help if requested ----------------------------------------
+case "${1:-}" in -h|-v|--help|--version) print_usage_and_exit;; esac
+
+# --- want to use "bult-in" seq, or not? -----------------------------
+case "${1:-}" in
+  '--by-myself') shift                                            ;;
+              *) type rev >/dev/null 2>&1 && exec rev "$@"; exit 1;;
+esac
+
+# --- misc setting #2 ------------------------------------------------
+PATH='/usr/bin:/bin'
+
+
+######################################################################
+# Argument Parsing and Reversing
+######################################################################
+
+# === do it ==========================================================
+case $# in 0) set -- -;; esac
+use_stdin=0
+for arg in "$@"; do
+  file=$arg
+  case "$file" in -|/*|./*|../*) :;; *) file="./$file";; esac
+  case "$file" in 
+    -|/dev/stdin|/dev/fd/0|/proc/self/fd/0)
+       case $use_stdin in
+         [!0]*) error_exit 1 'stdin can be used only once in the arguments';;
+       esac
+       use_stdin=1
+       ;;
+    *) if ([ ! -f "$file" ] && [ ! -c "$file" ] && [ ! -p "$file" ]) ||
+          [ ! -r "$file" ]                                             ; then
+         error_exit 1 "Cannot open the file \"$arg\""
+       fi
+       ;;
+  esac
+  awk 'BEGIN { ORS="";                                               }
+       { for(i=length($0);i>0;i--){print substr($0,i,1);} print "\n";}' "$file"
+  ret=$?
+  case $ret in [!0]*) error_exit $ret 'Error happend while reversing';; esac
+done
