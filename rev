@@ -13,7 +13,7 @@
 #                         built-in in performance
 #                         with leading zeros.
 #
-# Written by 321516 (@shellshoccarjpn) at 2016/11/30
+# Written by 321516 (@shellshoccarjpn) at 2016-12-21
 #
 # This is a public-domain software (CC0). It measns that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -31,7 +31,7 @@
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [filename ...]
-	Version : Wed Nov 30 16:50:47 JST 2016
+	Version : 2016-12-21 13:30:11 JST
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
 	        :   * Although the bult-in rev produces better performance
 	              than the POSIX commands set
@@ -45,11 +45,10 @@ error_exit() {
 
 # ===== Prepare ======================================================
 
-# --- misc setting #1 ------------------------------------------------
-IFS=$(printf ' \t\n_'); IFS=${IFS%_}
-export IFS PATH
+# --- misc setting ---------------------------------------------------
 set -u
 umask 0022
+PATH="$(getconf PATH):${PATH:-}"
 
 # --- print help if requested ----------------------------------------
 case "${1:-}" in -h|-v|--help|--version) print_usage_and_exit;; esac
@@ -59,9 +58,6 @@ case "${1:-}" in
   '--by-myself') shift                                            ;;
               *) type rev >/dev/null 2>&1 && exec rev "$@"; exit 1;;
 esac
-
-# --- misc setting #2 ------------------------------------------------
-PATH='/usr/bin:/bin'
 
 
 ######################################################################
