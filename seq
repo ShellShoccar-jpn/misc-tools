@@ -18,7 +18,7 @@
 #        -w ............. Print all numbers with the same width, by padding
 #                         with leading zeros.
 #
-# Written by 321516 (@shellshoccarjpn) at 2016/10/14
+# Written by 321516 (@shellshoccarjpn) at 2016-12-21
 #
 # This is a public-domain software (CC0). It measns that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -38,7 +38,7 @@ print_usage_and_exit () {
 	Usage   : ${0##*/} [options] last
 	          ${0##*/} [options] first last
 	          ${0##*/} [options] first increment last
-	Version : Fri Oct 14 09:44:11 JST 2016
+	Version : 2016-12-21 17:06:12 JST
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
 	        :   * Although the bult-in seq produces better performance
 	              than the POSIX commands set
@@ -52,20 +52,17 @@ error_exit() {
 
 # ===== Prepare ======================================================
 
-# --- misc setting #1 ------------------------------------------------
-IFS=$(printf ' \t\n_'); IFS=${IFS%_}
-export IFS LC_ALL=C LANG=C PATH
+# --- Initialize -----------------------------------------------------
 set -u
 umask 0022
+export LC_ALL=C
+export PATH="$(getconf PATH):${PATH:-}"
 
 # --- want to use "bult-in" seq, or not? -----------------------------
 case "${1:-}" in
   '--by-myself') shift                                            ;;
               *) type seq >/dev/null 2>&1 && exec seq "$@"; exit 1;;
 esac
-
-# --- misc setting #2 ------------------------------------------------
-PATH='/usr/bin:/bin'
 
 
 ######################################################################
@@ -185,7 +182,7 @@ printf '%s\n' "$n_lst" | grep -Eq "$n_pattern" || {
          sed  's/^\([+-]\{0,1\}\)\./\10./'                          |
          sed  's/^\([+-]\{0,1\}\)$/\10/'                            |
          awk  'BEGIN {N=0; n=0;                                   } #
-               "NUM" {p=index($1,".");                              #
+               1     {p=index($1,".");                              #
                       i=length($0);                                 #
                       if (p>0) {j=i-p; i=p-1;}                      #
                       N=(i>N)?i:N; n=(j>n)?j:n;                   } #
@@ -207,12 +204,14 @@ printf '%s\n' "$n_lst" | grep -Eq "$n_pattern" || {
 fopt=$( (printf '%s' "$fopt";echo) |
         sed '$!s/$/\\n/'           |
         tr -d '\n'                 |
+        grep  ^                    |
         sed 's/"/\\"/g'            )
 
 # === Convert the "-s" option string for AWK =========================
 sopt=$( (printf '%s' "$sopt";echo) |
         sed '$!s/$/\\n/'           |
         tr -d '\n'                 |
+        grep  ^                    |
         sed 's/"/\\"/g'            )
 
 # === Add a sign to the <increment> number ===========================

@@ -31,7 +31,7 @@
 print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [filename ...]
-	Version : 2016-12-21 13:30:11 JST
+	Version : 2016-12-21 17:08:29 JST
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
 	        :   * Although the bult-in rev produces better performance
 	              than the POSIX commands set
@@ -45,10 +45,10 @@ error_exit() {
 
 # ===== Prepare ======================================================
 
-# --- misc setting ---------------------------------------------------
+# --- Initialize -----------------------------------------------------
 set -u
 umask 0022
-PATH="$(getconf PATH):${PATH:-}"
+export PATH="$(getconf PATH):${PATH:-}"
 
 # --- print help if requested ----------------------------------------
 case "${1:-}" in -h|-v|--help|--version) print_usage_and_exit;; esac
