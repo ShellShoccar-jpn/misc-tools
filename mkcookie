@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/bin/sh
  
 ######################################################################
 #
@@ -62,7 +62,7 @@ print_usage_and_exit () {
 	          -h <"Y"|"N">       : for JavaScript restriction (HttpOnly)
 	                               "Y" is HttpOnly ON.
 	                               "N" is HttpOnly OFF (default).
-	Version : 2017-01-31 14:07:07 JST
+	Version : 2017-01-31 16:35:49 DST
 __USAGE
   exit 1
 }
