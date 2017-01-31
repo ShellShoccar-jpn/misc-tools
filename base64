@@ -18,7 +18,7 @@
 #                       from wrapping.
 #        -i ........... When decoding, ignore non-alphabet characters.
 #
-# Written by 321516 (@shellshoccarjpn) at 2016/10/14
+# Written by Rich Mikan (@richmikan) on 2017-01-31
 #
 # This is a public-domain software (CC0). It measns that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -32,7 +32,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [-w <COLS>] <file>
 	          ${0##*/} [--by-myself] -d [-i] <file>
-	Version : Fri Oct 14 03:46:02 JST 2016
+	Version : 2017-01-31 16:43:11 JST
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
 	        :   * Although the bult-in base64, uuencode and uudecode command or
 	        :     GNU AWK produces better performance than the POSIX commands set
@@ -52,8 +52,8 @@ which which >/dev/null 2>&1 || {
 }
 
 # --- misc setting #1 ------------------------------------------------
-PATH='/usr/bin:/bin:/usr/local/bin'
 set -u
+export PATH="$(command -p getconf PATH):${PATH:-}"
 umask 0022
 
 # --- want to use "bult-in" base64, or not? --------------------------
@@ -80,9 +80,7 @@ while :; do
 done
 
 # --- misc setting #2 ------------------------------------------------
-PATH='/usr/bin:/bin'
-IFS=$(printf ' \t\n_'); IFS=${IFS%_}
-export IFS LC_ALL=C LANG=C PATH
+export LC_ALL=C
 
 
 # ===== OPTION PARSING ===============================================
