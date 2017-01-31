@@ -39,7 +39,7 @@
 # Return: $?=0 (when all of the options are valid)
 #         stdout : HTTP Cookie string
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/09/23
+# Written by Rich Mikan (richmikan[at]richlab.org) on 2017-01-31
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -62,7 +62,7 @@ print_usage_and_exit () {
 	          -h <"Y"|"N">       : for JavaScript restriction (HttpOnly)
 	                               "Y" is HttpOnly ON.
 	                               "N" is HttpOnly OFF (default).
-	Version : Wed Sep 23 17:43:52 JST 2015
+	Version : 2017-01-31 14:07:07 JST
 __USAGE
   exit 1
 }
@@ -70,9 +70,8 @@ __USAGE
 # --- initalization --------------------------------------------------
 set -u
 umask 0022
-PATH='/usr/bin:/bin'
-IFS=$(printf ' \t\n_'); IFS=${IFS%_}
-export IFS LC_ALL=C LANG=C PATH
+export LC_ALL=C
+export PATH="$(command -p getconf PATH):${PATH:-}"
 
 # --- parse arguments ------------------------------------------------
 var=''
