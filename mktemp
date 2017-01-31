@@ -33,7 +33,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [options] [template [...]]
 	        : "-d" "-p [DIR]" "-q" "-u" "-t" "--suffix=<suff>"
-	Version : 2017-01-31 14:09:25 JST
+	Version : 2017-01-31 16:10:38 JST
 __USAGE
   exit 1
 }
@@ -188,6 +188,10 @@ case $# in 0) optt=1; set -- 'tmp.XXXXXXXXXX';; esac
 err=0
 for arg in "$@"; do
 
+  # --- Make dir string for printing ---------------------------------
+  Dir_trg=${arg%/*}
+  case "$Dir_trg" in "$arg") Dir_trg='';; *) Dir_trg="$Dir_trg/";; esac
+
   n=$max_retry_when_failed
   while [ $n -ge 0 ]; do
 
@@ -236,9 +240,9 @@ for arg in "$@"; do
     break
   done
 
-  # --- print error message when failed to make a file ---------------
+  # --- Print error message when failed to make a file ---------------
   case "${optq}${n}" in
-    '0-1') printf '%s\n' "${0##*/}: failed on $Path_target" 1>&2
+    '0-1') printf '%s\n' "${0##*/}: failed on $Dir_trg${Path_target##*/}" 1>&2
            err=1
            continue
            ;;
@@ -247,10 +251,10 @@ for arg in "$@"; do
            ;;
   esac
 
-  # --- print the path of the file -----------------------------------
-  printf '%s\n' "$Path_target"
+  # --- Print the path of the file -----------------------------------
+  printf '%s%s\n' "$Dir_trg" "${Path_target##*/}"
 
-  # --- remove the file if -u,--dry-run option is set ----------------
+  # --- Remove the file if -u,--dry-run option is set ----------------
   case $optu in 1) rm -rf "$Path_target";; esac
 
 done
