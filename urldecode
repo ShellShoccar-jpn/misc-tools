@@ -1,10 +1,12 @@
+#!/bin/sh
+
 ######################################################################
 #
 # URLENCODE - URL decoder on the basis of RFC 3986
 #
 # USAGE: urldecode <file> ...
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-01-31
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-07
 #
 # This is a public-domain software (CC0). It measns that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -28,7 +30,7 @@ export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <file> ...
-	Version : 2017-01-31 20:46:44 JST
+	Version : 2017-02-07 02:01:03 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1

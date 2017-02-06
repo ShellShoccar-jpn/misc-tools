@@ -1,3 +1,5 @@
+#!/bin/sh
+
 ######################################################################
 #
 # REV - A POSIX Compatible Implementation Of The "rev" Command
@@ -11,7 +13,7 @@
 #                         built-in in performance
 #                         with leading zeros.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-01-31
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-07
 #
 # This is a public-domain software (CC0). It measns that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -29,9 +31,9 @@
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [filename ...]
-	Version : 2017-01-31 16:34:46 JST
-	        : (POSIX Bourne Shell/POSIX commands)
-	        :   * Although the bult-in rev produces better performance
+	Version : 2017-02-07 02:01:03 JST
+	          (POSIX Bourne Shell/POSIX commands)
+	            * Although the bult-in rev produces better performance
 	              than the POSIX commands set
 	USAGE
   exit 1

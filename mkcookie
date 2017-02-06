@@ -1,3 +1,5 @@
+#!/bin/sh
+
 ######################################################################
 #
 # MKCOOKIE - HTTP Cookie String Generator
@@ -37,7 +39,7 @@
 # Return: $?=0 (when all of the options are valid)
 #         stdout : HTTP Cookie string
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-01-31
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-07
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -60,7 +62,7 @@ print_usage_and_exit () {
 	          -h <"Y"|"N">       : for JavaScript restriction (HttpOnly)
 	                               "Y" is HttpOnly ON.
 	                               "N" is HttpOnly OFF (default).
-	Version : 2017-01-31 16:35:49 JST
+	Version : 2017-02-07 02:01:03 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
