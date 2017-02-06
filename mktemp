@@ -1,5 +1,3 @@
-#!/bin/sh
-
 ######################################################################
 #
 # MKTEMP - The "mktemp" Command Also Works On Just A POSIX Environment
@@ -19,7 +17,7 @@
 #                            in front of the filepath
 #        "--suffix=<suff>" . Add the suffix behind the filename
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) on 2017-01-31
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-01-31
 #
 # This is a public-domain software (CC0). It measns that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -30,11 +28,12 @@
  
 # print the usage and exit
 print_usage_and_exit () {
-  cat <<-__USAGE 1>&2
+  cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [options] [template [...]]
 	        : "-d" "-p [DIR]" "-q" "-u" "-t" "--suffix=<suff>"
 	Version : 2017-01-31 16:35:12 JST
-__USAGE
+	          (POSIX.1 Bourne Shell/POSIX.1 commands)
+	USAGE
   exit 1
 }
 
@@ -45,7 +44,7 @@ __USAGE
 set -u
 umask 0022
 export LC_ALL=C
-export PATH="$(command -p getconf PATH):${PATH:-}"
+export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
 
 # --- set the temporary directory ------------------------------------
 Dir_tmp=$(set | grep ^TMPDIR= | sed 's/^[^=]\{1,\}=//');

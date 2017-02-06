@@ -1,5 +1,3 @@
-#!/bin/sh
-
 ######################################################################
 #
 # BASE64 - RFC 3548 Codec Command (compatible with "base64" command)
@@ -18,7 +16,7 @@
 #                       from wrapping.
 #        -i ........... When decoding, ignore non-alphabet characters.
 #
-# Written by Rich Mikan (@richmikan) on 2017-01-31
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-01-31
 #
 # This is a public-domain software (CC0). It measns that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -29,14 +27,14 @@
 
 # print the usage and exit
 print_usage_and_exit () {
-  cat <<-__USAGE 1>&2
+  cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [-w <COLS>] <file>
 	          ${0##*/} [--by-myself] -d [-i] <file>
 	Version : 2017-01-31 16:43:11 JST
-	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
-	        :   * Although the bult-in base64, uuencode and uudecode command or
-	        :     GNU AWK produces better performance than the POSIX commands set
-__USAGE
+	          (POSIX Bourne Shell/POSIX commands)
+	            * Although the bult-in base64, uuencode and uudecode command or
+	              GNU AWK produces better performance than the POSIX commands set
+	USAGE
   exit 1
 }
 
@@ -53,8 +51,8 @@ which which >/dev/null 2>&1 || {
 
 # --- misc setting #1 ------------------------------------------------
 set -u
-export PATH="$(command -p getconf PATH):${PATH:-}"
 umask 0022
+export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
 
 # --- want to use "bult-in" base64, or not? --------------------------
 by_myself=0

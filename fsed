@@ -1,17 +1,15 @@
-#! /bin/sh
-
 ######################################################################
 #
 # FSED : flexible sed (looks like the fgrep)
 #
-# Usage  : fsed <pattern_str> <substitute_str> <file>
+# Usage  : fsed <pattern_str> <substitute_str> <file> [file...]
 #
 # * fsed is more flexible substituter than the sed command. This
 #   ignores all of the functions which every meta-character of regular
 #   expression has, so that you can very easily substitute strings
 #   include various meta-characters, e.g. ^, $, \, /, &, and so on.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2015/02/27
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-06
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -19,48 +17,74 @@
 #
 ######################################################################
 
-# print the usage and exit
+
+######################################################################
+# Initial Configuration
+######################################################################
+
+# === Initialize shell environment ===================================
+set -u
+umask 0022
+export LC_ALL=C
+export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
+
+# === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
-  cat <<__USAGE 1>&2
-Usage   : ${0##*/} <pattern_str> <substitute_str>
-Version : Fri Feb 27 15:22:11 JST 2015
-__USAGE
+  cat <<-USAGE 1>&2
+	Usage   : ${0##*/} <pattern_str> <substitute_str> <file> [file...]
+	Version : 2017-02-06 15:41:42 JST
+	          (POSIX Bourne Shell/POSIX commands)
+	USAGE
   exit 1
 }
 
-# initalize
-set -u
-umask 0022
-PATH='/usr/bin:/bin'
-IFS=$(printf ' \t\n_'); IFS=${IFS%_}
-export IFS LC_ALL=C LANG=C PATH
 
-# parse the arguments
-case $# in
-  3) if [ \( -f "$3"      \) -o \
-          \( -c "$3"      \) -o \
-          \( -p "$3"      \) -o \
-          \( "_$3" = '_-' \)     ]; then
-       file=$3
-       case "$file" in -|/*|./*|../*) :;; *) file="./$file";; esac
-     else
-       echo '*** No such file found' 1>&2
-       print_usage_and_exit
-     fi                                  ;;
-  2) file='-'                            ;;
-  *) print_usage_and_exit                ;;
-esac
-pat=$(printf '%s' "$1"            |
+######################################################################
+# Argument Parsing
+######################################################################
+
+# === Parse arguments (except files) =================================
+case $# in [01]) print_usage_and_exit;; esac
+[ $(printf '%s\n' "$1" | wc -l | awk '{print $1}') -eq 1 ] || {
+  echo "${0##*/}: It is impossible to contain <0x0A> in <pattern_str>" 1>&2
+  exit 1
+}
+pat=$(printf '%s\n' "$1"          |
       sed 's/\([].\*/[]\)/\\\1/g' |
-      sed 's/^\^/\\^/'            |
-      sed 's/\$$/\\$/'            )
-sub=$(printf '%s' "$2"         |
+      sed '1s/^^/\\^/'            |
+      sed '$s/$$/\\$/'            )
+sub=$(printf '%s\n' "$2"       |
       sed 's/\([\&/]\)/\\\1/g' |
       sed 's/$/\\/'            |
       sed '$s/\\$//'           )
+shift 2
 
-# transformation
-case "$file" in
-  -) sed "s/$pat/$sub/g"        ;;
-  *) sed "s/$pat/$sub/g" "$file";;
-esac
+
+######################################################################
+# Main Routine
+######################################################################
+
+case $# in 0) set -- -;; esac
+for file in "$@"; do
+  if   [ "_$file" = '_-' ]                               ; then
+    sed "s/$pat/$sub/g"
+  elif [ -f "$file" ] || [ -c "$file" ] || [ -p "$file" ]; then
+    case "$file" in /*|./*|../*) :;; *) File="./$file";; esac
+    sed "s/$pat/$sub/g" "$File"
+  elif [ "_$file" = '_-' ]                               ; then
+    sed "s/$pat/$sub/g"
+  else
+    echo "${0##*/}: Cannot open as a file: $file" 1>&2
+    ret=1
+    continue
+  fi
+  ret=$?
+  [ $ret -eq 0 ] || { echo "${0##*/}: Failed to sed: $file" 1>&2; }
+done
+
+
+######################################################################
+# Finish
+######################################################################
+
+exit $ret

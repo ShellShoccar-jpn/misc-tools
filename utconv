@@ -1,5 +1,3 @@
-#!/bin/sh
-
 ######################################################################
 #
 # UTCONV - UNIX time and Real DateTime Converter
@@ -23,7 +21,7 @@
 #
 # * Any invalid time make me return the text "-1" with the return code 0.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) on 2017-01-31
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-01-31
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -38,6 +36,7 @@ case "${1:-}" in
 	USAGE: ${0##*/} [datetime_text_or_file]    # for Real-datetime -> Unixtime
 	       ${0##*/} -r [unixtime_text_or_file] # for Unixtime      -> Real-datetime
 	Version : 2017-01-31 16:35:30 JST
+	          (POSIX.1 Bourne Shell/POSIX.1 commands)
 	USAGE
     exit 1
     ;;
@@ -47,7 +46,7 @@ esac
 set -u
 umask 0022
 export LC_ALL=C
-export PATH="$(command -p getconf PATH):${PATH:-}"
+export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
 
 # --- conversion -----------------------------------------------------
 case $# in 0) set -- '-';; esac

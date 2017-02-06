@@ -1,5 +1,3 @@
-#!/bin/sh
- 
 ######################################################################
 #
 # MKCOOKIE - HTTP Cookie String Generator
@@ -39,7 +37,7 @@
 # Return: $?=0 (when all of the options are valid)
 #         stdout : HTTP Cookie string
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) on 2017-01-31
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-01-31
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -48,7 +46,7 @@
 ######################################################################
  
 print_usage_and_exit () {
-  cat <<-__USAGE 1>&2
+  cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [options] [<name>=<value>]
 	          -e <expiring_info> : for expiring date and time setting
 	                               "YYYYMMDDHHMMSS" or "+<n>"
@@ -62,8 +60,9 @@ print_usage_and_exit () {
 	          -h <"Y"|"N">       : for JavaScript restriction (HttpOnly)
 	                               "Y" is HttpOnly ON.
 	                               "N" is HttpOnly OFF (default).
-	Version : 2017-01-31 16:35:49 DST
-__USAGE
+	Version : 2017-01-31 16:35:49 JST
+	          (POSIX Bourne Shell/POSIX commands)
+	USAGE
   exit 1
 }
 
@@ -71,7 +70,7 @@ __USAGE
 set -u
 umask 0022
 export LC_ALL=C
-export PATH="$(command -p getconf PATH):${PATH:-}"
+export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
 
 # --- parse arguments ------------------------------------------------
 var=''

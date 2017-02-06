@@ -1,5 +1,3 @@
-#!/bin/sh
-
 ######################################################################
 #
 # REV - A POSIX Compatible Implementation Of The "rev" Command
@@ -13,7 +11,7 @@
 #                         built-in in performance
 #                         with leading zeros.
 #
-# Written by Rich Mikan (@shellshoccarjpn) on 2017-01-31
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-01-31
 #
 # This is a public-domain software (CC0). It measns that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -29,13 +27,13 @@
 
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
-  cat <<-__USAGE 1>&2
+  cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [filename ...]
 	Version : 2017-01-31 16:34:46 JST
-	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
+	        : (POSIX Bourne Shell/POSIX commands)
 	        :   * Although the bult-in rev produces better performance
 	              than the POSIX commands set
-__USAGE
+	USAGE
   exit 1
 }
 error_exit() {
@@ -48,7 +46,7 @@ error_exit() {
 # --- Initialize -----------------------------------------------------
 set -u
 umask 0022
-export PATH="$(command -p getconf PATH):$PATH"
+export PATH="$(command -p getconf PATH)${PATH:+:}$PATH"
 
 # --- print help if requested ----------------------------------------
 case "${1:-}" in -h|-v|--help|--version) print_usage_and_exit;; esac

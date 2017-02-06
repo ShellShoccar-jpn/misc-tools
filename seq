@@ -1,5 +1,3 @@
-#!/bin/sh
-
 ######################################################################
 #
 # SEQ - A POSIX Compatible Implementation Of The "seq" Command
@@ -18,7 +16,7 @@
 #        -w ............. Print all numbers with the same width, by padding
 #                         with leading zeros.
 #
-# Written by Rich Mikan (@shellshoccarjpn) at 2017-01-31
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-06
 #
 # This is a public-domain software (CC0). It measns that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -34,15 +32,15 @@
 
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
-  cat <<-__USAGE 1>&2
+  cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [options] last
 	          ${0##*/} [options] first last
 	          ${0##*/} [options] first increment last
-	Version : 2017-01-31 16:34:25 JST
-	        : (POSIX.1 Bourne Shell/POSIX.1 commands)
-	        :   * Although the bult-in seq produces better performance
+	Version : 2017-02-06 15:00:33 JST
+	          (POSIX.1 Bourne Shell/POSIX.1 commands)
+	            * Although the bult-in seq produces better performance
 	              than the POSIX commands set
-__USAGE
+	USAGE
   exit 1
 }
 error_exit() {
@@ -56,7 +54,7 @@ error_exit() {
 set -u
 umask 0022
 export LC_ALL=C
-export PATH="$(command -p getconf PATH):$PATH"
+export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
 
 # --- want to use "bult-in" seq, or not? -----------------------------
 case "${1:-}" in
