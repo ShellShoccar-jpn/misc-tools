@@ -36,8 +36,8 @@ print_usage_and_exit () {
 	Usage   : ${0##*/} [options] last
 	          ${0##*/} [options] first last
 	          ${0##*/} [options] first increment last
-	Version : 2017-02-06 15:00:33 JST
-	          (POSIX.1 Bourne Shell/POSIX.1 commands)
+	Version : 2017-02-06 18:43:52 JST
+	          (POSIX Bourne Shell/POSIX commands)
 	            * Although the bult-in seq produces better performance
 	              than the POSIX commands set
 	USAGE
