@@ -6,7 +6,11 @@
 #
 # USAGE: mkcookie [options] [<name>=<value>]
 #
-# * <name>=<value> : Cookie varriable name and value
+# * <name>=<value>:
+#   - Cookie varriable name and value
+#   - If it is not given, try to get from STDIN "<name> <value>"
+#     (not use "=").  You can give two or more variables by every pair
+#     is in every line
 # * OPTIONS:
 #   - -e <expiring_info>
 #     for expiring date and time setting, You can use one of the following
@@ -39,48 +43,67 @@
 # Return: $?=0 (when all of the options are valid)
 #         stdout : HTTP Cookie string
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-07
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-09
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
 # the side effects which are broght about by the major licenses.
 #
 ######################################################################
- 
-print_usage_and_exit () {
-  cat <<-USAGE 1>&2
-	Usage   : ${0##*/} [options] [<name>=<value>]
-	          -e <expiring_info> : for expiring date and time setting
-	                               "YYYYMMDDHHMMSS" or "+<n>"
-	                               or "YYYYMMDDHHMMSS+<n>"
-	          -p <path_name>     : for path restriction
-	          -d <domain_name>   : for domain restriction
-	          -s <"Y"|"N"|"A">   : for HTTPS(SSL,TLS) restriction
-	                               "Y" is always ON.
-	                               "N" is always OFF.
-	                               "A" is for auto detection (default).
-	          -h <"Y"|"N">       : for JavaScript restriction (HttpOnly)
-	                               "Y" is HttpOnly ON.
-	                               "N" is HttpOnly OFF (default).
-	Version : 2017-02-07 02:01:03 JST
-	          (POSIX Bourne Shell/POSIX commands)
-	USAGE
-  exit 1
-}
 
-# --- initalization --------------------------------------------------
+
+######################################################################
+# Initial Configuration
+######################################################################
+
+# === Initialize shell environment ===================================
 set -u
 umask 0022
 export LC_ALL=C
 export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
 
-# --- parse arguments ------------------------------------------------
+# === Define the functions for printing usage ========================
+print_usage_and_exit () {
+  cat <<-USAGE 1>&2
+	Usage   : ${0##*/} [options] [<name>=<value>]
+	Args    : [<name>=<value>] ... Cookie varriable name and value
+	                               If it is not given, try to get from
+	                               STDIN "<name> <value>" (not use "=").
+	                               You can give two or more variables
+	                               by every pair is in every line
+	Options : -e <expiring_info> . for expiring date and time setting
+	                               "YYYYMMDDHHMMSS" or "+<n>"
+	                               or "YYYYMMDDHHMMSS+<n>"
+	          -p <path_name> ..... for path restriction
+	          -d <domain_name> ... for domain restriction
+	          -s <"Y"|"N"|"A"> ... for HTTPS(SSL,TLS) restriction
+	                               "Y" is always ON.
+	                               "N" is always OFF.
+	                               "A" is for auto detection (default).
+	          -h <"Y"|"N"> ....... for JavaScript restriction (HttpOnly)
+	                               "Y" is HttpOnly ON.
+	                               "N" is HttpOnly OFF (default).
+	Version : 2017-02-09 00:23:08 JST
+	          (POSIX Bourne Shell/POSIX commands)
+	USAGE
+  exit 1
+}
+
+
+######################################################################
+# Parse Arguments
+######################################################################
+
+# === Get the options and the filepath ===============================
+# --- initialize option parameters -----------------------------------
 var=''
-eopt=''
-popt=''
-dopt=''
-sopt=''
-hopt=''
+opte=''
+optp=''
+optd=''
+opts=''
+opth=''
+#
+# --- get them -------------------------------------------------------
 optmode=''
 case $# in [!0]*)
   i=0
@@ -97,35 +120,35 @@ case $# in [!0]*)
           ret2=${ret#* }
           if [ "$ret1" = 'e' ]; then
             if [ -n "$ret2" ]; then
-              eopt=$ret2
+              opte=$ret2
             else
               optmode='e'
             fi
           fi
           if [ "$ret1" = 'p' ]; then
             if [ -n "$ret2" ]; then
-              popt=$ret2
+              optp=$ret2
             else
               optmode='p'
             fi
           fi
           if [ "$ret1" = 'd' ]; then
             if [ -n "$ret2" ]; then
-              dopt=$ret2
+              optd=$ret2
             else
               optmode='d'
             fi
           fi
           if [ "$ret1" = 's' ]; then
             if [ -n "$ret2" ]; then
-              sopt=$ret2
+              opts=$ret2
             else
               optmode='s'
             fi
           fi
           if [ "$ret1" = 'h' ]; then
             if [ -n "$ret2" ]; then
-              hopt=$ret2
+              opth=$ret2
             else
               optmode='h'
             fi
@@ -140,19 +163,19 @@ case $# in [!0]*)
           ;;
       esac
     elif [ "$optmode" = 'e' ]; then
-      eopt=$arg
+      opte=$arg
       optmode=''
     elif [ "$optmode" = 'p' ]; then
-      popt=$arg
+      optp=$arg
       optmode=''
     elif [ "$optmode" = 'd' ]; then
-      dopt=$arg
+      optd=$arg
       optmode=''
     elif [ "$optmode" = 's' ]; then
-      sopt=$arg
+      opts=$arg
       optmode=''
     elif [ "$optmode" = 'h' ]; then
-      hopt=$arg
+      opth=$arg
       optmode=''
     else
       print_usage_and_exit
@@ -161,11 +184,11 @@ case $# in [!0]*)
   ;;
 esac
 
-# --- validate the arguments -----------------------------------------
+# === Vaidate arguments ==============================================
 printf '%s\n' "$var" | grep -Eq "$(printf '^([^ \t=]+=)?')" || print_usage_and_exit
-case "$eopt" in
+case "$opte" in
   '') ;;
-   *) check=$(printf '%s\n' "$eopt"                                                                   |
+   *) check=$(printf '%s\n' "$opte"                                                                   |
               awk '                                                                                   #
                 /^[0-9]+[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$/ {         #
                   print $0, 0;                                                                        #
@@ -190,25 +213,29 @@ case "$eopt" in
      lifetime=${check#* }
      ;;
 esac
-case "$popt" in '') ;;
-  *) path=$(    printf '%s' "$popt" | tr -d ';\n'         )
-     case "$path"     in "$popt") :;; *) print_usage_and_exit;; esac;;
+case "$optp" in '') ;;
+  *) path=$(    printf '%s' "$optp" | tr -d ';\n'         )
+     case "$path"     in "$optp") :;; *) print_usage_and_exit;; esac;;
 esac
-case "$dopt" in '') ;;
-  *) domain=$(  printf '%s' "$dopt" | tr -Cd 'A-Za-z0-9.-')
-     case "$domain"   in "$dopt") :;; *) print_usage_and_exit;; esac;;
+case "$optd" in '') ;;
+  *) domain=$(  printf '%s' "$optd" | tr -Cd 'A-Za-z0-9.-')
+     case "$domain"   in "$optd") :;; *) print_usage_and_exit;; esac;;
 esac
-case "$sopt" in '') ;;
-  *) secure=$(  printf '%s' "$sopt" | tr -Cd 'A-Za-z'     )
-     case "$secure"   in "$sopt") :;; *) print_usage_and_exit;; esac;;
+case "$opts" in '') ;;
+  *) secure=$(  printf '%s' "$opts" | tr -Cd 'A-Za-z'     )
+     case "$secure"   in "$opts") :;; *) print_usage_and_exit;; esac;;
 esac
-case "$hopt" in '') ;;
-  *) httponly=$(printf '%s' "$hopt" | tr -Cd 'A-Za-z'     )
-     case "$httponly" in "$hopt") :;; *) print_usage_and_exit;; esac;;
+case "$opth" in '') ;;
+  *) httponly=$(printf '%s' "$opth" | tr -Cd 'A-Za-z'     )
+     case "$httponly" in "$opth") :;; *) print_usage_and_exit;; esac;;
 esac
 
 
-# --- print the basic part of cookie (with URL encoding) -------------
+######################################################################
+# Main Routine
+######################################################################
+
+# === Print the basic part of cookie (with URL encoding) =============
 case "$var" in                                                                 #
   '') cat                                                                     ;;
    *) printf '%s %s\n' "${var%%=*}" "${var#*=}"                               ;;
@@ -345,5 +372,9 @@ path="${path:-}" awk '                                                         #
   }                                                                            #
 '
 
-# --- finish ---------------------------------------------------------
+
+######################################################################
+# Finish
+######################################################################
+
 exit 0

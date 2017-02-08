@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/bin/sh
 
 ######################################################################
 #
@@ -47,7 +47,7 @@
 #   That means, you can join various filters to fd=2 (stderr). Although
 #   it is very tricky. ;-)
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2016/09/10
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-09
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -55,46 +55,61 @@
 #
 ######################################################################
 
+readonly DEFAULT_TIMEOUT=600
 
-DEFAULT_TIMEOUT=600
 
-# ===== FUNCTION =====================================================
+######################################################################
+# Initial Configuration
+######################################################################
 
-# --- define a function when invalid arguments were set --------------
+# === Initialize shell environment ===================================
+set -u
+umask 0022
+export LC_ALL=C
+export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
+
+# === Define the functions for printing usage ========================
 print_usage_and_exit () {
-  cat <<-__USAGE 1>&2
+  cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [-t timeout] <named_pipe_to_use> [output_file]
-	Version : Sat Sep 10 15:29:59 JST 2016
-__USAGE
+	          * See the document at the source code of this command
+	Version : 2017-02-09 01:26:16
+	USAGE
   exit 1
 }
 
+
+######################################################################
+# Prepare Main Routine
+######################################################################
+
+# === Define functions ===============================================
 # --- FUNC: Make a Temporary File ------------------------------------
 # arg   : (none)
 # ret   : 0 when succeeded
 # stdout: path of the generated temporary file
 mktempf0() {
-  # --- parameters, etc. ---------------------------------------------
+  # --- parameters, etc.
   num_of_digits=16  # Length of Random String
   n=10              # Max Times of Retrying
   chrs='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_'
                     # Available letters
   LF=$(printf '\\\n_');LF=${LF%_}
-  # --- call built-in mktemp if exists -------------------------------
+  # --- call built-in mktemp if exists
   type mktemp >/dev/null 2>&1 && {
     mktemp -t tmp.${0##*/}.$$.XXXXXXXXXXXXXXXX
     return $?
   }
-  # --- set the temporary directory ----------------------------------
+  # --- set the temporary directory
   Dir_tmp=$(set | grep -q ^TMPDIR= | sed 's/^[^=]\{1,\}=//');
   case "$Dir_tmp" in
     '') Dir_tmp='/tmp'      ;;
     /)  Dir_tmp=''          ;;
     *)  Dir_tmp=${Dir_tmp%/};;
   esac
-  # --- mktemp loop --------------------------------------------------
+  # --- mktemp loop
   while [ $n -ge 0 ]; do
-    # --- Generate Ramdom string -------------------------------------
+    # --- Generate Ramdom string
     # calculate the number of words which required
     nw=$(echo "${num_of_digits}*l(${#chrs})/11.09+1" | # 11.09=ln(65536)
          bc -l                                       |
@@ -135,34 +150,29 @@ mktempf0() {
                      }                        }                  #
              /[0-9]/{print c[$0*1];           }'                 |
         tail -c $num_of_digits                                   )
-    # --- Making the file path ---------------------------------------
+    # --- Making the file path
     Path_target="${Dir_tmp}/tmp.${0##*/}.$$.$s"
-    # --- Making the file --------------------------------------------
+    # --- Making the file
     (set -C; umask 177; : > "$Path_target") 2>/dev/null || {
       [ -f "$Path_target" ] && { n=$((n-1)); continue; }
       n=-1; break;
     }
     break
   done
-  # --- print error message when failed to make a file ---------------
+  # --- print error message when failed to make a file
   case "$n" in -1) return 1;; esac
-  # --- print the path of the file -----------------------------------
+  # --- print the path of the file
   printf '%s\n' "$Path_target"
-  # --- return successfully ------------------------------------------
+  # --- return successfully
   return 0
 }
 
 
-# ===== PREPARATION ==================================================
+######################################################################
+# Main Routine
+######################################################################
 
-# --- initialize -----------------------------------------------------
-set -u
-umask 0022
-PATH='/usr/bin:/bin'
-IFS=$(printf ' \t\n_'); IFS=${IFS%_}
-export IFS LC_ALL=C LANG=C PATH
-
-# --- judge which I have started as a parent or a child --------------
+# === Judge which I have started as a parent or a child ==============
 while :; do
   case $#     in                               6) :;; *) check='p'; break;; esac
   pid=$$
@@ -173,18 +183,16 @@ while :; do
   check='c';break;
 done
 
-
 # ===== ROUTINE AS A PARENT ==========================================
-
 case $check in 'p')
-
+  #
   # --- exit trap (for parent) ---------------------------------------
   exit_trap() {
     trap - EXIT HUP INT QUIT PIPE ALRM TERM
     rm -f "${namedpipe_to_del_by_myself:-}"
     exit ${1:-0}
   }
-
+  #
   # --- parse the arguments ------------------------------------------
   timeout=$DEFAULT_TIMEOUT
   case $#   in                              0) print_usage_and_exit;; esac
@@ -204,14 +212,14 @@ case $check in 'p')
   case "$pipe" in                  "$outfile") print_usage_and_exit;; esac
   case "$pipe"    in -|/*|./*|../*) :;; *) pipe="./$pipe"      ;; esac
   case "$outfile" in -|/*|./*|../*) :;; *) outfile="./$outfile";; esac
-
+  #
   # --- enable the exit trap -----------------------------------------
   trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM
-
+  #
   # --- investigate the caller process ID ----------------------------
   pid=$$
   pid=$(ps -Ao pid,ppid | awk '$1=='$pid'{print $2}')
-
+  #
   # --- make the named pipe if required ------------------------------
   check=$(ls -l "$pipe" 2>/dev/null)
   case "$?$check" in
@@ -235,7 +243,7 @@ case $check in 'p')
        exit_trap 4
        ;;
   esac
-
+  #
   # --- make stderr silent -------------------------------------------
   #exec 3>&2 2>/dev/null # fd3 is only available for debugging
   exec 2>/dev/null >&2 3>&2
@@ -243,27 +251,24 @@ case $check in 'p')
   # --- prepare for locking ------------------------------------------
   sleep 100 & # This is to wait that the child process is ready
   sleepjob_pid=$!
-
+  #
   # --- exec the compress command piping script ----------------------
   case "${namedpipe_to_del_by_myself:-}" in
     '') check=0                               ;;
     *)  check=1; namedpipe_to_del_by_myself='';;
   esac
   "$0" "$pipe" "$outfile" "$check" "$sleepjob_pid" "$pid" "$timeout" &
-
+  #
   # --- wait for starting of the compress command piping script ------
   wait "$sleepjob_pid" 2>/dev/null
-
+  #
   # --- exit normally ------------------------------------------------
   exit_trap 0
-
 ;;
 
 
 # ===== ROUTINE AS A CHILD ===========================================
-
 'c')
-
   # This child process must be called with the arguments
   #   $1:namedpipe to read
   #   $2:file to write into
@@ -272,7 +277,7 @@ case $check in 'p')
   #   $4:process ID to kill for resuming the parent process
   #   $5:process ID which this script waits for termination (caller PID)
   #   $6:timeout (seconds)
-
+  #
   # --- validate the arguments ---------------------------------------
   case $# in      6) :;; *) echo '*** Invalid arguments'   1>&3; exit 10;; esac
   [ -p "$1" ] ||          { echo '*** Invalid argument #1' 1>&3; exit 11; }
@@ -293,7 +298,7 @@ case $check in 'p')
   printf '%s\n' "$6" | grep -q '^[0-9]\+$' ||
                           { echo '*** Invalid argument #6' 1>&3; exit 16; }
   timeout=$6
-
+  #
   # --- set exiting trap ---------------------------------------------
   exit_trap() {
     trap - EXIT HUP INT QUIT PIPE ALRM TERM
@@ -316,17 +321,17 @@ case $check in 'p')
     exit $ret
   }
   trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM
-
+  #
   # --- tell the parent that I have started up -----------------------
   kill -s TERM "$ppid"
-
+  #
   # --- make a temporary file ----------------------------------------
   z_file=$(mktempf0)
   case $? in
     0) :                                                                 ;;
     *) printf '%s\n' "${0##*/}: Can't make a tempfile" 1>&3; exit_trap 18;;
   esac
-
+  #
   # --- set my life time ---------------------------------------------
   case $timeout in
     0) :                                                                      ;;
@@ -335,7 +340,7 @@ case $check in 'p')
        timerjob_pid=$!
        timersleep_pid=$(ps -Ao pid,ppid | awk '$2=='$timerjob_pid'{print $1}');;
   esac
-
+  #
   # --- do the compress command piping (hehave as a background job) --
   pid=$$
   case "$file" in
@@ -350,7 +355,7 @@ case $check in 'p')
     #       You cannot find the process ID of compress yet. The reason is
     #       that the namedpipe which is received nothing yet prevent from
     #       starting the compress command until the namedpipe get any data.
-
+  #
   # --- wait for termination of the caller (is not the parent) process
   while :; do
     kill -0 $cpid >/dev/null 2>&1
@@ -360,5 +365,4 @@ case $check in 'p')
     wait $pollingsleep_pid
   done
   exit_trap 0
-
 ;; esac

@@ -2,7 +2,7 @@
 
 ######################################################################
 #
-# FSED : flexible sed (looks like the fgrep)
+# FSED - flexible sed (looks like the fgrep)
 #
 # Usage  : fsed <pattern_str> <substitute_str> <file> [file...]
 #

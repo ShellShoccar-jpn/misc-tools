@@ -31,28 +31,46 @@
 #
 ######################################################################
 
-# --- print the usage and exit if required ---------------------------
-case "${1:-}" in
-  --version|--help|-h)
-    cat <<-USAGE 1>&2
-	USAGE: ${0##*/} [datetime_text_or_file]    # for Real-datetime -> Unixtime
-	       ${0##*/} -r [unixtime_text_or_file] # for Unixtime      -> Real-datetime
-	Version : 2017-02-07 02:01:03 JST
-	          (POSIX Bourne Shell/POSIX commands)
-	USAGE
-    exit 1
-    ;;
-esac
 
-# --- initalization --------------------------------------------------
+######################################################################
+# Initial Configuration
+######################################################################
+
+# === Initialize shell environment ===================================
 set -u
 umask 0022
 export LC_ALL=C
 export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
 
-# --- conversion -----------------------------------------------------
+# === Define the functions for printing usage ========================
+print_usage_and_exit () {
+  cat <<-USAGE 1>&2
+	USAGE   : ${0##*/} [datetime_text_or_file]    # Real-datetime -> Unixtime
+	          ${0##*/} -r [unixtime_text_or_file] # Unixtime -> Real-datetime
+	Args    : datetime_text_or_file ... A time to converting
+	Options : -r ...................... Swithes mode to Unixtime->Real-datetime
+	Version : 2017-02-07 02:01:03 JST
+	          (POSIX Bourne Shell/POSIX commands)
+	USAGE
+  exit 1
+}
+
+
+######################################################################
+# Parse Arguments
+######################################################################
+
+# === print the usage and exit if required ===========================
+case "${1:-}" in --version|--help|-h) print_usage_and_exit;; esac
+
+
+######################################################################
+# Main Routine
+######################################################################
+
+# === Convert ========================================================
 case $# in 0) set -- '-';; esac
-awk '
+exec awk '
 BEGIN {
   # 1) initialize
   unixtime2YYYYMMDDhhmmss_init("LOCALTIME"); # initialize with localtime mode

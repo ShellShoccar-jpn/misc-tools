@@ -6,20 +6,20 @@
 #
 # USAGE: mktemp [--by-myself] [options] [template [...]]
 #
-#        "--by-myself" ..... (write as the 1st argument when use)
+#        --by-myself ..... (write as the 1st argument when use)
 #                            Not use the "built-in" mktemp command
 #                            and always do mktemp by myself but it is
 #                            inferior to the built-in in performance
-#        "-d" .............. Make a directory instead of a file
-#        "-p [DIR]" ........ Define the temporary directory instead of
-#                            $TMPDIR
-#        "-q" .............. Quiet even if some error occurred
-#        "-u" .............. Make a file but remove it immediately
-#        "-t" .............. Add the temporary directory as a prefix
-#                            in front of the filepath
-#        "--suffix=<suff>" . Add the suffix behind the filename
+#        -d .............. Makes a directory instead of a file
+#        -p <DIR> ........ Defines the temporary directory instead of
+#                          $TMPDIR
+#        -q .............. Quiet even if some error occurred
+#        -u .............. Makes a file but remove it immediately
+#        -t .............. Adds the temporary directory as a prefix
+#                          in front of the filepath
+#        --suffix=<suff> . Adds the suffix behind the filename
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-08
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-09
 #
 # This is a public-domain software (CC0). It measns that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -43,7 +43,12 @@ export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [--by-myself] [options] [template [...]]
-	Version : 2017-02-08 22:13:53 JST
+	Arg&Opts: Almost compatible with GNU mktemp
+	          The following options are available and compatible with it
+	            -d, -p <DIR>, -q, -u, -t, --suffix=<suff>
+	          But --by-myself is the only original option, it prevent
+	          from use the built-in same name command even if available
+	Version : 2017-02-09 00:10:43 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -53,7 +58,7 @@ error_exit() {
   exit $1
 }
 
-# === exec the mktemp command if exists ==============================
+# === Exec the built-in mktemp command if OK and exists ==============
 case "${1:-}" in
   --by-myself) shift                                                        ;;
   *)           type mktemp >/dev/null 2>&1 && { exec mktemp "$@"; exit 1; } ;;

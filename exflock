@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/bin/sh
 
 ######################################################################
 #
@@ -44,7 +44,7 @@
 #              :
 #          kill $flock_pid
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2016/09/10
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-09
 #
 # This is a public-domain software. It measns that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -52,50 +52,70 @@
 #
 ######################################################################
 
+readonly DEFAULT_MAXLIFETIME=45
 
-DEFAULT_MAXLIFETIME=45
 
-# ===== FUNCTION =====================================================
+######################################################################
+# Initial Configuration
+######################################################################
 
-# --- print the usage and exit ---------------------------------------
+# === Initialize shell environment ===================================
+set -u
+umask 0022
+export LC_ALL=C
+export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
+
+# === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
-  cat <<-__USAGE 1>&2
+  cat <<-USAGE 1>&2
 	Usage  : ${0##*/} <seconds> <file> [maxlifetime]
 	         <seconds> ...... maximum waiting time to succeed locking
 	         <file> ......... the path of the file you want to lock
 	         [maxlifetime] .. the maximum life of the locking process (sec)
 	                          (0 means infinity, and default=$DEFAULT_MAXLIFETIME)
-	Version : Sat Sep 10 15:25:44 JST 2016
-__USAGE
+	          * See the document at the source code of this command
+	            for more infomation
+	Version : 2017-02-09 01:30:56
+	USAGE
   exit 1
 }
+error_exit() {
+  [ -n "$2" ] && echo "${0##*/}: $2" 1>&2
+  exit $1
+}
 
+
+######################################################################
+# Prepare Main Routine
+######################################################################
+
+# === Define functions ===============================================
 # --- FUNC: Make a Temporary File ------------------------------------
 # arg   : (none)
 # ret   : 0 when succeeded
 # stdout: path of the generated temporary file
 mktempf0() {
-  # --- parameters, etc. ---------------------------------------------
+  # --- parameters, etc.
   num_of_digits=16  # Length of Random String
   n=10              # Max Times of Retrying
   chrs='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_'
                     # Available letters
   LF=$(printf '\\\n_');LF=${LF%_}
-  # --- call built-in mktemp if exists -------------------------------
+  # --- call built-in mktemp if exists
   type mktemp >/dev/null 2>&1 && {
     mktemp -t tmp.${0##*/}.$$.XXXXXXXXXXXXXXXX
     return $?
   }
-  # --- set the temporary directory ----------------------------------
+  # --- set the temporary directory
   Dir_tmp=$(set | grep -q ^TMPDIR= | sed 's/^[^=]\{1,\}=//');
   case "$Dir_tmp" in
     '') Dir_tmp='/tmp'      ;;
     /)  Dir_tmp=''          ;;
     *)  Dir_tmp=${Dir_tmp%/};;
   esac
-  # --- mktemp loop --------------------------------------------------
+  # --- mktemp loop
   while [ $n -ge 0 ]; do
-    # --- Generate Ramdom string -------------------------------------
+    # --- Generate Ramdom string
     # calculate the number of words which required
     nw=$(echo "${num_of_digits}*l(${#chrs})/11.09+1" | # 11.09=ln(65536)
          bc -l                                       |
@@ -136,41 +156,38 @@ mktempf0() {
                      }                        }                  #
              /[0-9]/{print c[$0*1];           }'                 |
         tail -c $num_of_digits                                   )
-    # --- Making the file path ---------------------------------------
+    # --- Making the file path
     Path_target="${Dir_tmp}/tmp.${0##*/}.$$.$s"
-    # --- Making the file --------------------------------------------
+    # --- Making the file
     (set -C; umask 177; : > "$Path_target") 2>/dev/null || {
       [ -f "$Path_target" ] && { n=$((n-1)); continue; }
       n=-1; break;
     }
     break
   done
-  # --- print error message when failed to make a file ---------------
+  # --- print error message when failed to make a file
   case "$n" in -1) return 1;; esac
-  # --- print the path of the file -----------------------------------
+  # --- print the path of the file
   printf '%s\n' "$Path_target"
-  # --- return successfully ------------------------------------------
+  # --- return successfully
   return 0
 }
 
-# ===== PREPARATION ==================================================
 
-# --- initialize -----------------------------------------------------
-set -u
-PATH='/usr/bin:/bin'
-IFS=$(printf ' \t\n_'); IFS=${IFS%_}
-export IFS LC_ALL=C LANG=C PATH
-umask 0022
 
-# --- judge which is my flock command --------------------------------
+######################################################################
+# Main Routine
+######################################################################
+
+# === Judge which is my flock command ================================
 case $(uname) in
-  FreeBSD) CMD_flock='lockf'                   ;;
-  Linux)   CMD_flock='flock'                   ;;
-  NetBSD)  CMD_flock='flock'                   ;;
-  *)       echo 'Non-supported OS' 1>&2; exit 1;;
+  FreeBSD) CMD_flock='lockf'              ;;
+  Linux)   CMD_flock='flock'              ;;
+  NetBSD)  CMD_flock='flock'              ;;
+  *)       error_exit 1 'Non-supported OS';;
 esac
 
-# --- judge which I have started as a parent or a child --------------
+# === Judge which I have started as a parent or a child ==============
 while :; do
   pid=$$
   check=$(ps -Ao pid,ppid | awk '$1=='$pid'{print $2}')
@@ -187,16 +204,15 @@ done
 
 
 # ===== ROUTINE AS A PARENT ==========================================
-
 case $check in 'p')
-
+  #
   # --- exit trap (for parent) ---------------------------------------
   exit_trap () {
     trap - EXIT HUP INT QUIT PIPE ALRM TERM
     rm -f "${temp_datafile:-}"
     exit ${1:-0}
   }
-
+  #
   # --- parse the arguments ------------------------------------------
   case $# in             0) print_usage_and_exit;; esac
   printf '%s\n' "$1" | grep '^[0-9]\{1,\}$' >/dev/null 2>&1
@@ -215,18 +231,18 @@ case $check in 'p')
        maxlifetime=$1                                   ;;
     0) maxlifetime=$DEFAULT_MAXLIFETIME                 ;;
   esac
-
+  #
   # --- make stderr silent -------------------------------------------
   #exec 3>&2 2>/dev/null # (a)    If you want to debug this program,
   exec 2>/dev/null 3>&2  # (b)    enable (a) line instead of (b) line.
-
+  #
   # --- enable the exit trap -----------------------------------------
   trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM
-
+  #
   # --- investigate the caller process ID ----------------------------
   pid=$$
   pid=$(ps -Ao pid,ppid | awk '$1=='$pid'{print $2}')
-
+  #
   # --- prepare for locking -------------------------------------------
   sleep 100 & # This is to wait for success or failure of starting of the child
   sleepjob_pid=$!
@@ -236,7 +252,7 @@ case $check in 'p')
     *) printf '%s\n' "${0##*/}: Can't make a tempfile" 1>&3; exit_trap 2;;
   esac
   printf '%s' "-$sleepjob_pid" > "$temp_datafile"
-
+  #
   # --- execute locking process, which is the child ------------------
   case $(uname) in
     FreeBSD)
@@ -265,26 +281,23 @@ case $check in 'p')
       exit_trap 3
       ;;
   esac
-
+  #
   # --- return pid of the locking script -----------------------------
   wait $sleepjob_pid >/dev/null 2>&1
   cat "$temp_datafile" | grep -v '[^0-9]'
-
+  #
   # --- finish -------------------------------------------------------
   exit_trap $?
-
 ;;
 
 
 # ===== ROUTINE AS A CHILD ===========================================
-
 'c')
-
   # This child process must be called with the arguments
   #   $1: PID which this script waits for termination
   #   $2: timeout (secs)
   #   $3: file for telling my pid
-
+  #
   # --- validate the arguments ---------------------------------------
   case $# in 3) :;; *) echo '*** Invalid arguments'   1>&3; exit 10;; esac
   printf '%s\n' "$1" | grep -q '^[0-9]\{1,\}$'
@@ -292,7 +305,7 @@ case $check in 'p')
   printf '%s\n' "$2" | grep -q '^[0-9]\{1,\}$'
   case $? in 0) :;; *) echo '*** Invalid argument #2' 1>&3; exit 12;; esac
   [ -f "$3"  ] ||    { echo '*** Invalid argument #3' 1>&3; exit 13; }
-
+  #
   # --- set exiting trap ---------------------------------------------
   exit_trap() {
     trap - EXIT HUP INT QUIT PIPE ALRM TERM
@@ -301,12 +314,12 @@ case $check in 'p')
     exit ${1:-0}
   }
   trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM
-
+  #
   # --- tell my pid to the parent process with the tempfile ($3) -----
   notify_pid=$(tail -c +2 "$3")
   printf $$ > "$3"
   kill -s TERM "$notify_pid"
-
+  #
   # --- set my life time ---------------------------------------------
   case $2 in
     0) :                                                                      ;;
@@ -314,7 +327,7 @@ case $check in 'p')
        timerjob_pid=$!
        timersleep_pid=$(ps -Ao pid,ppid | awk '$2=='$timerjob_pid'{print $1}');;
   esac
-
+  #
   # --- wait for termination of the caller (is not the parent) process
   while :; do
     kill -0 $1 >/dev/null 2>&1
@@ -323,8 +336,7 @@ case $check in 'p')
     pollingsleep_pid=$!
     wait $pollingsleep_pid
   done
-
+  #
   # --- finish -------------------------------------------------------
   exit_trap 0
-
 ;; esac

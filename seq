@@ -18,7 +18,7 @@
 #        -w ............. Print all numbers with the same width, by padding
 #                         with leading zeros.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-07
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-09
 #
 # This is a public-domain software (CC0). It measns that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -32,13 +32,24 @@
 # Initial Configuration
 ######################################################################
 
+# === Initialize shell environment ===================================
+set -u
+umask 0022
+export LC_ALL=C
+export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
+
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [options] last
 	          ${0##*/} [options] first last
 	          ${0##*/} [options] first increment last
-	Version : 2017-02-07 02:01:03 JST
+	Arg&Opts: Almost compatible with GNU seq
+	          The following options are available and compatible with it
+	            -f <format>, -s <string>, -w
+	          But --by-myself is the only original option, it prevent
+	          from use the built-in same name command even if available
+	Version : 2017-02-09 00:27:15 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	            * Although the bult-in seq produces better performance
 	              than the POSIX commands set
@@ -50,15 +61,7 @@ error_exit() {
   exit $1
 }
 
-# ===== Prepare ======================================================
-
-# --- Initialize -----------------------------------------------------
-set -u
-umask 0022
-export LC_ALL=C
-export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
-
-# --- want to use "bult-in" seq, or not? -----------------------------
+# === Exec the built-in seq command if OK and exists =================
 case "${1:-}" in
   '--by-myself') shift                                                  ;;
               *) type seq >/dev/null 2>&1 && { exec seq "$@"; exit 1; } ;;
@@ -69,15 +72,16 @@ esac
 # Argument Parsing
 ######################################################################
 
-# === set default values =============================================
+# === Get the options and the filepath ===============================
+# --- initialize option parameters -----------------------------------
 fopt=''
 sopt='\n'
 wopt=0
 n_1st=1
 n_inc=1
 n_lst=''
-
-# === parse arguments ================================================
+#
+# --- get them -------------------------------------------------------
 optmode=''
 while :; do
   case $# in 0) break;; esac
@@ -142,7 +146,7 @@ case "$#" in
   *) 
 esac
 
-# === vaidate arguments ==============================================
+# === Vaidate arguments ==============================================
 [ $wopt -gt 0 ] && [ -n "$fopt" ] && {
   error_exit 1 'format string may not be specified when printing equal width strings'
 }
@@ -219,9 +223,10 @@ case "$n_inc" in [0-9.]*) n_inc="+$n_inc";; esac
 
 
 ######################################################################
-# Run "seq"-like script
+# Main routine
 ######################################################################
 
+# === Run "seq"-like script ==========================================
 awk 'BEGIN{                                                 #
        if ('"$n_inc"' >= 0) {                               #
          # --- increment routine -------------------------- #
@@ -244,3 +249,10 @@ awk 'BEGIN{                                                 #
        }                                                    #
      }'                                                     |
 grep ^
+
+
+######################################################################
+# Finish
+######################################################################
+
+exit 0
