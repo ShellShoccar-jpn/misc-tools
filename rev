@@ -13,7 +13,7 @@
 #                         built-in in performance
 #                         with leading zeros.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-09
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-10
 #
 # This is a public-domain software (CC0). It measns that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -40,7 +40,7 @@ print_usage_and_exit () {
 	Arg&Opts: Almost compatible with the original rev command
 	          But --by-myself is the only original option, it prevent
 	          from use the built-in same name command even if available
-	Version : 2017-02-09 00:41:49 JST
+	Version : 2017-02-10 00:55:50 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	            * Although the bult-in rev produces better performance
 	              than the POSIX commands set
@@ -53,10 +53,17 @@ error_exit() {
 }
 
 # === Exec the built-in rev command if OK and exists =================
-case "${1:-}" in
-  '--by-myself') shift                                                  ;;
-              *) type rev >/dev/null 2>&1 && { exec rev "$@"; exit 1; } ;;
+by_myself=0
+case "${1:-}" in 
+  '--by-myself')
+     shift; by_myself=1
+     ;;
+  *) case "$(d=${0%/*}/;[ "_$d" = "_$0/" ]||cd "$d";echo "$(pwd)/${0##*/}")" in
+       "$(command -v rev)") by_myself=1;;
+     esac
+     ;;
 esac
+case $by_myself) in 0) exec rev "$@"; exit 1;; esac
 
 
 ######################################################################

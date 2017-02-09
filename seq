@@ -18,7 +18,7 @@
 #        -w ............. Print all numbers with the same width, by padding
 #                         with leading zeros.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-09
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-10
 #
 # This is a public-domain software (CC0). It measns that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -49,7 +49,7 @@ print_usage_and_exit () {
 	            -f <format>, -s <string>, -w
 	          But --by-myself is the only original option, it prevent
 	          from use the built-in same name command even if available
-	Version : 2017-02-09 00:27:15 JST
+	Version : 2017-02-10 01:06:21 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	            * Although the bult-in seq produces better performance
 	              than the POSIX commands set
@@ -62,10 +62,17 @@ error_exit() {
 }
 
 # === Exec the built-in seq command if OK and exists =================
-case "${1:-}" in
-  '--by-myself') shift                                                  ;;
-              *) type seq >/dev/null 2>&1 && { exec seq "$@"; exit 1; } ;;
+by_myself=0
+case "${1:-}" in 
+  '--by-myself')
+     shift; by_myself=1
+     ;;
+  *) case "$(d=${0%/*}/;[ "_$d" = "_$0/" ]||cd "$d";echo "$(pwd)/${0##*/}")" in
+       "$(command -v seq)") by_myself=1;;
+     esac
+     ;;
 esac
+case $by_myself) in 0) exec seq "$@"; exit 1;; esac
 
 
 ######################################################################
