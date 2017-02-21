@@ -82,7 +82,7 @@ case "${1:-}" in
      shift; by_myself=1
      ;;
   *) case "$(d=${0%/*}/;[ "_$d" = "_$0/" ]||cd "$d";echo "$(pwd)/${0##*/}")" in
-       "$(command -v base64)") by_myself=1;;
+       "$(command -v base64 2>/dev/null)") by_myself=1;;
      esac
      ;;
 esac
