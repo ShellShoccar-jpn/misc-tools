@@ -23,7 +23,7 @@
 #
 # * Any invalid time make me return the text "-1" with the return code 0.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-23
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-24
 #
 # This is a public-domain software. It means that all of the people
 # can use this with no restrictions at all. By the way, I am fed up

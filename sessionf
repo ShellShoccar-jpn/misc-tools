@@ -39,7 +39,7 @@
 # * On "validate", "reuse" and "remove" subcommands, you can set the session
 #   file directory in the <id> argument instead of the "at" argument.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2017-02-23
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-24
 #
 # This is a public-domain software. It means that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
