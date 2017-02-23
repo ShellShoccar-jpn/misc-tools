@@ -3,7 +3,7 @@
 # base designed by Nobuaki Tounaka
 # written by Rich Mikan
 #
-# This is a public-domain software (CC0). It measns that all of the
+# This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
 # By the way, I am fed up the side effects which are broght about by
 # the major licenses.
@@ -13,7 +13,7 @@ print_usage_and_exit () {
   cat <<-__USAGE 1>&2
 	Usage   : ${0##*/} [+<n>h] <f1> <f2> ... <file>
 	        : ${0##*/} -d <string>
-	Version : Mon Mar 28 01:28:43 JST 2016
+	Version : 2017-02-24 00:38:02 JST
 	        : (POSIX.1 Bourne Shell/POSIX.1 commands/UTF-8)
 __USAGE
   exit 1

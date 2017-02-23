@@ -37,9 +37,9 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2016/09/10
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2017-02-23
 #
-# This is a public-domain software. It measns that all of the people
+# This is a public-domain software. It means that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
 # the side effects which are broght about by the major licenses.
 #
@@ -71,7 +71,7 @@ print_usage_and_exit () {
 	Return  : $?     ==0 ... one or more locking were success
 	                 !=0 ... all failure
 	          stdout ....... enerated path of the lockfile (just lock-id)
-	Version : Sat Sep 10 15:28:58 JST 2016
+	Version : 2017-02-24 00:38:02 JST
 __USAGE
   exit 1
 }

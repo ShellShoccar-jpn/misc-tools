@@ -44,9 +44,9 @@
 #              :
 #          kill $flock_pid
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-09
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-23
 #
-# This is a public-domain software. It measns that all of the people
+# This is a public-domain software. It means that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
 # the side effects which are broght about by the major licenses.
 #
@@ -75,7 +75,7 @@ print_usage_and_exit () {
 	                          (0 means infinity, and default=$DEFAULT_MAXLIFETIME)
 	          * See the document at the source code of this command
 	            for more infomation
-	Version : 2017-02-09 01:30:56
+	Version : 2017-02-24 00:38:02
 	USAGE
   exit 1
 }

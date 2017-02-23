@@ -33,9 +33,9 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Rich Mikan (richmikan[at]richlab.org) at 2016/01/22
+# Written by Rich Mikan (richmikan[at]richlab.org) at 2017-02-23
 #
-# This is a public-domain software. It measns that all of the people
+# This is a public-domain software. It means that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
 # the side effects which are broght about by the major licenses.
 #
@@ -60,7 +60,7 @@ print_usage_and_exit () {
 	          -w <maxwaiting> ... maximum waiting seconds to succeed locking
 	                              (-1 means waiting infinitely)
 	                              The default value is 10.
-	Version : Fri Jan 22 18:59:37 JST 2016
+	Version : 2017-02-24 00:38:02 JST
 __USAGE
   exit 1
 }
