@@ -11,7 +11,7 @@
 #        -R, -r, --recursive
 #            recursively
 #        -p, --perform, --start
-#            do GRER actually, if you run this command without the
+#            do GREO actually, if you run this command without the
 #            options, it will be work as rehearsal mode
 #        --quick-update
 #            replace the file(s) without tempfile (only for professional)
@@ -47,7 +47,7 @@ print_usage_and_exit () {
 	          -R, -r, --recursive
 	              recursively
 	          -p, --perform, --start
-	              do GRER actually, if you run this command without the
+	              do GREO actually, if you run this command without the
 	              options, it will be work as rehearsal mode
 	          --quick-update
 	              replace the file(s) without tempfile (only for professional)
@@ -370,7 +370,7 @@ grep $opt4grep "$pat4grep" $devnull "$@"                              |
 sed 's/:.*$//'                                                        |
 uniq                                                                  |
                                                                       #
-# === GRERing ======================================================= #
+# === GREOing ======================================================= #
 while IFS= read -r file0; do                                          #
   file=$file0                                                         #
   # 1) --- validate file                                              #
