@@ -343,8 +343,6 @@ case $optp in 0)
   if find "$@" 2>/dev/null | grep -q ':' 2>/dev/null; then
     printf '%s: %s' "${0##*/}" 'WARNING!! Some filepathed contain ":".' 1>&2
     printf '%s\n'              ' These cause destroying other files.'   1>&2
-  else
-    error_exit $? 'No file matched'
   fi
   if grep $opt4grep "$pat4grep" $devnull "$@" 2>/dev/null; then
     exit 0
