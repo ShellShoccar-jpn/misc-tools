@@ -40,7 +40,7 @@
 # 3. I want to replace all places of string "-R" into "-r", but the strings of
 #    which start by "-" will be misunderstood as an option. How should I type
 #    for?
-#      $ greo -p -- '-R' 'HOGE' *
+#      $ greo -p -- '-R' '-r' *
 #
 #
 # Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-24
@@ -88,7 +88,7 @@ print_usage_and_exit () {
 	              * Quickly replacing but permission, owner/group, link, ACL
 	                informations will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 2017-02-24 12:14:40 JST
+	Version : 2017-02-24 19:47:05 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
