@@ -9,21 +9,20 @@
 #            These are the 1st and 2nd arguments of s/1/2/g.
 #            Available meta-chr. set as regular expression is
 #            Basic Regular Expression, you can see on sed manual.
+#            However, you do not have to escape "/" in the strings.
 #        file#n
 #            A file to overwrite
-# OPTS : -F, --fixed-strings
+# OPTS : -F, --fixed-strings (compatible with the same options of grep)
 #            Regard both arguments ("regexp", "replacement") as
 #            not regexp strings but simple string
-#            it is the same function as "-F" on grep
-#        -R, -r, --recursive
+#        -R, -r, --recursive (compatible with the same options of grep)
 #            Read all files under each directory, recursively
-#            it is the same function as "-R" on grep
 #        -p, --perform, --start
 #            Do GREO actually, if you run this command without the
 #            options, it will be work as rehearsal mode
 #        --quick-overwrite
 #            Replace the file(s) without tempfile (only for professional)
-#            * Quickly replacing but permission, owner/group, link, ACL
+#            * Quickly overwriting but permission, owner/group, link, ACL
 #              informations will be reset
 #        --  Finish recognizing the following arguments as options
 #
@@ -71,24 +70,23 @@ print_usage_and_exit () {
 	              These are the 1st and 2nd arguments of s/1/2/g.
 	              Available meta-chr. set as regular expression is
 	              Basic Regular Expression, you can see on sed manual.
+	              However, you do not have to escape "/" in the strings.
 	          file #n
 	              A file to overwrite
-	Options : -F, --fixed-strings
+	Options : -F, --fixed-strings (compatible with the same options of grep)
 	              Regard both arguments ("regexp", "replacement") as
 	              not regexp strings but simple string
-	              it is the same function as "-F" on grep
-	          -R, -r, --recursive
+	          -R, -r, --recursive (compatible with the same options of grep)
 	              Read all files under each directory, recursively
-	              it is the same function as "-R" on grep
 	          -p, --perform, --start
 	              Do GREO actually, if you run this command without the
 	              options, it will be work as rehearsal mode
 	          --quick-overwrite
 	              Replace the file(s) without tempfile (only for professional)
-	              * Quickly replacing but permission, owner/group, link, ACL
+	              * Quickly overwriting but permission, owner/group, link, ACL
 	                informations will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 2017-02-24 19:47:05 JST
+	Version : 2017-02-24 21:53:10 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1

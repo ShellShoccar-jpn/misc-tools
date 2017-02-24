@@ -1,41 +1,78 @@
-#! /bin/sh
+#!/bin/sh
 
-# base designed by Nobuaki Tounaka
-# written by Rich Mikan
+######################################################################
 #
-# This is a public-domain software (CC0). It means that all of the
-# people can use this for any purposes with no restrictions at all.
-# By the way, I am fed up the side effects which are broght about by
-# the major licenses.
+# HIRA2KATA - Convert from Hiragana into Katakana in the Selected Fields
+#
+# USAGE: hira2kata [+<n>h] <f1> <f2> ... <file>
+#        hira2kata -d <f1> <f2> ... <string>
+#
+#        <fn> .... Time field number you want to convert
+#        <file> .. Text file which contains some time field to convert
+#        <string>  It will be explained in -d option
+#        -d ...... Direct Mode :
+#                  It make this command regard the last argument (<string>)
+#                  as a field formatted string instead of <file>
+#        +<n>h ... Regards the top <n> lines as comment and Print without
+#                  converting
+#
+# Designed originally by Nobuaki Tounaka
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-24
+#
+# This is a public-domain software. It means that all of the people
+# can use this with no restrictions at all. By the way, I am fed up
+# the side effects which are broght about by the major licenses.
+#
+######################################################################
 
-# print the usage and exit
-print_usage_and_exit () {
-  cat <<-__USAGE 1>&2
-	Usage   : ${0##*/} [+<n>h] <f1> <f2> ... <file>
-	        : ${0##*/} -d <string>
-	Version : 2017-02-24 00:38:02 JST
-	        : (POSIX.1 Bourne Shell/POSIX.1 commands/UTF-8)
-__USAGE
-  exit 1
-}
 
-# initialize
+######################################################################
+# Initial Configuration
+######################################################################
+
+# === Initialize shell environment ===================================
 set -u
 umask 0022
-PATH='/usr/bin:/bin'
-IFS=$(printf ' \t\n_'); IFS=${IFS%_}
-export IFS LC_ALL=C LANG=C PATH
+export LC_ALL=C
+export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
+
+# === Define the functions for printing usage and error message ======
+print_usage_and_exit () {
+  cat <<-USAGE 1>&2
+	Usage   : ${0##*/} [+<n>h] <f1> <f2> ... <file>
+	          ${0##*/} -d <f1> <f2> ... <string>
+	Options : -d ...... Direct Mode :
+	                    It make this command regard the last argument (<string>)
+	                    as a field formatted string instead of <file>
+	          +<n>h ... Regards the top <n> lines as comment and Print without
+	                    converting
+	Version : 2017-02-24 21:43:24 JST
+	          (POSIX.1 Bourne Shell/POSIX.1 commands/UTF-8)
+	USAGE
+  exit 1
+}
+error_exit() {
+  [ -n "$2" ] && echo "${0##*/}: $2" 1>&2
+  exit $1
+}
+
+
+######################################################################
+# Parse Arguments
+######################################################################
+
+# === Get the options and the filepath ===============================
+# --- initialize option parameters -----------------------------------
 directmode=0
 directstr=''
-awkc0=''
 file=''
 fldnums=''
 all_fields=0
 use_stdin=0
 opt_part=1
-hopt=0
-
-# parse the arguments
+opth=0
+#
+# --- get them -------------------------------------------------------
 case "$#${1:-}" in
   1-h|1--help|1--version) print_usage_and_exit;;
 esac
@@ -45,14 +82,14 @@ case $# in [!0]*)
     i=$((i+1))
     fldnum=''
     # direct mode processing
-    if   [ \( $opt_part -ne 0 \) -a \( "_$arg" = '_-d'        \) ]; then
+    if   [ $opt_part -ne 0 ] && [ "_$arg" = '_-d'        ]; then
       directmode=1
       continue
-    elif [ \( $opt_part -ne 0 \) -a \( "_$arg" != "_${arg#+}" \) ]; then
+    elif [ $opt_part -ne 0 ] && [ "_$arg" != "_${arg#+}" ]; then
       s=$(printf '%s\n' "$arg" | sed 's/^+\([0-9]*\)h$/\1/')
       case "$s" in "$arg") print_usage_and_exit;; esac
-      case "$s" in     '') hopt=1; continue    ;; esac
-      hopt=$(expr $s + 0)
+      case "$s" in     '') opth=1; continue    ;; esac
+      opth=$(expr $s + 0)
       continue
     fi
     opt_part=0
@@ -60,8 +97,7 @@ case $# in [!0]*)
     # separate arg to arg1, arg2
     arg1=${arg%%/*}
     arg2=${arg##*/}
-    if [ \( "_${arg1}/${arg2}" = "_$arg"   \) -a \
-         \( -n "$arg1" \) -a \( -n "$arg2" \)    ]
+    if [ "_${arg1}/${arg2}" = "_$arg" ] && [ -n "$arg1" ] && [ -n "$arg2" ]
     then
       :
     else
@@ -78,7 +114,7 @@ case $# in [!0]*)
         j=$((j+1))
       fi
     done
-    if [ \( $j -eq 2 \) -o \( \( $j -eq 1 \) -a \( -z "$arg2" \) \) ]; then
+    if [ $j -eq 2 ] || ([ $j -eq 1 ] && [ -z "$arg2" ]); then
       fldnums="$fldnums $arg"
       continue
     fi
@@ -89,26 +125,25 @@ case $# in [!0]*)
   done
   ;;
 esac
-# (if you want to regard no fldnums as all, set all_fields=1 instead of exit)
+
+# === Validate the arguments =========================================
+# (if you want to regard no fldnums at all, set all_fields=1 instead of exit)
 case "$fldnums" in '') all_fields=1;; esac
 case $directmode in
   0) case "$file" in '') file='-';; esac
-     if [ \( "_$file" = '_-'               \) -o \
-          \( "_$file" = '_/dev/stdin'      \) -o \
-          \( "_$file" = '_/dev/fd/0'       \) -o \
-          \( "_$file" = '_/proc/self/fd/0' \)    ]
-     then
+     if [ "_$file" = '_-'               ] ||
+        [ "_$file" = '_/dev/stdin'      ] ||
+        [ "_$file" = '_/dev/fd/0'       ] ||
+        [ "_$file" = '_/proc/self/fd/0' ]  ; then
        use_stdin=$((use_stdin+1))
      fi
-     if [ \( ! -f "$file"     \) -a \
-          \( ! -c "$file"     \) -a \
-          \( ! -p "$file"     \) -a \
-          \( "_$file" != '_-' \)    ]
-     then
+     if [ ! -f "$file"     ] &&
+        [ ! -c "$file"     ] &&
+        [ ! -p "$file"     ] &&
+        [ "_$file" != '_-' ]  ; then
        print_usage_and_exit
-     elif [ \( ! -r "$file" \) -a \( "_$file" != '_-' \) ]; then
-       printf '%s\n' "${0##*/}: Cannot open the file" 1>&2
-       exit 1
+     elif [ ! -r "$file" ] && [ "_$file" != '_-' ]; then
+       error_exit 1 'Cannot open the file'
      fi
      ;;
   *) case "$directstr" in '') print_usage_and_exit;; esac
@@ -117,7 +152,12 @@ case $directmode in
 esac
 case "$file" in -|/*|./*|../*) :;; *) file="./$file";; esac
 
-# make the part of the awk code
+
+######################################################################
+# Prepare for the Main Routine
+######################################################################
+
+# === Generate the partial code for AWK ==============================
 case $all_fields in
   0) awkc0=$(echo "$fldnums"                           |
              sed 's/^0\{1,\}\([0-9]\)/\1/'             |
@@ -250,7 +290,7 @@ case $all_fields in
      ;;
 esac
 
-# make awk code
+# === Generate the AWK code for hira2kata operation ==================
 awkcode='
 BEGIN {
   for (i=0; i<hdr_skip; i++) {
@@ -286,7 +326,7 @@ function utf8hira2kata_prep( i,l) {
   for(i=1;i<=255;i++){chr[i]=sprintf("%c",i);asc[chr[i]]=i;}
 
   # memorize other values
-  offset=14909824; # 「ぁ」の1つ手前の文字の位置
+  offset=14909824; # The previous code of "ぁ"
 }
 
 function utf8hira2kata(s_in, i,s,s1,s2,utf8c,delta,x,y,z,s_out) {
@@ -306,19 +346,19 @@ function utf8hira2kata(s_in, i,s,s1,s2,utf8c,delta,x,y,z,s_out) {
       s1 = substr(s_in,i+1,1);
       s2 = substr(s_in,i+2,1);
       utf8c = asc[s]*65536 + asc[s1]*256 + asc[s2];
-      if        (utf8c<(offset+  1)) { # 「ぁ」未満
+      if        (utf8c<(offset+  1)) { # lower range than "ぁ"
         delta=   0;
-      } else if (utf8c<(offset+ 32)) { # 「ぁ」～「た」
+      } else if (utf8c<(offset+ 32)) { # between "ぁ" and "た"
         delta= 288;
-      } else if (utf8c<(offset+ 64)) { # 「だ」～「み」
+      } else if (utf8c<(offset+ 64)) { # between "だ" and "み"
         delta= 480;
-      } else if (utf8c<(offset+256)) { # 未定義文字区間
+      } else if (utf8c<(offset+256)) { # out of range
         delta=   0;
-      } else if (utf8c<(offset+279)) { # 「む」～「ゖ」
+      } else if (utf8c<(offset+279)) { # between "む" and "ゖ"
         delta= 288;
-      } else if (utf8c<(offset+285)) { # 対象外・未定義文字区間
+      } else if (utf8c<(offset+285)) { # out of range
         delta=   0;
-      } else if (utf8c<(offset+287)) { # 「ゝ」「ゞ」
+      } else if (utf8c<(offset+287)) { # "ゝ" and "ゞ"
         delta= 288;
       } else {
         delta=   0;
@@ -350,9 +390,13 @@ function utf8hira2kata(s_in, i,s,s1,s2,utf8c,delta,x,y,z,s_out) {
 }
 '
 
-# main
+
+######################################################################
+# Main Routine
+######################################################################
+
 case $directmode in
-  0) exec awk -v hdr_skip=$hopt "$awkcode" "$file";;
+  0) exec awk -v hdr_skip=$opth "$awkcode" "$file";;
   *)      printf '%s' "$directstr"                |
-          awk -v hdr_skip=$hopt "$awkcode"        ;;
+          awk -v hdr_skip=$opth "$awkcode"        ;;
 esac

@@ -1,21 +1,29 @@
-#! /bin/sh
+#!/bin/sh
 
 ######################################################################
 #
-# is_furigana
-# ファイルとして与えられた文字列が
-# UTF-8的にふりがな(平仮名・片仮名のみ)かどうかを戻り値で返す
-# (例1) echo "あか"  | is_furigana を実行すると0を返す。
-# (例2) echo "ﾐﾄﾞﾘ"  | is_furigana を実行すると0を返す。
-# (例3) echo "ｱｵ1号" | is_furigana を実行すると0以外を返す。
-# (注1) 空白や文字列最後以外の改行が含まれていると、ふりがなとは認定しない。
-# (注2) 空文字列でもふりがなとは認定しない。
+# IS_FURIGANA - Validate All of the Given Letters Are "Furigana"
 #
-# Usage  : is_furigana <file>
+# USAGE: is_furigana <file>
+# RET  : $? ... 0 will be returned only when all of the given letters are
+#               furigana
 #
-# Return : $?に判定結果
+# === Example ===
+# 1. In the following cases, 0 will be returned
+#      > echo "あか"      | is_furigana
+#      > echo "ﾐﾄﾞﾘ"      | is_furigana
+#      > printf 'ｱｲｳｴｵ\n' | is_furigana
+#    * <0x0A> which is at the end of string will be allowed
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-24
+# 2. In the following cases, >0 will be returned
+#      > echo "ｱｵ1号"                 | is_furigana
+#      > echo "とうきょうと ちよだく" | is_furigana
+#      > printf 'ｱｲ\nｳｴｵ'             | is_furigana
+#    * <0x0A> which is except the end of string will not be allowed
+#    * blank (0x20) will be not also allowd
+#
+#
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-25
 #
 # This is a public-domain software. It means that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -23,39 +31,58 @@
 #
 ######################################################################
 
-# print the usage and exit
-print_usage_and_exit () {
-  cat <<-__USAGE 1>&2
-	Usage   : ${0##*/} <file>
-	Version : 2017-02-24 00:38:02 JST
-__USAGE
-  exit 1
-}
 
-# initalize
+######################################################################
+# Initial Configuration
+######################################################################
+
+# === Initialize shell environment ===================================
 set -u
 umask 0022
-PATH='/usr/bin:/bin'
-IFS=$(printf ' \t\n_'); IFS=${IFS%_}
-export IFS LC_ALL=C LANG=C PATH
+export LC_ALL=C
+export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
 
-if [ \( -f "${1:-}"      \) -o \
-     \( -c "${1:-}"      \) -o \
-     \( -p "${1:-}"      \) -o \
-     \( "_${1:-}" = '_-' \)    ]; then
+# === Define the functions for printing usage and error message ======
+print_usage_and_exit () {
+  cat <<-USAGE 1>&2
+	Usage   : ${0##*/} <file>
+	Version : 2017-02-24 00:38:02 JST
+	USAGE
+  exit 1
+}
+error_exit() {
+  [ -n "$2" ] && echo "${0##*/}: $2" 1>&2
+  exit $1
+}
+
+
+######################################################################
+# Parse Arguments
+######################################################################
+
+# === Get the filepath ===============================================
+if [ -f "${1:-}"      ] ||
+   [ -c "${1:-}"      ] ||
+   [ -p "${1:-}"      ] ||
+   [ "_${1:-}" = '_-' ]  ; then
   file="$1"
 elif [ $# -lt 1 ]; then
   file='-'
 else
   print_usage_and_exit
 fi
-if [ \( ! -r "$file" \) -a \( "_$file" != '_-' \) ]; then
-  printf '%s\n' "${0##*/}: Cannot open the file" 1>&2
-  exit 1
+
+# === Validate the arguments =========================================
+if [ ! -r "$file" ] && [ "_$file" != '_-' ]; then
+  error_exit 1 'Cannot open the file'
 fi
 case "$file" in -|/*|./*|../*) :;; *) file="./$file";; esac
 
-# main
+
+######################################################################
+# Main Routine
+######################################################################
+
 exec awk '
 BEGIN {
   # register all character codes
@@ -90,35 +117,35 @@ BEGIN {
       s1 = substr($0,i+1,1);
       s2 = substr($0,i+2,1);
       utf8c = asc[s]*65536 + asc[s1]*256 + asc[s2];
-      if        (utf8c < 14909825) { # 範囲外
+      if        (utf8c < 14909825) { # out of range
         ret=21; exit;
-      } else if (utf8c < 14909888) { # ぁ～み
+      } else if (utf8c < 14909888) { # between "ぁ" and "み"
         i+=2; continue;
-      } else if (utf8c < 14910080) { # 範囲外
+      } else if (utf8c < 14910080) { # out of range
         ret=22; exit;
-      } else if (utf8c < 14910103) { # む～ゖ
+      } else if (utf8c < 14910103) { # between "む" and "ゖ"
         i+=2; continue;
-      } else if (utf8c < 14910106) { # 範囲外
+      } else if (utf8c < 14910106) { # out of range
         ret=23; exit;
-      } else if (utf8c < 14910111) { # ゜～ゞ
+      } else if (utf8c < 14910111) { # between "゜" and "ゞ"
         i+=2; continue;
-      } else if (utf8c < 14910113) { # 範囲外
+      } else if (utf8c < 14910113) { # out of range
         ret=24; exit;
-      } else if (utf8c < 14910144) { # ァ～タ
+      } else if (utf8c < 14910144) { # between "ァ" and "タ"
         i+=2; continue;
-      } else if (utf8c < 14910336) { # 範囲外
+      } else if (utf8c < 14910336) { # out of range
         ret=25; exit;
-      } else if (utf8c < 14910399) { # ダ～ヾ
+      } else if (utf8c < 14910399) { # between "ダ" and "ヾ"
         i+=2; continue;
-      } else if (utf8c < 15711653) { # 範囲外
+      } else if (utf8c < 15711653) { # out of range
         ret=26; exit;
-      } else if (utf8c < 15711680) { # ･～ｿ
+      } else if (utf8c < 15711680) { # between "･" and "ｿ"
         i+=2; continue;
-      } else if (utf8c < 15711872) { # 範囲外
+      } else if (utf8c < 15711872) { # out of range
         ret=27; exit;
-      } else if (utf8c < 15711904) { # ﾀ～ﾟ
+      } else if (utf8c < 15711904) { # between "ﾀ" and "ﾟ"
         i+=2; continue;
-      } else                       { # 範囲外
+      } else                       { # out of range
         ret=28; exit;
       }
       i += 2;
