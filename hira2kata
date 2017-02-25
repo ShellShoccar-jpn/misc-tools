@@ -17,7 +17,7 @@
 #                  converting
 #
 # Designed originally by Nobuaki Tounaka
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-24
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-25
 #
 # This is a public-domain software. It means that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -46,7 +46,7 @@ print_usage_and_exit () {
 	                    as a field formatted string instead of <file>
 	          +<n>h ... Regards the top <n> lines as comment and Print without
 	                    converting
-	Version : 2017-02-24 21:43:24 JST
+	Version : 2017-02-25 22:20:02 JST
 	          (POSIX.1 Bourne Shell/POSIX.1 commands/UTF-8)
 	USAGE
   exit 1
@@ -136,6 +136,9 @@ case $directmode in
         [ "_$file" = '_/dev/fd/0'       ] ||
         [ "_$file" = '_/proc/self/fd/0' ]  ; then
        use_stdin=$((use_stdin+1))
+       [ $use_stdin -le 1 ] || {
+         error_exit 1 'stdin cannot be opend only once: '"$file"
+       }
      fi
      if [ ! -f "$file"     ] &&
         [ ! -c "$file"     ] &&
