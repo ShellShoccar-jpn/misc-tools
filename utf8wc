@@ -40,7 +40,7 @@ export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <file> [file...]
-	Version : 2017-02-25 15:54:56 JST
+	Version : 2017-02-25 18:18:30 JST
 	USAGE
   exit 1
 }
@@ -60,85 +60,82 @@ case $# in 0) set -- -;; esac
 
 
 ######################################################################
-# Prepare for the Main Routine
-######################################################################
-
-# === Set AWK code into a shell variable =============================
-# (The reason that using shell variable for AWK code is to let xargs pass
-#  ARG_MAX limit)
-awkcode='
-BEGIN {
-  RS           = "\n";
-  fileno       =    0;
-  numofletters =    0;
-
-  while (getline line) {
-    if (FNR==1) {
-      fileno++;
-      if (NR>1) {print numofletters;numofletters=0;}
-      catchup_fileno();
-    } else {
-      numofletters++;
-    }
-    numofletters += utf8strlen(line);
-  }
-
-}
-END {
-  if(NR>0){print numofletters;}
-  catchup_fileno();
-}
-
-# catch up fileno because files which is 0 byte will be skipped
-function catchup_fileno() {
-  while (1) {
-    if (fileno      >=ARGC    ) {break;}
-    if (ARGV[fileno]==FILENAME) {break;}
-    print 0;
-    fileno++;
-  }
-}
-
-# strlen for UTF-8 (main)
-function utf8strlen(str, len,i,l1,l2,l3) {
-  len = 0;
-  for (i = 1; i <= length(str); i++) {
-    len++;
-    l1=substr(str, i, 1);
-    if        (l1 =="\010") {len-=2;continue;
-    } else if (l1 < "\200") {       continue;
-    } else if (l1 < "\300") {len--; continue;
-    } else if (l1 < "\340") {i++;
-    } else if (l1 < "\360") {
-      if (l1 == "\357") {
-        l2 = substr(str, i+1, 1);
-        if (l2 == "\275") {
-          l3 = substr(str, i+2, 1);
-          if ((l3 >= "\240") && (l3 < "\300")) {len--;}
-        } else if (l2 == "\276") {
-          l3 = substr(str, i+2, 1);
-          if ((l3 >= "\200") && (l3 < "\240")) {len--;}
-        }
-      }
-      i += 2;
-    } else if (l1 < "\370") {i += 3;
-    } else if (l1 < "\374") {i += 4;
-    } else if (l1 < "\376") {i += 5;
-    } else                  {len-- ; continue;}
-    len++;
-  }
-  return len;
-}'
-
-
-######################################################################
 # Main
 ######################################################################
 
-# * "-E" is a measure to keep Korn Shell from applying backslash
-#   interpretation. But the other shells' echo don't know the option
-#   and print it out honestly. So the following sed will cut it if it
-#   exists.
-# * The string "dummy" is to make echo not regard the following string
-#   as a option.
-echo -E dummy "$@" | sed 's/^\(-E \)\{0,1\}dummy //' | xargs awk "$awkcode"
+ret=0
+for file in "$@"; do
+  awk 'BEGIN {
+         RS           = "\n";
+         fileno       =    0;
+         numofletters =    0;
+
+         while (getline line) {
+           if (FNR==1) {
+             fileno++;
+             if (NR>1) {print numofletters;numofletters=0;}
+             catchup_fileno();
+           } else {
+             numofletters++;
+           }
+           numofletters += utf8strlen(line);
+         }
+
+       }
+       END {
+         if(NR>0){print numofletters;}
+         catchup_fileno();
+       }
+
+       # catch up fileno because files which is 0 byte will be skipped
+       function catchup_fileno() {
+         while (1) {
+           if (fileno      >=ARGC    ) {break;}
+           if (ARGV[fileno]==FILENAME) {break;}
+           print 0;
+           fileno++;
+         }
+       }
+
+       # strlen for UTF-8 (main)
+       function utf8strlen(str, len,i,l1,l2,l3) {
+         len = 0;
+         for (i = 1; i <= length(str); i++) {
+           len++;
+           l1=substr(str, i, 1);
+           if        (l1 =="\010") {len-=2;continue;
+           } else if (l1 < "\200") {       continue;
+           } else if (l1 < "\300") {len--; continue;
+           } else if (l1 < "\340") {i++;
+           } else if (l1 < "\360") {
+             if (l1 == "\357") {
+               l2 = substr(str, i+1, 1);
+               if (l2 == "\275") {
+                 l3 = substr(str, i+2, 1);
+                 if ((l3 >= "\240") && (l3 < "\300")) {len--;}
+               } else if (l2 == "\276") {
+                 l3 = substr(str, i+2, 1);
+                 if ((l3 >= "\200") && (l3 < "\240")) {len--;}
+               }
+             }
+             i += 2;
+           } else if (l1 < "\370") {i += 3;
+           } else if (l1 < "\374") {i += 4;
+           } else if (l1 < "\376") {i += 5;
+           } else                  {len-- ; continue;}
+           len++;
+         }
+         return len;
+       }' "$file" 2>/dev/null
+  [ $? -eq 0 ] || {
+    echo "${0##*/}: Cannot open the file: $file" 1>&2
+    ret=1
+  }
+done
+
+
+######################################################################
+# Finish
+######################################################################
+
+exit $ret
