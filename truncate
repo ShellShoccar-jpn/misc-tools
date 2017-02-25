@@ -62,7 +62,7 @@ print_usage_and_exit () {
 	                            relative, otherwise absolute.
 	                            And when the unit suffix is written at last,
 	                            the value is multiplied by the unit suffix.
-	Version : 2017-02-26 00:16:17 JST
+	Version : 2017-02-26 00:56:29 JST
 	USAGE
   exit 1
 }
@@ -70,7 +70,7 @@ warning() {
   ${1+:} false && echo "${0##*/}: $1" 1>&2
 }
 error_exit() {
-  [ -n "$2"       ] && echo "${0##*/}: $2" 1>&2
+  ${2+:} false && echo "${0##*/}: $2" 1>&2
   exit $1
 }
 exit_trap() {
