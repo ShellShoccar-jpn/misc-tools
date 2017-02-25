@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/bin/sh
  
 ######################################################################
 #
@@ -7,23 +7,23 @@
 # USAGE: truncate [--by-myself] [-c] -s [+|-]size[K|k|M|m|G|g|T|t] file ...
 #        truncate [--by-myself] [-c] -r rfile file ...
 #
-#        "--by-myself" ..... (write as the 1st argument when use)
-#                            Not use the "built-in" mktemp command
-#                            and always do mktemp by myself but it is
-#                            inferior to the built-in in performance
-#        "-c" .............. Do not create files if they do not exist.
-#                            The truncate utility does not treat this
-#                            as an error.
-#        "-r rfile" ........ Truncate or extend files to the length of
-#                            the file rfile.
-#        "-s [+|-]size[K|k|M|m|G|g|T|t]"
-#                        ... Truncate or extend files by the size value.
-#                            When "+" or "-" is written at first, it means
-#                            relative, otherwise absolute.
-#                            And when the unit suffix is written at last,
-#                            the value is multiplied by the unit suffix.
+#        --by-myself ..... (write as the 1st argument when use)
+#                          Not use the "built-in" mktemp command
+#                          and always do mktemp by myself but it is
+#                          inferior to the built-in in performance
+#        -c .............. Do not create files if they do not exist.
+#                           The truncate utility does not treat this
+#                           as an error.
+#        -r <rfile> ...... Truncate or extend files to the length of
+#                          the file <rfile>.
+#        -s [+|-]<size>[K|k|M|m|G|g|T|t]
+#                      ... Truncate or extend files by the <size> value.
+#                          When "+" or "-" is written at first, it means
+#                          relative, otherwise absolute.
+#                          And when the unit suffix is written at last,
+#                          the value is multiplied by the unit suffix.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-24
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-26
 #
 # This is a public-domain software. It means that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -31,39 +31,83 @@
 #
 ######################################################################
 
-# print the usage and exit
-print_usage_and_exit () {
-  cat <<-__USAGE 1>&2
-	Usage   : ${0##*/} [--by-myself] [-c] -s [+|-]size[K|k|M|m|G|g|T|t] file ...
-	        : ${0##*/} [-c] -r rfile file ...
-	Version : 2017-02-24 00:38:02 JST
-__USAGE
-  exit 1
-}
 
+######################################################################
+# Initial Configuration
+######################################################################
 
-# ===== PREPARE ======================================================
-
-# --- exec the truncate command if exists ----------------------------
-PATH='/usr/bin:/bin:/usr/local/bin'
-case "${1:-}" in
-  --by-myself) shift
-               ;;
-  *)           type truncate >/dev/null 2>&1 && {
-                 exec truncate "$@"
-                 exit 1
-               }
-               ;;
-esac
-
-# --- initialize -----------------------------------------------------
+# === Initialize shell environment ===================================
 set -u
 umask 0022
-PATH='/usr/bin:/bin'
-IFS=$(printf ' \t\n_'); IFS=${IFS%_}
-export IFS LC_ALL=C LANG=C PATH
+export LC_ALL=C
+export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
 
-# --- FUNC: exec the mktemp command if exists ------------------------
+# === Define the functions for printing usage and error message ======
+print_usage_and_exit () {
+  cat <<-USAGE 1>&2
+	Usage   : ${0##*/} [--by-myself] [-c] -s [+|-]size[K|k|M|m|G|g|T|t] file ...
+	          ${0##*/} [--by-myself] [-c] -r rfile file ...
+	Options : --by-myself ..... (write as the 1st argument when use)
+	                            Not use the "built-in" mktemp command
+	                            and always do mktemp by myself but it is
+	                            inferior to the built-in in performance
+	          -c .............. Do not create files if they do not exist.
+	                             The truncate utility does not treat this
+	                             as an error.
+	          -r <rfile> ...... Truncate or extend files to the length of
+	                            the file <rfile>.
+	          -s [+|-]<size>[K|k|M|m|G|g|T|t]
+	                        ... Truncate or extend files by the <size> value.
+	                            When "+" or "-" is written at first, it means
+	                            relative, otherwise absolute.
+	                            And when the unit suffix is written at last,
+	                            the value is multiplied by the unit suffix.
+	Version : 2017-02-26 00:16:17 JST
+	USAGE
+  exit 1
+}
+warning() {
+  ${1+:} false && echo "${0##*/}: $1" 1>&2
+}
+error_exit() {
+  [ -n "$2"       ] && echo "${0##*/}: $2" 1>&2
+  exit $1
+}
+exit_trap() {
+  trap '-' EXIT HUP INT QUIT PIPE ALRM TERM
+  rm -f "${Tempfile:-}"
+  exit ${1:-0}
+}
+
+# === Exec the built-in truncate command if OK and exists ============
+by_myself=0
+case "${1:-}" in 
+  '--by-myself')
+     shift; by_myself=1
+     ;;
+  *) case "$(d=${0%/*}/;[ "_$d" = "_$0/" ]||cd "$d";echo "$(pwd)/${0##*/}")" in
+       "$(command -v truncate 2>/dev/null)") by_myself=1;;
+     esac
+     ;;
+esac
+case $by_myself in 0) exec truncate "$@"; exit 1;; esac
+
+# === Confirm the required commands exist ============================
+# --- 
+if   type bc >/dev/null 2>&1                                      ; then
+  CMD_CALC='bc'
+elif [ "$(expr 9223372036854775806 + 1)" = '9223372036854775807' ]; then
+  CMD_CALC='xargs expr'
+else
+  error_exit 1 'bc command or 64bit-expr command is required'
+fi
+
+
+######################################################################
+# Register Functions
+######################################################################
+
+# === FUNC: exec the mktemp command if exists ========================
 get_attr_and_size0() {
   attr=$1
   size0=$(ls -adl "$attr" 2>/dev/null) || [ ! -e "$attr" ] || {
@@ -77,7 +121,7 @@ get_attr_and_size0() {
   return 0
 }
 
-# --- FUNC: Make a Temporary File ------------------------------------
+# === FUNC: Make a Temporary File ====================================
 # arg   : (none)
 # ret   : 0 when succeeded
 # stdout: path of the generated temporary file
@@ -161,12 +205,18 @@ mktempf0() {
 }
 
 
-# ===== PARSE OPTION =================================================
+######################################################################
+# Parse Arguments
+######################################################################
 
+# === Get the options ================================================
+# --- initialize option parameters -----------------------------------
 optc=0    # 1 when -c is set
 opto=0    # not implemented yet
 asize=''  # absolute size which is wanted
 dsize=''  # delta-size which is wanted
+#
+# --- get them -------------------------------------------------------
 optmode=''
 while :; do
   case $# in 0) break;; esac
@@ -208,13 +258,11 @@ while :; do
     r) case "$s" in /*|./*|../*) file=$s;; *) file="./$s";; esac
        while :; do
          get_attr_and_size0 "$file" || {
-           printf '%s\n' "${0##*/}: cannot open \`$s' (Permission denied)" 1>&2
-           exit 1
+           error_exit 1 'Cannot open (Permission denied): '"$s"
          }
          case "$attr" in
            '') # skip when option -c is set
-               printf '%s: %s: No such file or directory\n' "${0##*/}" "$s" 1>&2
-               exit 1
+               error_exit 'No such file or directory: '"$s"
                ;;
            -*) break
                ;;
@@ -233,8 +281,7 @@ while :; do
                ;;
            d*) break
                ;;
-            *) printf '%s\n' "${0##*/}: \`$file0' is not a regular file." 1>&2
-               exit 1
+            *) error_exit 1 'Not a regular file: '"$file0"
                ;;
          esac
        done
@@ -250,26 +297,25 @@ while :; do
                                      {exit 2;}'
        case $? in
          0) case "$s" in
-              *[0-9]) asize=$s                                 ;;
-              *[Kk])  asize=$(echo "${s%?}*1024"          | bc);;
-              *[Mm])  asize=$(echo "${s%?}*1048576"       | bc);;
-              *[Gg])  asize=$(echo "${s%?}*1073741824"    | bc);;
-              *[Tt])  asize=$(echo "${s%?}*1099511627776" | bc);;
+              *[0-9]) asize=$s                                          ;;
+              *[Kk])  asize=$(echo "${s%?} * 1024"          | $CMD_CALC);;
+              *[Mm])  asize=$(echo "${s%?} * 1048576"       | $CMD_CALC);;
+              *[Gg])  asize=$(echo "${s%?} * 1073741824"    | $CMD_CALC);;
+              *[Tt])  asize=$(echo "${s%?} * 1099511627776" | $CMD_CALC);;
             esac
             dsize=''
             ;;
          1) s=${s#+}
             case "$s" in
-              *[0-9]) dsize=$s                                 ;;
-              *[Kk])  dsize=$(echo "${s%?}*1024"          | bc);;
-              *[Mm])  dsize=$(echo "${s%?}*1048576"       | bc);;
-              *[Gg])  dsize=$(echo "${s%?}*1073741824"    | bc);;
-              *[Tt])  dsize=$(echo "${s%?}*1099511627776" | bc);;
+              *[0-9]) dsize=$s                                          ;;
+              *[Kk])  dsize=$(echo "${s%?} * 1024"          | $CMD_CALC);;
+              *[Mm])  dsize=$(echo "${s%?} * 1048576"       | $CMD_CALC);;
+              *[Gg])  dsize=$(echo "${s%?} * 1073741824"    | $CMD_CALC);;
+              *[Tt])  dsize=$(echo "${s%?} * 1099511627776" | $CMD_CALC);;
             esac
             asize=''
             ;;
-         2) printf '%s\n' "${0##*/}: Invalid size by -s,--size option" 1>&2
-            exit 1
+         2) error_exit 1 'Invalid size by -s,--size option'
             ;;
        esac
        shift
@@ -281,7 +327,9 @@ while :; do
 done
 
 
-# ===== TRUNCATE OR EXTEND ===========================================
+######################################################################
+# Main Routine
+######################################################################
 
 case $# in 0) print_usage_and_exit;; esac
 err=0
@@ -291,7 +339,7 @@ for file0 in "$@"; do
   # --- 1) Search the regular file path and the size of that file ----
   while :; do
     get_attr_and_size0 "$file" || {
-      printf '%s\n' "${0##*/}: cannot open \`$file0' (Permission denied)" 1>&2
+      warning 'Cannot open (Permission denied): '"$file0"
       continue 2
     }
     case "$attr" in
@@ -313,11 +361,11 @@ for file0 in "$@"; do
           esac
           continue
           ;;
-      d*) printf '%s\n' "${0##*/}: \`$file0' is a directory." 1>&2
+      d*) warning 'It is a directory: '"$file0"
           err=1
           continue 2
           ;;
-       *) #printf '%s\n' "${0##*/}: \`$file0' is not a regular file." 1>&2
+       *) #waring 'Not a regular file: '"$file0"
           #err=1
           continue 2
           ;;
@@ -326,17 +374,15 @@ for file0 in "$@"; do
 
   # --- 2) Re-calculate $dsize(delta-size) when $asize(absolute size) is set
   case "${asize}:${dsize}" in
-    :[0-9-]*) size1=$(echo "$dsize + $size0" | bc)   # when only dsize
-              case $size1 in -*) size1=0;; esac   ;;
-    [0-9]*:*) size1=$asize                           # when size exists
-              dsize=$(echo "$asize - $size0" | bc);;
-           *) echo 'error!' 1>&2; exit 255        ;; # otherwise (error)
+    :[0-9-]*) size1=$(echo "$dsize + $size0" | $CMD_CALC)   # when only dsize
+              case $size1 in -*) size1=0;; esac          ;;
+    [0-9]*:*) size1=$asize                                  # when size exists
+              dsize=$(echo "$asize - $size0" | $CMD_CALC);;
+           *) error_exit 255 'ERROR!'                    ;; # otherwise (error)
   esac
   # 2-1) Refuse truncating when dsize >= 16GB
-  case $(echo "${dsize}-17179869184" | bc) in
-    [0-9]*) printf '%s: Too large to increase the filesize of `%s'"'"'\n' \
-                   "${0##*/}"                                             \
-                   "$file0"                                               1>&2
+  case $(echo "${dsize} - 17179869184" | $CMD_CALC) in
+    [0-9]*) warning 'Too large to increase the filesize: '"$file0"
             err=1
             continue
             ;;
@@ -348,21 +394,21 @@ for file0 in "$@"; do
         case $size1 in
           0) : > "$file0"
              ;;
-          *) case "${tmpf:-}" in
-               '') tmpf=$(mktempf0) || {
+          *) case "${Tempfile:-}" in
+               '') trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM
+                   Tempfile=$(mktempf0) || {
                      printf '%s: %s: Failed to truncate\n' "${0##*/}" "$file0"
                      err=1
                      continue
                    }
-                   trap "rm -f $tmpf; exit" EXIT HUP INT QUIT PIPE ALRM TERM
                    ;;
              esac
-             dd "if=$file0" count=1 bs=$size1 "of=$tmpf" 2>/dev/null || {
+             dd "if=$file0" count=1 bs=$size1 "of=$Tempfile" 2>/dev/null || {
                printf '%s: %s: Failed to truncate\n' "${0##*/}" "$file0"
                err=1
                continue
              }
-             cat "$tmpf" > "$file0"
+             cat "$Tempfile" > "$file0"
              ;;
         esac
         ;;
@@ -380,5 +426,8 @@ for file0 in "$@"; do
 done
 
 
-# ===== TERMINATE ====================================================
+######################################################################
+# Finish
+######################################################################
+
 exit $err
