@@ -1,20 +1,24 @@
-#! /bin/sh
+#!/bin/sh
 
 ######################################################################
 #
-# utf8wc
-# ファイルとして与えられた文字列のUTF-8としての半角換算文字数を数える。
-# (例1) echo "あ"      | nkf -xw80 | utf8wc を実行すると 2を返す。
-# (例2) echo "ｱ"       | nkf -xw80 | utf8wc を実行すると 1を返す。
-# (例3) echo "ﾐﾄﾞﾘ1号" | nkf -xw80 | utf8wc を実行すると 7を返す。
-# (注1)  改行はCR+LFもLFも1文字として数える。
-# (注2)  一番最後の改行は無視される。
+# UTF8WC - A Halfwidth Unit Ruler for Strings Contain UTF-8 Characters
 #
-# Usage  : utf8wc <file>
+# USAGE: utf8wc <file> [file ...]
+# RET  : stdout ... Length of the given string by halfwidth unit every
+#                   file a line
 #
-# Return : stdoutに半角換算文字数
+# === Example ===
+# In case of UTF-8,
+# 1. This example returns 2.
+#    > echo "あ"      | utf8wc
+# 2. This example returns 1.
+#    > echo "ｱ"       | utf8wc
+# 3. This example returns 7.
+#    > echo "ﾐﾄﾞﾘ1号" | utf8wc
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-24
+#
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-25
 #
 # This is a public-domain software. It means that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
@@ -22,121 +26,119 @@
 #
 ######################################################################
 
-# print the usage and exit
-print_usage_and_exit () {
-  cat <<__USAGE 1>&2
-Usage   : ${0##*/} <file>
-Version : 2017-02-24 00:38:02 JST
-__USAGE
-  exit 1
-}
+######################################################################
+# Initial Configuration
+######################################################################
 
-# initalizate
+# === Initialize shell environment ===================================
 set -u
 umask 0022
-PATH='/usr/bin:/bin'
-IFS=$(printf ' \t\n_'); IFS=${IFS%_}
-export IFS LC_ALL=C LANG=C PATH
+export LC_ALL=C
+export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
 
-if [ \( -f "${1:-}"      \) -o \
-     \( -c "${1:-}"      \) -o \
-     \( -p "${1:-}"      \) -o \
-     \( "_${1:-}" = '_-' \)    ]; then
-  file="$1"
-  case "$file" in -|/*|./*|../*) :;; *) file="./$file";; esac
-elif [ $# -lt 1 ]; then
-  file='-'
-else
-  print_usage_and_exit
-fi
-if [ \( ! -r "$file" \) -a \( "_$file" != '_-' \) ]; then
-  printf '%s\n' "${0##*/}: Cannot open the file" 1>&2
+# === Define the functions for printing usage ========================
+print_usage_and_exit () {
+  cat <<-USAGE 1>&2
+	Usage   : ${0##*/} <file> [file...]
+	Version : 2017-02-25 15:54:56 JST
+	USAGE
   exit 1
-fi
-
-# main
-awk '
-BEGIN {
-  RS="\n";
-
-  utf8strlen_prep();
-
-  numofletters = 0;
-  while (getline line) {
-    sub(/\r$/, "", line);
-    numofletters += utf8strlen(line);
-  }
-  while (getline line) {
-    numofletters += 1;
-    sub(/\r$/, "", line);
-    numofletters += utf8strlen(line);
-  }
-
-  print numofletters;
 }
-# strlen for UTF-8 (preparation : you must call this before using utf8strlen)
-function utf8strlen_prep() {
-  utf8strlen_80_1 = sprintf("\200");
-  utf8strlen_C0_X = sprintf("\300");
-  utf8strlen_E0_2 = sprintf("\340");
-  utf8strlen_F0_3 = sprintf("\360");
-  utf8strlen_F8_4 = sprintf("\370");
-  utf8strlen_FC_5 = sprintf("\374");
-  utf8strlen_FE_6 = sprintf("\376");
-  utf8strlen_K_EF = sprintf("\357");
-  utf8strlen_K_BD = sprintf("\275");
-  utf8strlen_K_BE = sprintf("\276");
-  utf8strlen_K_A0 = sprintf("\240");
-  utf8strlen_K_C0 = sprintf("\300");
-  utf8strlen_K_80 = sprintf("\200");
+
+
+######################################################################
+# Argument Parsing
+######################################################################
+
+# === Print usage and exit if one of the help options is set =========
+case "$# ${1:-}" in
+  '1 -h'|'1 --help'|'1 --version') print_usage_and_exit;;
+esac
+
+# === Set "-" into the 1st argument if no argument is given ==========
+case $# in 0) set -- -;; esac
+
+
+######################################################################
+# Prepare for the Main Routine
+######################################################################
+
+# === Set AWK code into a shell variable =============================
+# (The reason that using shell variable for AWK code is to let xargs pass
+#  ARG_MAX limit)
+awkcode='
+BEGIN {
+  RS           = "\n";
+  fileno       =    0;
+  numofletters =    0;
+
+  while (getline line) {
+    if (FNR==1) {
+      fileno++;
+      if (NR>1) {print numofletters;numofletters=0;}
+      catchup_fileno();
+    } else {
+      numofletters++;
+    }
+    numofletters += utf8strlen(line);
+  }
+
+}
+END {
+  if(NR>0){print numofletters;}
+  catchup_fileno();
+}
+
+# catch up fileno because files which is 0 byte will be skipped
+function catchup_fileno() {
+  while (1) {
+    if (fileno      >=ARGC    ) {break;}
+    if (ARGV[fileno]==FILENAME) {break;}
+    print 0;
+    fileno++;
+  }
 }
 
 # strlen for UTF-8 (main)
-function utf8strlen(str) {
-  utf8strlen_ = 0;
-  for (utf8strlen_i = 1; utf8strlen_i <= length(str); utf8strlen_i++) {
-    utf8strlen_++;
-    utf8strlen_letter=substr(str, utf8strlen_i, 1);
-    if (utf8strlen_letter < utf8strlen_80_1) {
-      continue;
-    } else if (utf8strlen_letter < utf8strlen_C0_X) {
-      utf8strlen_--;
-      continue;
-    } else if (utf8strlen_letter < utf8strlen_E0_2) {
-      utf8strlen_i++;
-    } else if (utf8strlen_letter < utf8strlen_F0_3) {
-      if (utf8strlen_letter == utf8strlen_K_EF) {
-        utf8strlen_letter2 = substr(str, utf8strlen_i+1, 1);
-        if (utf8strlen_letter2 == utf8strlen_K_BD) {
-          utf8strlen_letter3 = substr(str, utf8strlen_i+2, 1);
-          if ((utf8strlen_letter3 >= utf8strlen_K_A0) &&
-              (utf8strlen_letter3 <  utf8strlen_K_C0)  ) {
-            utf8strlen_--;
-          }
-        } else if (utf8strlen_letter2 == utf8strlen_K_BE) {
-          utf8strlen_letter3 = substr(str, utf8strlen_i+2, 1);
-          if ((utf8strlen_letter3 >= utf8strlen_K_80) &&
-              (utf8strlen_letter3 <  utf8strlen_K_A0)  ) {
-            utf8strlen_--;
-          }
+function utf8strlen(str, len,i,l1,l2,l3) {
+  len = 0;
+  for (i = 1; i <= length(str); i++) {
+    len++;
+    l1=substr(str, i, 1);
+    if        (l1 =="\010") {len-=2;continue;
+    } else if (l1 < "\200") {       continue;
+    } else if (l1 < "\300") {len--; continue;
+    } else if (l1 < "\340") {i++;
+    } else if (l1 < "\360") {
+      if (l1 == "\357") {
+        l2 = substr(str, i+1, 1);
+        if (l2 == "\275") {
+          l3 = substr(str, i+2, 1);
+          if ((l3 >= "\240") && (l3 < "\300")) {len--;}
+        } else if (l2 == "\276") {
+          l3 = substr(str, i+2, 1);
+          if ((l3 >= "\200") && (l3 < "\240")) {len--;}
         }
       }
-      utf8strlen_i += 2;
-    } else if (utf8strlen_letter < utf8strlen_F8_4) {
-      utf8strlen_i += 3;
-    } else if (utf8strlen_letter < utf8strlen_FC_5) {
-      utf8strlen_i += 4;
-    } else if (utf8strlen_letter < utf8strlen_FE_6) {
-      utf8strlen_i += 5;
-    } else {
-      utf8strlen_--;
-      continue;
-    }
-    utf8strlen_++;
+      i += 2;
+    } else if (l1 < "\370") {i += 3;
+    } else if (l1 < "\374") {i += 4;
+    } else if (l1 < "\376") {i += 5;
+    } else                  {len-- ; continue;}
+    len++;
   }
-  return utf8strlen_;
-}
-' "$file"
+  return len;
+}'
 
-# finish
-exit 0
+
+######################################################################
+# Main
+######################################################################
+
+# * "-E" is a measure to keep Korn Shell from applying backslash
+#   interpretation. But the other shells' echo don't know the option
+#   and print it out honestly. So the following sed will cut it if it
+#   exists.
+# * The string "dummy" is to make echo not regard the following string
+#   as a option.
+echo -E dummy "$@" | sed 's/^\(-E \)\{0,1\}dummy //' | xargs awk "$awkcode"

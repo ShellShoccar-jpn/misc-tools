@@ -1,38 +1,60 @@
-#! /bin/sh
+#!/bin/sh
  
 ######################################################################
 #
 # ENUMDATE - Enumerate dates from arg#1 to arg#2
 #
 # USAGE: enumdate <yyyymmdd1> <yyyymmdd2>
-#
-# Return: $?=0 (when all of the options are valid)
+# ARGS : <yyyymmdd1> ... Date you want to enumerate from
+#        <yyyymmdd2> ... Date you want to enumerate to
+#        * The number of digits for "yyyy" part can be 1, 2, 3,
+#          of course 4. (e.g. "1", "201") But in case of 2 digits,
+#          for instance "87" will be regarded as not "1987" but "87".
+#        * It is OK altough <yyyymmdd1> is bigger, smaller than
+#          <yyyymmdd2>, or <yyyymmdd1> is equal with <yyyymmdd2>.
+# RET  : $?=0 (when all of the options are valid)
 #         stdout : HTTP Cookie string
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-24
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-25
 #
 # This is a public-domain software. It means that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
 # the side effects which are broght about by the major licenses.
 #
 ######################################################################
- 
+
+
+######################################################################
+# Initial Configuration
+######################################################################
+
+# === Initialize shell environment ===================================
+set -u
+umask 0022
+export LC_ALL=C
+export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
+
+# === Define the functions for printing usage ========================
 print_usage_and_exit () {
-  cat <<-__USAGE 1>&2
+  cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <yyyymmdd1> <yyyymmdd2>
-	Version : 2017-02-24 00:38:02 JST
-__USAGE
+	Argument: <yyyymmdd1> ... Date you want to enumerate from
+	          <yyyymmdd2> ... Date you want to enumerate to
+	          * The number of digits for "yyyy" part can be 1, 2, 3,
+	            of course 4. (e.g. "1", "201") But in case of 2 digits,
+	            for instance "87" will be regarded as not "1987" but "87".
+	          * It is OK altough <yyyymmdd1> is bigger, smaller than
+	            <yyyymmdd2>, or <yyyymmdd1> is equal with <yyyymmdd2>.
+	Version : 2017-02-25 13:38:47 JST
+	USAGE
   exit 1
 }
 
-# --- initalization --------------------------------------------------
-set -u
-umask 0022
-PATH='/usr/bin:/bin'
-IFS=$(printf ' \t\n_'); IFS=${IFS%_}
-export IFS LC_ALL=C LANG=C PATH
 
-# --- parse arguments ------------------------------------------------
+######################################################################
+# Parse Arguments
+######################################################################
+
 case $# in
   2) :                   ;;
   *) print_usage_and_exit;;
@@ -41,7 +63,10 @@ printf '%s' "$1" | grep -Eq '^[0-9]{5,8}$' || print_usage_and_exit
 printf '%s' "$2" | grep -Eq '^[0-9]{5,8}$' || print_usage_and_exit
 
 
-# --- main -----------------------------------------------------------
+######################################################################
+# Main Routine
+######################################################################
+
 MYNAME="${0##*/}" awk -v d1=$1 -v d2=$2 '
 BEGIN {
   i = length(d2);
@@ -64,16 +89,16 @@ BEGIN {
 
   if        (d1*1 < d2*1) {
     while (date_y*10000+date_m*100+date_d < YMD) {
-      printf("%d%02d%02d\n",date_y,date_m,date_d);
+      printf("%04d%02d%02d\n",date_y,date_m,date_d);
       incdate();
     }
   } else if (d1*1 > d2*1) {
     while (date_y*10000+date_m*100+date_d > YMD) {
-      printf("%d%02d%02d\n",date_y,date_m,date_d);
+      printf("%04d%02d%02d\n",date_y,date_m,date_d);
       decdate();
     }
   }
-  printf("%d%02d%02d\n",date_y,date_m,date_d);
+  printf("%04d%02d%02d\n",date_y,date_m,date_d);
 }
 
 # INPUT : date_y, date_m, date_d
