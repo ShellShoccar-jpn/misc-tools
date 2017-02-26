@@ -62,7 +62,7 @@ print_usage_and_exit () {
 	                            relative, otherwise absolute.
 	                            And when the unit suffix is written at last,
 	                            the value is multiplied by the unit suffix.
-	Version : 2017-02-26 11:02:44 JST
+	Version : 2017-02-26 16:21:35 JST
 	USAGE
   exit 1
 }
@@ -266,7 +266,7 @@ while :; do
                ;;
            -*) break
                ;;
-           l*) s=$(printf '%s' "$file"         |
+           l*) s=$(printf '%s\n' "$file"       |
                    sed 's/\([].\*/[]\)/\\\1/g' |
                    sed 's/^\^/\\^/'            |
                    sed 's/\$$/\\$/'            )
@@ -348,7 +348,7 @@ for file0 in "$@"; do
           ;;
       -*) break
           ;;
-      l*) s=$(printf '%s' "$file"         |
+      l*) s=$(printf '%s\n' "$file"       |
               sed 's/\([].\*/[]\)/\\\1/g' |
               sed 's/^\^/\\^/'            |
               sed 's/\$$/\\$/'            )

@@ -49,7 +49,7 @@ print_usage_and_exit () {
 	            -f <format>, -s <string>, -w
 	          But --by-myself is the only original option, it prevent
 	          from use the built-in same name command even if available
-	Version : 2017-02-26 00:56:29 JST
+	Version : 2017-02-26 16:19:37 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	            * Although the bult-in seq produces better performance
 	              than the POSIX commands set
@@ -81,9 +81,9 @@ case $by_myself in 0) exec seq "$@"; exit 1;; esac
 
 # === Get the options and the filepath ===============================
 # --- initialize option parameters -----------------------------------
-fopt=''
-sopt='\n'
-wopt=0
+optf=''
+opts='\n'
+optw=0
 n_1st=1
 n_inc=1
 n_lst=''
@@ -111,19 +111,19 @@ while :; do
                    arg=${s#* }
                    s=${s%% *}
                    case "$s" in '!'*) print_usage_and_exit;; esac
-                   case "$s" in  *w*) wopt=1              ;; esac
+                   case "$s" in  *w*) optw=1              ;; esac
                    case "$s" in  *f*) optmode='f'         ;; esac
                    case "$s" in  *s*) optmode='s'         ;; esac
                    shift;
                    case "$arg" in '') continue;; esac
                    ;;
           --format=*)
-                   fopt=${s#--format=}
+                   optf=${s#--format=}
                    shift
                    continue
                    ;;
           --separator=*)
-                   sopt=${s#--format=}
+                   opts=${s#--format=}
                    shift
                    continue
                    ;;
@@ -140,8 +140,8 @@ while :; do
         ;;
   esac
   case "$optmode" in
-    f) fopt=$arg                ;;
-    s) sopt=$arg                ;;
+    f) optf=$arg                ;;
+    s) opts=$arg                ;;
     *) echo 'ERROR' 1>&2; exit 1;;
   esac
   optmode=''
@@ -154,14 +154,14 @@ case "$#" in
 esac
 
 # === Vaidate arguments ==============================================
-[ $wopt -gt 0 ] && [ -n "$fopt" ] && {
+[ $optw -gt 0 ] && [ -n "$optf" ] && {
   error_exit 1 'format string may not be specified when printing equal width strings'
 }
-[ -n "$fopt" ] && {
-  printf '%s\n' "$fopt" | grep -Eq '%(-?[0-9]+(\.[0-9]+)?)?[AaEeFfGg]' || {
+[ -n "$optf" ] && {
+  printf '%s\n' "$optf" | grep -Eq '%(-?[0-9]+(\.[0-9]+)?)?[AaEeFfGg]' || {
     error_exit 1 'The format you gave me has no % directive'
   }
-  case "$(printf '%s\n' "$fopt" | sed 's/\%\(-\{0,1\}[0-9]\{1,\}\(\.[0-9]\{1,\}\)\{0,1\}\)\{0,1\}[AaEeFfGg%]//')" in
+  case "$(printf '%s\n' "$optf" | sed 's/\%\(-\{0,1\}[0-9]\{1,\}\(\.[0-9]\{1,\}\)\{0,1\}\)\{0,1\}[AaEeFfGg%]//')" in
     *%*) error_exit 1 'The format you gave me is invalid or has too many % directives';;
     *)   :                                                                            ;;
   esac
@@ -183,8 +183,8 @@ printf '%s\n' "$n_lst" | grep -Eq "$n_pattern" || {
 ######################################################################
 
 # === Generate the format by "-w" ====================================
-[ $wopt -gt 0 ] && {
-  fopt=$(printf '%f %f %f' "$n_1st" "$n_inc" "$n_lst"               |
+[ $optw -gt 0 ] && {
+  optf=$(printf '%f %f %f' "$n_1st" "$n_inc" "$n_lst"               |
          grep -v 'Ee'                                               |
          tr   ' ' '\n'                                              |
          sed  '/\./s/0\{1,\}$//'                                    |
@@ -203,23 +203,23 @@ printf '%s\n' "$n_lst" | grep -Eq "$n_pattern" || {
 }
 
 # === Generate the format if not specified ===========================
-[ -z "$fopt" ] && {
+[ -z "$optf" ] && {
   if printf '%s%s%s\n' "$n_1st" "$n_inc" "$n_lst" | grep -Eq '^[0-9]$'; then
-    fopt='%d'
+    optf='%d'
   else
-    fopt='%g'
+    optf='%g'
   fi
 }
 
 # === Convert the format string for AWK ==============================
-fopt=$( (printf '%s' "$fopt";echo) |
+optf=$( (printf '%s' "$optf";echo) |
         sed '$!s/$/\\n/'           |
         tr -d '\n'                 |
         grep  ^                    |
         sed 's/"/\\"/g'            )
 
 # === Convert the "-s" option string for AWK =========================
-sopt=$( (printf '%s' "$sopt";echo) |
+opts=$( (printf '%s' "$opts";echo) |
         sed '$!s/$/\\n/'           |
         tr -d '\n'                 |
         grep  ^                    |
@@ -239,19 +239,19 @@ awk 'BEGIN{                                                 #
          # --- increment routine -------------------------- #
          if ('"$n_1st"' > '"$n_lst"') {exit;}               #
          i='"$n_1st"';                                      #
-         printf("'"$fopt"'", i);                            #
+         printf("'"$optf"'", i);                            #
          i=i'"$n_inc"';                                     #
          for (            ; i<='"$n_lst"'; i=i'"$n_inc"') { #
-           printf("%s'"$fopt"'", "'"$sopt"'", i);           #
+           printf("%s'"$optf"'", "'"$opts"'", i);           #
          }                                                  #
        } else {                                             #
          # --- decrement routine -------------------------- #
          if ('"$n_1st"' < '"$n_lst"') {exit;}               #
          i='"$n_1st"';                                      #
-         printf("'"$fopt"'", i);                            #
+         printf("'"$optf"'", i);                            #
          i=i'"$n_inc"';                                     #
          for (            ; i>='"$n_lst"'; i=i'"$n_inc"') { #
-           printf("%s'"$fopt"'", "'"$sopt"'", i);           #
+           printf("%s'"$optf"'", "'"$opts"'", i);           #
          }                                                  #
        }                                                    #
      }'                                                     |
