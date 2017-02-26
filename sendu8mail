@@ -23,7 +23,7 @@
 #   * If the following headers is omitted, inserted by this function.
 #     "Content-Type:", "Content-Transfer-Encoding:", "MIME-Version:"
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-24
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-26
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -50,7 +50,7 @@ print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <mailfile>
 	Args    : <mailfile> ... Text data as a e-mail
-	Version : 2017-02-24 00:38:02 JST
+	Version : 2017-02-26 10:17:32 JST
 	          (POSIX Bourne Shell/POSIX commands/sendmail command/UTF-8)
 	USAGE
   exit 1
@@ -207,8 +207,7 @@ file=''
 case $# in
      0) file='-'
         ;;
-  [12]) [ \( -f "$1" \) -o \( -c "$1" \) -o \( -p "$1" \) -o \
-          \( "_$1" = '_-' \)                              ] || {
+  [12]) [ -f "$1" ] || [ -c "$1" ] || [ -p "$1" ] || [  "_$1" = '_-' ] || {
           print_usage_and_exit
         }
         file=$1

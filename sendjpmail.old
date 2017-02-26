@@ -45,13 +45,13 @@ if [ ! -x "$CMD_NKF" ]; then
   echo "ERROR: ${0##*/}: nkf command is not found" 1>&2
   exit 1
 fi
-if [ \( ! -f "$1" \) -o \( ! -r "$1" \) ]; then
+if [ ! -f "$1" ] || [ ! -r "$1" ]; then
   echo "ERROR: ${0##*/}: template file is invalid" 1>&2
   exit 1
 fi
 PATH_mailtemplate=$1
 touch "$2"
-if [ \( ! -f "$2" \) -o \( ! -r "$2" \) -o \( ! -w "$2" \) ]; then
+if [ ! -f "$2" ] || [ ! -r "$2" ] || [ ! -w "$2" ]; then
   echo "ERROR: ${0##*/}: temporary file is invalid" 1>&2
   exit 1
 fi
