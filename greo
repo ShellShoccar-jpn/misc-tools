@@ -86,7 +86,7 @@ print_usage_and_exit () {
 	              * Quickly overwriting but permission, owner/group, link, ACL
 	                informations will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 2017-02-26 11:03:32 JST
+	Version : 2017-02-26 15:59:23 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -423,10 +423,28 @@ while IFS= read -r file0; do                                          #
                                                                       #
   # 2) --- "greo" a file                                              #
   case $optt in                                                       #
-    0) sed "s/$pat4sed/$sub4sed/g" "$file" > "$Tempfile" &&           #
+    0) (cat "$file"; echo '')              |                          #
+       sed "s/$pat4sed/$sub4sed/g" "$file" |                          #
+       awk 'BEGIN{ORS=""; OFS="";          #                          #
+                  getline line;            #                          #
+                  print line;              #                          #
+                  dlm=sprintf("\n");       #                          #
+                  while (getline line) {   #                          #
+                    print dlm,line;        #                          #
+                  }                     }' > "$Tempfile" &&           #
        cat "$Tempfile"                     > "$file"                  #
        ;;                                                             #
-    *) (rm "$file" && sed "s/$pat4sed/$sub4sed/g" > "$file") <"$file" #
+    *) ( rm "$file"                             &&                    #
+         { (cat; echo '')                      |                      #
+           sed "s/$pat4sed/$sub4sed/g"         |                      #
+           awk 'BEGIN{ORS=""; OFS="";          #                      #
+                      getline line;            #                      #
+                      print line;              #                      #
+                      dlm=sprintf("\n");       #                      #
+                      while (getline line) {   #                      #
+                        print dlm,line;        #                      #
+                      }                     }' ; } > "$file"          #
+       ) <"$file"                                                     #
        ;;                                                             #
   esac                                                                #
   if [ $? -eq 0 ]; then                                               #
