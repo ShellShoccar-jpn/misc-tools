@@ -1,8 +1,8 @@
-#! /bin/sh
+#!/bin/sh
 
 ######################################################################
 #
-# PEXLOCK : A Exclusive Lock Command within POSIX
+# PEXLOCK - A Exclusive Lock Command within POSIX
 #
 # Usage   : pexlock [options] <lockname> [lockname ...]
 #           -d <lockdir> ...... the directory for lockfiles.
@@ -25,9 +25,9 @@
 #              :
 #           (do something requires exclusive lock)
 #              :
-#           touch -c "$lockid"    # extend lifetime if you want
-#              :                  # (but it needs to remain SUFFICIENT LIFETIME)
-#           punlock "$lockid"                               # release the lock
+#           touch -c "$lockid" # extend lifetime if you want
+#              :               # (but it needs to remain SUFFICIENT LIFETIME)
+#           punlock "$lockid"  # release the lock
 #
 # Notice  : The lockfile is written with rw-rw-rw for sharing.
 #           If you want not to share it with others,
@@ -42,45 +42,68 @@
 ######################################################################
 
 
-# ===== FUNCTIONS ====================================================
+######################################################################
+# Initial Configuration
+######################################################################
 
-# --- FUNC: print the usage and exit ---------------------------------
+# === Initialize shell environment ===================================
+set -u
+umask 0000 # <-- not 0022
+export LC_ALL=C
+export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
+
+# === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
-  cat <<-__USAGE 1>&2
+  cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [options] <lockname> [lockname ...]
-	          -d <lockdir> ...... the directory for lockfiles.
+	Options : -d <lockdir> ...... the directory for lockfiles.
 	                              The lockfile directory will be decided
 	                              as the following rule.
 	                              1) this option "-d" if specified
 	                              2) the environment varriable "PLOCKDIR"
 	                                 if specified
 	                              3) if the environment varriable "TMPDIR"
-	                                 specified, "\$TMPDIR/plock.<username>"
+	                                 specified, "$TMPDIR/plock.<username>"
 	                              4) "/tmp/plock.<username>" (default)
 	          -w <maxwaiting> ... maximum waiting seconds to succeed locking
 	                              (-1 means waiting infinitely)
 	                              The default value is 10.
+	Return  : $?     ==0 ... one or more locking were success
+	                 !=0 ... all failure
+	          stdout ....... generated path of the lockfile
+	Example : lockid=$(pexlock -d /tmp/plock -w 10 foo) || exit 1 # do ex-lock
+	             :
+	          (do something requires exclusive lock)
+	             :
+	          touch -c "$lockid" # extend lifetime if you want
+	             :               # (but it needs to remain SUFFICIENT LIFETIME)
+	          punlock "$lockid"  # release the lock
+	Notice  : The lockfile is written with rw-rw-rw for sharing.
+	          If you want not to share it with others,
+	          you have to give the lockdir rwxrwx--- or rwx------ permisson.
 	Version : 2017-02-24 00:38:02 JST
-__USAGE
+	USAGE
   exit 1
+}
+warning() {
+  ${1+:} false && echo "${0##*/}: $1" 1>&2
+}
+error_exit() {
+  ${2+:} false && echo "${0##*/}: $2" 1>&2
+  exit $1
 }
 
 
+######################################################################
+# Argument Parsing
+######################################################################
 
-# ===== PREPARATION ==================================================
-
-# --- initialize -----------------------------------------------------
-set -u
-PATH='/usr/bin:/bin'
-IFS=$(printf ' \t\n_'); IFS=${IFS%_}
-export IFS LC_ALL=C LANG=C PATH
-umask 0000
-
-# --- parse the arguments --------------------------------------------
-dopt=''
+# === Set default values =============================================
+optd=''
 max_waiting_secs=10
 max_lifetime_secs=''
-ppid=$(ps -Ao pid,ppid | awk '$1=='"$$"'{print $2;exit}')
+
+# === Parse arguments ================================================
 optmode=''
 while [ $# -gt 0 ]; do
   case "$optmode" in
@@ -99,7 +122,7 @@ while [ $# -gt 0 ]; do
                    ret2=${ret#* }
                    case "$ret1$ret2" in
                      d)  optmode='d'             ;;
-                     d*) dopt=$ret2              ;;
+                     d*) optd=$ret2              ;;
                      w)  optmode='w'             ;;
                      w*) max_waiting_secs=$ret2  ;;
                      l)  optmode='l'             ;;
@@ -112,7 +135,7 @@ while [ $# -gt 0 ]; do
                    ;;
         esac
         ;;
-    d)  dopt=$1
+    d)  optd=$1
         optmode=''
         ;;
     w)  max_waiting_secs=$1
@@ -124,18 +147,19 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+# === Validate arguments =============================================
 case $# in 0) print_usage_and_exit;; esac
 echo "_$max_waiting_secs"   | grep -Eq '^_-?[0-9]+$' || {
-  printf '%s: Maximum waiting seconds parameter is invalid\n' "${0##*/}" 1>&2
-  exit 1
+  error_exit 1 'Maximum waiting seconds parameter is invalid'
 }
 case "$max_lifetime_secs" in
-  '') :                                                                       ;;
-   *) printf '%s: option "-l" could not use in this command\n' "${0##*/}" 1>&2;;
+  '') :                                                  ;;
+   *) warning 'option "-l" could not use in this command';;
 esac
 Dir_lock=''
 while :; do
-  case "$dopt"         in '') :;; *) Dir_lock="${dopt%/}/"
+  case "$optd"         in '') :;; *) Dir_lock="${optd%/}/"
                                      break                             ;; esac
   case "${PLOCKDIR:-}" in '') :;; *) Dir_lock="${PLOCKDIR%/}/"
                                      break                             ;; esac
@@ -147,18 +171,19 @@ while :; do
                                      break                             ;; esac
 done
 case $? in
-  [!0]*) echo "${0##*/}: Failed to make the lockfile directory" 1>&2;exit 1;;
+  [!0]*) error_exit 1 'Failed to make the lockfile directory';;
 esac
-[ \( -z "$dopt" \) -o \( -d "$dopt" \) ] || {
-  echo "${0##*/}: \"$Dir_lock\": No such directory or permission denied" 1>&2
-  exit 1
+[ -z "$optd" ] || [ -d "$optd" ] || {
+  error_exit 1 'No such directory or permission denied: '"$Dir_lock"
 }
 case "$Dir_lock" in [!/]*) s=$(pwd);Dir_lock="${s%/}/$Dir_lock";; esac
 
 
+######################################################################
+# Main Routine
+######################################################################
 
-# ===== MAIN =========================================================
-
+ppid=$(ps -Ao pid,ppid | awk '$1=='"$$"'{print $2;exit}')
 count_all=0
 count_success=0
 for lockname in "$@"; do
@@ -166,14 +191,12 @@ for lockname in "$@"; do
 
   # --- Validate the lockname  ---------------------------------------
   case "$lockname" in '.border_date_and_time.tmp')
-    printf '%s: ".border_date_and_time.tmp" is reserved, skipped\n' \
-           "${0##*/}" 1>&2
+    warning '".border_date_and_time.tmp" is reserved, skipped'
     continue
     ;;
   esac
   echo "_$lockname" | grep -q '[/:]' && {
-    printf '%s: "%s": Neither "/" nor ":" can be used in lockname, skipped\n' \
-           "${0##*/}" "$lockname" 1>&2
+    warning "$lockname"': Neither "/" nor ":" can be used in lockname, skipped'
     continue
   }
 
@@ -201,11 +224,10 @@ for lockname in "$@"; do
   case $try in
     [1-9]*) printf '%s%s\n' "$Dir_lock" "${lockname}"
             ;;
-         0) printf '%s: "%s": timeout, try again later\n' \
-                   "${0##*/}" "$lockname" 1>&2
+         0) warning "$lockname"': timeout, try again later'
             continue
             ;;
-        -*) printf '%s: "%s": unexpedter error!\n' "${0##*/}" "$lockname" 1>&2
+        -*) warning "$lockname"': unexpedter error!'
             continue
             ;;
   esac
@@ -214,10 +236,11 @@ for lockname in "$@"; do
 done
 
 
+######################################################################
+# Finish
+######################################################################
 
-# ===== FINISH =======================================================
-
-# --- Return 1 if all locking failed ---------------------------------
+# === Return 1 if all locking failed =================================
 case "$count_success:$count_all" in
   0:[!0]*) exit 1;;
         *) exit 0;;

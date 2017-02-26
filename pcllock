@@ -1,8 +1,8 @@
-#! /bin/sh
+#!/bin/sh
 
 ######################################################################
 #
-# PCLLOCK : A Cleaner Command for "pexlock" and "pshlock"
+# PCLLOCK - A Cleaner Command for "pexlock" and "pshlock"
 #           (remove the expired and orphaned lockfiles in the lockdirectory)
 #
 # Usage   : pcllock [options]
@@ -42,38 +42,52 @@
 ######################################################################
 
 
-# ===== FUNCTIONS ====================================================
+######################################################################
+# Initial Configuration
+######################################################################
 
-# --- FUNC: print the usage and exit ---------------------------------
+# === Initialize shell environment ===================================
+set -u
+umask 0022
+export LC_ALL=C
+export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
+
+# === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
-  cat <<-__USAGE 1>&2
+  cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [options]
-	          -d <lockdir> ...... the directory for lockfiles.
+	Options : -d <lockdir> ...... the directory for lockfiles.
 	                              The lockfile directory will be decided
 	                              as the following rule.
 	                              1) this option "-d" if specified
 	                              2) the environment varriable "PLOCKDIR"
 	                                 if specified
 	                              3) "$(pwd)" (default)
-	          -w <maxwaiting> ... <<for only lockfiles by "pshlock">>
-	                              maximum waiting seconds to succeed locking
+	          -w <maxwaiting> ... maximum waiting seconds to succeed unlocking
+	                              a shared lock
 	                              (-1 means waiting infinitely)
 	                              The default value is 10.
-	          -l <lifetime> ..... <<for only lockfiles by "pshlock">>
-	                              the maximum lifetime of the lockfile (sec)
+	          -l <lifetime> ..... the maximum lifetime of the lockfile (sec)
 	                              The default value is 600.
 	                              Older lockfiles than that will be ignored
 	                              and removed.
-	                              (-1 means infinitely, so this program do
-	                              nothing)
+	                              (-1 means infinitely)
+	Return  : $?     ==0 ... one or more cleaning were success
+	                 !=0 ... all failure
+	          stdout ....... enerated path of the lockfile (just lock-id)
+	Example : write the following line into the crontab file someone owned
+	          * * * * * pcllock -l 300 -w 10 -d /PATH/TO/LOCKDIR
 	Version : 2017-02-24 00:38:02 JST
-__USAGE
+	USAGE
   exit 1
 }
-
-# --- FUNC: exit-trap ------------------------------------------------
-# arg   : [return code]
-# ret   : (not return)
+warning() {
+  ${1+:} false && echo "${0##*/}: $1" 1>&2
+}
+error_exit() {
+  ${2+:} false && echo "${0##*/}: $2" 1>&2
+  exit $1
+}
 exit_trap () {
   trap - EXIT HUP INT QUIT PIPE ALRM TERM
   rm -f "${tmpf_pids:-}" "${tmpf_time:-}" "${File_modlk:-}" >/dev/null 2>&1
@@ -81,7 +95,7 @@ exit_trap () {
   case $# in 0) exit $i;; *) exit ${1:-0};; esac
 }
 
-# --- FUNC: Calcurate the expire date-and-time (for touch command) ---
+# === FUNC: Calcurate the expire date-and-time (for touch command) ===
 # arg   : number of second from now which you know the date-and-time
 # ret   : 0
 # stdout: path of the generated temporary file
@@ -179,17 +193,17 @@ expire_date_and_time() {
   '
 }
 
-# --- FUNC: Make a Temporary File ------------------------------------
+# === FUNC: Make a Temporary File ====================================
 # arg   : (none)
 # ret   : 0 when succeeded
 # stdout: path of the generated temporary file
+LFs=$(printf '\\\n_');LFs=${LFs%_} # Use as a "\n" in s-command of sed
 mktempf0() {
   # --- parameters, etc. ---------------------------------------------
   num_of_digits=16  # Length of Random String
   n=10              # Max Times of Retrying
   chrs='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_'
                     # Available letters
-  LF=$(printf '\\\n_');LF=${LF%_}
   # --- call built-in mktemp if exists -------------------------------
   type mktemp >/dev/null 2>&1 && {
     mktemp -t tmp.${0##*/}.$$.XXXXXXXXXXXXXXXX
@@ -218,7 +232,7 @@ mktempf0() {
     else
       hstr=$( (ps -Ao pid,etime,pcpu,vsz; date)         |
              od -t d4 -A n -v                           |
-             sed 's/[^0-9]\{1,\}/'"$LF"'/g'             |
+             sed 's/[^0-9]\{1,\}/'"$LFs"'/g'            |
              grep '[0-9]'                               |
              tail -n 42                                 |
              sed 's/.*\(.\{8\}\)$/\1/g'                 |
@@ -263,20 +277,16 @@ mktempf0() {
 }
 
 
+######################################################################
+# Argument Parsing
+######################################################################
 
-# ===== PREPARATION ==================================================
-
-# --- initialize -----------------------------------------------------
-set -u
-PATH='/usr/bin:/bin'
-IFS=$(printf ' \t\n_'); IFS=${IFS%_}
-export IFS LC_ALL=C LANG=C PATH
-umask 0022
-
-# --- parse the arguments --------------------------------------------
-dopt=''
+# === Set default values =============================================
+optd=''
 max_waiting_secs=10
 max_lifetime_secs=600
+
+# === Parse arguments ================================================
 optmode=''
 while [ $# -gt 0 ]; do
   case "$optmode" in
@@ -295,7 +305,7 @@ while [ $# -gt 0 ]; do
                    ret2=${ret#* }
                    case "$ret1$ret2" in
                      d)  optmode='d'             ;;
-                     d*) dopt=$ret2              ;;
+                     d*) optd=$ret2              ;;
                      w)  optmode='w'             ;;
                      w*) max_waiting_secs=$ret2  ;;
                      l)  optmode='l'             ;;
@@ -308,7 +318,7 @@ while [ $# -gt 0 ]; do
                    ;;
         esac
         ;;
-    d)  dopt=$1
+    d)  optd=$1
         optmode=''
         ;;
     w)  max_waiting_secs=$1
@@ -320,19 +330,19 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+# === Validate arguments =============================================
 case $# in [!0]*) print_usage_and_exit;; esac
 echo "_$max_waiting_secs"   | grep -Eq '^_-?[0-9]+$' || {
-  printf '%s: Maximum waiting seconds parameter is invalid\n' "${0##*/}" 1>&2
-  exit 1
+  error_exit 1 'Maximum waiting seconds parameter is invalid'
 }
-echo "_$max_lifetime_secs"  | grep -Eq '^_-?[0-9]+$'   || {
-  printf '%s: Maximum lifetime parameter is invalid\n' "${0##*/}" 1>&2
-  exit 1
+echo "_$max_lifetime_secs"  | grep -Eq '^_-?[0-9]+$' || {
+  error_exit 1 'Maximum lifetime parameter is invalid'
 }
 [ $max_lifetime_secs -lt 0 ] && exit
 Dir_lock=''
 while :; do
-  case "$dopt"         in '') :;; *) Dir_lock="${dopt%/}/"
+  case "$optd"         in '') :;; *) Dir_lock="${optd%/}/"
                                      break                             ;; esac
   case "${PLOCKDIR:-}" in '') :;; *) Dir_lock="${PLOCKDIR%/}/"
                                      break                             ;; esac
@@ -342,32 +352,29 @@ while :; do
 done
 case "$Dir_lock" in [!/]*) s=$(pwd);Dir_lock="${s%/}/$Dir_lock";; esac
 
-# --- Decide the target directory and change to there ----------------
+
+######################################################################
+# Main Routine
+######################################################################
+
+# === Decide the target directory and change to there ================
 cd "$Dir_lock" 2>/dev/null || {
-  printf '%s: "%s": No such directory or permission denied\n' \
-          "${0##*/}" "$Dir_lock" 1>&2
-  exit 1
+  error_exit 1 'No such directory or permission denied: '"$Dir_lock"
 }
 
-
-
-# ===== MAIN =========================================================
-
-# --- Get PIDs for making sure every owners of lockfile is no longer alive
-tmpf_pids=$(mktempf0) || {
-  printf '%s: Failed to make a temporary file #1\n' "${0##*/}" 1>&2
-  exit 1
-}
+# === Get PIDs for making sure every owners of lockfile is no longer alive
 trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM
+tmpf_pids=$(mktempf0) || {
+  error_exit 1 'Failed to make a temporary file #1'
+}
 ps -Ao pid | tr -d ' ' | grep -E '^[0-9]+$' | sort -k1,1 > "$tmpf_pids"
 
-# --- make a temporary file for listing the too old files ------------
+# === make a temporary file for listing the too old files ============
 tmpf_time=$(mktempf0) || {
-  printf '%s: Failed to make a temporary file #2\n' "${0##*/}" 1>&2
-  exit 1
+  error_exit 1 'Failed to make a temporary file #'
 }
 
-# --- Remove the orphaned ex-lockfiles in the target directory -------
+# === Remove the orphaned ex-lockfiles in the target directory =======
 # (And also remove the orphaned sh-lock access token file "modifying")
 touch -t $(expire_date_and_time $max_lifetime_secs) "$tmpf_time"
 find './' -type f \( \! -newer "$tmpf_time" \) |
@@ -383,7 +390,7 @@ sed 's/:[0-9]\{1,\}$//'                        |
 # 1:old_and_orphaned_ex-files                  #
 xargs rm -f
 
-# --- Remove the orphaned sh-lockfiles in the target directory -------
+# === Remove the orphaned sh-lockfiles in the target directory =======
 IFS0=$IFS
 IFS='
 '
@@ -409,7 +416,7 @@ do
     break
   done
   case $try in
-    0) printf '%s: "%s": timeout, try again later\n' "${0##*/}" "$lockname" 1>&2
+    0) warning "$lockname"': timeout, try again later\n'
        continue
        ;;
   esac
@@ -439,8 +446,8 @@ done
 IFS=$IFS0
 
 
+######################################################################
+# Finish
+######################################################################
 
-# ===== FINISH =======================================================
-
-# --- Succeed --------------------------------------------------------
-exit 0
+exit_trap 0

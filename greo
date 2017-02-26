@@ -86,7 +86,7 @@ print_usage_and_exit () {
 	              * Quickly overwriting but permission, owner/group, link, ACL
 	                informations will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 2017-02-26 00:49:00 JST
+	Version : 2017-02-26 11:03:32 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -101,10 +101,8 @@ exit_trap() {
   exit ${1:-0}
 }
 
-# === Define some chrs. to escape some special chrs. temporarily =====
-LFs=$(printf '\\\n_');LFs=${LFs%_} # Use as a "\n" in s-command of sed
-
 # === FUNC : the alternative of the "mktemp -t" ======================
+LFs=$(printf '\\\n_');LFs=${LFs%_} # Use as a "\n" in s-command of sed
 mktempf0() {
   # --- parameters, etc. ---------------------------------------------
   num_of_digits=16  # Length of Random String
@@ -267,8 +265,8 @@ while :; do
         ;;
   esac
   case "$optmode" in
-   #X) optX=$arg                                     ;;
-    *) error_exit 'There is a BUG is in this program';;
+   #X) optX=$arg                                       ;;
+    *) error_exit 1 'There is a BUG is in this program';;
   esac
   optmode=''
 done
@@ -399,7 +397,7 @@ case "$optt" in 0)
   trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM
   Tempfile=$(mktempf0)
   if [ $? -ne 0 ] || [ -z "$Tempfile" ]; then
-    error_exit 'Cannot create a temporary file'
+    error_exit 1 'Cannot create a temporary file'
   fi
 ;; esac
 

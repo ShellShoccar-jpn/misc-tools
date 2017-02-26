@@ -62,7 +62,7 @@ print_usage_and_exit () {
 	                            relative, otherwise absolute.
 	                            And when the unit suffix is written at last,
 	                            the value is multiplied by the unit suffix.
-	Version : 2017-02-26 00:56:29 JST
+	Version : 2017-02-26 11:02:44 JST
 	USAGE
   exit 1
 }
@@ -125,13 +125,13 @@ get_attr_and_size0() {
 # arg   : (none)
 # ret   : 0 when succeeded
 # stdout: path of the generated temporary file
+LFs=$(printf '\\\n_');LFs=${LFs%_}
 mktempf0() {
   # --- parameters, etc. ---------------------------------------------
   num_of_digits=16  # Length of Random String
   n=10              # Max Times of Retrying
   chrs='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_'
                     # Available letters
-  LF=$(printf '\\\n_');LF=${LF%_}
   # --- call built-in mktemp if exists -------------------------------
   type mktemp >/dev/null 2>&1 && {
     mktemp -t tmp.${0##*/}.$$.XXXXXXXXXXXXXXXX
@@ -160,7 +160,7 @@ mktempf0() {
     else
       hstr=$( (ps -Ao pid,etime,pcpu,vsz; date)         |
              od -t d4 -A n -v                           |
-             sed 's/[^0-9]\{1,\}/'"$LF"'/g'             |
+             sed 's/[^0-9]\{1,\}/'"$LFs"'/g'            |
              grep '[0-9]'                               |
              tail -n 42                                 |
              sed 's/.*\(.\{8\}\)$/\1/g'                 |
@@ -262,7 +262,7 @@ while :; do
          }
          case "$attr" in
            '') # skip when option -c is set
-               error_exit 'No such file or directory: '"$s"
+               error_exit 1 'No such file or directory: '"$s"
                ;;
            -*) break
                ;;

@@ -73,7 +73,7 @@ print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [-t timeout] <named_pipe_to_use> [output_file]
 	          * See the document at the source code of this command
-	Version : 2017-02-26 10:15:14 JST
+	Version : 2017-02-26 11:06:12 JST
 	USAGE
   exit 1
 }
@@ -88,13 +88,13 @@ print_usage_and_exit () {
 # arg   : (none)
 # ret   : 0 when succeeded
 # stdout: path of the generated temporary file
+LFs=$(printf '\\\n_');LFs=${LFs%_} # Use as a "\n" in s-command of sed
 mktempf0() {
   # --- parameters, etc.
   num_of_digits=16  # Length of Random String
   n=10              # Max Times of Retrying
   chrs='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_'
                     # Available letters
-  LF=$(printf '\\\n_');LF=${LF%_}
   # --- call built-in mktemp if exists
   type mktemp >/dev/null 2>&1 && {
     mktemp -t tmp.${0##*/}.$$.XXXXXXXXXXXXXXXX
@@ -123,7 +123,7 @@ mktempf0() {
     else
       hstr=$( (ps -Ao pid,etime,pcpu,vsz; date)         |
              od -t d4 -A n -v                           |
-             sed 's/[^0-9]\{1,\}/'"$LF"'/g'             |
+             sed 's/[^0-9]\{1,\}/'"$LFs"'/g'            |
              grep '[0-9]'                               |
              tail -n 42                                 |
              sed 's/.*\(.\{8\}\)$/\1/g'                 |
