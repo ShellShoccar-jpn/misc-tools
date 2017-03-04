@@ -15,11 +15,11 @@
 # RET  : $?=0 (when all of the options are valid)
 #         stdout : HTTP Cookie string
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-02-25
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-03-04
 #
 # This is a public-domain software. It means that all of the people
 # can use this with no restrictions at all. By the way, I am fed up
-# the side effects which are broght about by the major licenses.
+# the side effects which are brought about by the major licenses.
 #
 ######################################################################
 
@@ -45,7 +45,7 @@ print_usage_and_exit () {
 	            for instance "87" will be regarded as not "1987" but "87".
 	          * It is OK altough <yyyymmdd1> is bigger, smaller than
 	            <yyyymmdd2>, or <yyyymmdd1> is equal with <yyyymmdd2>.
-	Version : 2017-02-25 13:38:47 JST
+	Version : 2017-03-04 15:11:01 JST
 	USAGE
   exit 1
 }

@@ -13,4 +13,4 @@ Miscellaneous tools for shellscript developing that are not refined yet
 
 These are all public-domain softwares (CC0). It means that all of the people can use them with no restrictions at all.
 The reason that autors name is written in the all of the software is not for persisting our rights but letting you know our contact address.
-By the way, I am fed up the side effects which are broght about by the major licenses.
+By the way, I am fed up the side effects which are brought about by the major licenses.
