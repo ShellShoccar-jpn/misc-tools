@@ -15,7 +15,7 @@
 # RET  : $?=0 (when all of the options are valid)
 #         stdout : HTTP Cookie string
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-03-05
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-04-17
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -46,7 +46,7 @@ print_usage_and_exit () {
 	            for instance "87" will be regarded as not "1987" but "87".
 	          * It is OK altough <yyyymmdd1> is bigger, smaller than
 	            <yyyymmdd2>, or <yyyymmdd1> is equal with <yyyymmdd2>.
-	Version : 2017-03-05 04:49:02 JST
+	Version : 2017-04-17 11:25:01 JST
 	USAGE
   exit 1
 }
@@ -75,7 +75,7 @@ BEGIN {
   date_m = substr(d2, i-3,   2) * 1;
   date_d = substr(d2, i-1     ) * 1;
   if (! valdate()) {
-    printf("%s: Invalid date: %s\n",ENVIRON["MYNAME"],d2) > "/dev/stderr";
+    printf("%s: Invalid date: %s\n",ENVIRON["MYNAME"],d2) | "cat 1>&2";
     exit 1;
   }
   date_Y=date_y; date_M=date_m; date_D=date_d; YMD = d2*1;
@@ -84,7 +84,7 @@ BEGIN {
   date_m = substr(d1, i-3,   2) * 1;
   date_d = substr(d1, i-1     ) * 1;
   if (! valdate()) {
-    printf("%s: Invalid date: %s\n",ENVIRON["MYNAME"],d2) > "/dev/stderr";
+    printf("%s: Invalid date: %s\n",ENVIRON["MYNAME"],d2) | "cat 1>&2";
     exit 1;
   }
 

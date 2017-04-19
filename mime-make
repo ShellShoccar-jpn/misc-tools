@@ -41,7 +41,7 @@
 # Return: $?=0 (when all of the arguments are valid)
 #         stdout : generated MIME formatted data
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-04-04
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-04-17
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -96,7 +96,7 @@ print_usage_and_exit () {
 	                (default is --crlf when form-mode, --lf when mail-mode)
 	  --b64/--raw : switch about applying or not Base64 to the <file> of (c)-(f)
 	                (default is --raw)
-	Version : 2017-04-04 14:20:51 JST
+	Version : 2017-04-17 16:14:36 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -120,9 +120,9 @@ LFs=$(printf '\n_'); LFs=${LFs%_} # Use as a "\n" in s-command of sed
 # === which command also works on Just a POSIX environment ($1:command name)
 which which >/dev/null 2>&1 || {
   which() {
-    command -v "$1" 2>/dev/null |
-    awk 'match($0,/^\//){print; ok=1;}
-         END {if(ok==0){print "which: not found" > "/dev/stderr"; exit 1}}'
+    command -v "$1" 2>/dev/null | grep '^/' || {
+      echo 'which: not found' 1>&2 && (exit 1)
+    }
   }
 }
 
@@ -1371,7 +1371,10 @@ while [ $# -gt 0 ]; do
                        "$cr"
                 printf 'Content-Type: text/plain; charset="UTF-8"%s\n%s\n' \
                        "$cr" "$cr"
-                grep ^ "$file"            | # For the mailbody text,
+                case "$file" in           #
+                  -) grep ''        ;;    #
+                  :) grep '' "$file";;    #
+                esac                      | # For the mailbody text,
                 sed "/^\$/s/\$/$CR/"      | # it must be always put <CR>
                 sed "/[^$CR]\$/s/\$/$CR/" | # on the end of every line
                 base64 --wrap=76          |
