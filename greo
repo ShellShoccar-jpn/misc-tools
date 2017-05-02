@@ -35,10 +35,10 @@
 #    current dir.
 #      $ greo -p 'typo' 'type' *
 #
-# 2. Replace the date written in comment into today (202017-05-02) in all of the
+# 2. Replace the date written in comment into today (2017-05-02) in all of the
 #    files which has modified within 24 hours in "src" directory recursively.
 #      $ find './src' -type f -mtime -1 |
-#      > xargs greo -p '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' '202017-05-02'
+#      > xargs greo -p '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' '2017-05-02'
 #
 # 3. I want to replace all places of string "-R" into "-r", but the strings of
 #    which start by "-" will be misunderstood as an option. How should I type
@@ -46,7 +46,7 @@
 #      $ greo -p -- '-R' '-r' *
 #
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 202017-05-02
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-05-03
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -95,7 +95,7 @@ print_usage_and_exit () {
 	              * Quickly overwriting but permission, owner/group, link, ACL
 	                informations will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 202017-05-02 21:11:01 JST
+	Version : 2017-05-03 01:36:50 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
