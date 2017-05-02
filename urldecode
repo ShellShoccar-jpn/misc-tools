@@ -6,7 +6,7 @@
 #
 # USAGE: urldecode <file> ...
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-03-05
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 202017-05-02
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -24,14 +24,15 @@
 set -eu
 umask 0022
 export LC_ALL=C
-export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
+export PATH="$(command -p getconf PATH)${PATH+:}${PATH-}"
+export UNIX_STD=2003  # to make HP-UX conform to POSIX
 
 # === Define the functions for printing usage ========================
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <file> ...
 	Args    : <file> ... Text file for URL decoding
-	Version : 2017-03-05 04:49:02 JST
+	Version : 202017-05-02 21:11:01 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -52,55 +53,44 @@ esac
 # Main
 ######################################################################
 
-case $# in
-  0) cat -                    ;;
-  *) for file in "$@"; do      #
-       case "$file" in      #  #
-         -)  :             ;;  #
-         /*) :             ;;  #
-         *)  file="./$file";;  #
-       esac                 #  #
-       cat "$file"             #
-     done                     ;;
-esac |
-(cat -; printf '\n') |
-awk '
-BEGIN {
-  # --- prepare
-  OFS = "";
-  ORS = "";
-  # --- prepare decoding
-  for (i=0; i<256; i++) {
-    l  = sprintf("%c",i);
-    k1 = sprintf("%02x",i);
-    k2 = substr(k1,1,1) toupper(substr(k1,2,1));
-    k3 = toupper(substr(k1,1,1)) substr(k1,2,1);
-    k4 = toupper(k1);
-    p2c[k1]=l;p2c[k2]=l;p2c[k3]=l;p2c[k4]=l;
-  }
-  # --- decode
-  while (getline line) {
-    gsub(/\+/, " ", line);
-    while (length(line)) {
-      if (match(line,/%[0-9A-Fa-f][0-9A-Fa-f]/)) {
-        print substr(line,1,RSTART-1), p2c[substr(line,RSTART+1,2)];
-        line = substr(line,RSTART+RLENGTH);
-      } else {
-        print line;
-        break;
-      }
-    }
-    print "\n";
-  }
-}' |
-awk '
-BEGIN{
-  ORS="";
-  OFS="";
-  getline line;
-  print line;
-  while (getline line) {
-    print "\n",line;
-  }
-}
+(cat ${1+"$@"}; echo '')                                             |
+awk '                                                                #
+BEGIN {                                                              #
+  # --- prepare                                                      #
+  OFS = "";                                                          #
+  ORS = "";                                                          #
+  # --- prepare decoding                                             #
+  for (i=0; i<256; i++) {                                            #
+    l  = sprintf("%c",i);                                            #
+    k1 = sprintf("%02x",i);                                          #
+    k2 = substr(k1,1,1) toupper(substr(k1,2,1));                     #
+    k3 = toupper(substr(k1,1,1)) substr(k1,2,1);                     #
+    k4 = toupper(k1);                                                #
+    p2c[k1]=l;p2c[k2]=l;p2c[k3]=l;p2c[k4]=l;                         #
+  }                                                                  #
+  # --- decode                                                       #
+  while (getline line) {                                             #
+    gsub(/\+/, " ", line);                                           #
+    while (length(line)) {                                           #
+      if (match(line,/%[0-9A-Fa-f][0-9A-Fa-f]/)) {                   #
+        print substr(line,1,RSTART-1), p2c[substr(line,RSTART+1,2)]; #
+        line = substr(line,RSTART+RLENGTH);                          #
+      } else {                                                       #
+        print line;                                                  #
+        break;                                                       #
+      }                                                              #
+    }                                                                #
+    print "\n";                                                      #
+  }                                                                  #
+}'                                                                   |
+awk '                                                                #
+BEGIN{                                                               #
+  ORS="";                                                            #
+  OFS="";                                                            #
+  getline line;                                                      #
+  print line;                                                        #
+  while (getline line) {                                             #
+    print "\n",line;                                                 #
+  }                                                                  #
+}                                                                    #
 '

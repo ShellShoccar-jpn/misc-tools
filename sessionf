@@ -39,7 +39,7 @@
 # * On "validate", "reuse" and "remove" subcommands, you can set the session
 #   file directory in the <id> argument instead of the "at" argument.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-04-17
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 202017-05-02
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -57,14 +57,15 @@
 set -u
 umask 0022
 export LC_ALL=C
-export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
+export PATH="$(command -p getconf PATH)${PATH+:}${PATH-}"
+export UNIX_STD=2003  # to make HP-UX conform to POSIX
 
 # === Define the functions for printing usage ========================
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <subcommand> [argument] ...
 	          * See the header comment of me for detail
-	Version : 2017-04-17 16:18:54 JST
+	Version : 202017-05-02 21:11:01 JST
 	USAGE
   exit 1
 }
@@ -189,7 +190,7 @@ if [ "$subcmd" != 'create' ]; then
   printf '%s\n' "$1" | grep -q '/' && dir=${1%/*} && [ -z "$dir" ] && dir='/'
   shift
 fi
-for arg in "$@"; do
+for arg in ${1+"$@"}; do
   case "$arg" in
     at=*)
       check=${arg#at=}

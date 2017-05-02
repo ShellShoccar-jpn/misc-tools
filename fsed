@@ -11,7 +11,7 @@
 #   expression has, so that you can very easily substitute strings
 #   include various meta-characters, e.g. ^, $, \, /, &, and so on.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-03-05
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 202017-05-02
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -29,13 +29,14 @@
 set -u
 umask 0022
 export LC_ALL=C
-export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
+export PATH="$(command -p getconf PATH)${PATH+:}${PATH-}"
+export UNIX_STD=2003  # to make HP-UX conform to POSIX
 
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <pattern_str> <substitute_str> <file> [file...]
-	Version : 2017-03-05 04:49:02 JST
+	Version : 202017-05-02 21:11:01 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -70,27 +71,10 @@ shift 2
 # Main Routine
 ######################################################################
 
-case $# in 0) set -- -;; esac
-use_stdin=0
-for file0 in "$@"; do                                            #
-  file=$file0                                                    #
-  if   [ "_$file" = '_-' ]                               ; then  #
-    cat                                                          #
-  elif [ -f "$file" ] || [ -c "$file" ] || [ -p "$file" ]; then  #
-    case "$file" in /*|./*|../*) :;; *) File="./$file";; esac    #
-    cat "$file"                                                  #
-  else                                                           #
-    warning 'Cannot open as a file: '"$file0"                    #
-    ret=1                                                        #
-    continue                                                     #
-  fi                                                             #
-  ret=$?                                                         #
-  [ $ret -eq 0 ] || { warning 'Failed to fsed: '"$file0"; }      #
-done                                                             |
-(cat; echo '')                                                   |
-sed "s/$pat/$sub/g"                                              |
-awk 'BEGIN{ORS=""; OFS="";                                       #
-           getline line;                                         #
-           print line;                                           #
-           dlm=sprintf("\n");                                    #
-           while (getline line) {print dlm,line;} }'
+(cat ${1+"$@"}; echo '')                             |
+sed "s/$pat/$sub/g"                                  |
+awk 'BEGIN{ORS=""; OFS="";                           #
+           getline line;                             #
+           print line;                               #
+           dlm=sprintf("\n");                        #
+           while (getline line) {print dlm,line;} }' #

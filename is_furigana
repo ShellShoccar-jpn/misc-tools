@@ -23,7 +23,7 @@
 #    * blank (0x20) will be not also allowd
 #
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-03-05
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 202017-05-02
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -41,13 +41,14 @@
 set -u
 umask 0022
 export LC_ALL=C
-export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
+export PATH="$(command -p getconf PATH)${PATH+:}${PATH-}"
+export UNIX_STD=2003  # to make HP-UX conform to POSIX
 
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <file>
-	Version : 2017-03-05 04:49:02 JST
+	Version : 202017-05-02 21:11:01 JST
 	USAGE
   exit 1
 }
@@ -62,22 +63,31 @@ error_exit() {
 ######################################################################
 
 # === Get the filepath ===============================================
-if [ -f "${1:-}"      ] ||
-   [ -c "${1:-}"      ] ||
-   [ -p "${1:-}"      ] ||
-   [ "_${1:-}" = '_-' ]  ; then
-  file="$1"
-elif [ $# -lt 1 ]; then
-  file='-'
+# --- initialize option parameters -----------------------------------
+file=''
+#
+# --- get them -------------------------------------------------------
+case $# in
+  0) :                   ;;
+  1) file=$1             ;;
+  *) print_usage_and_exit;;
+esac
+
+# === Validate the arguments =========================================
+if   [ "_$file" = '_'                ] ||
+     [ "_$file" = '_-'               ] ||
+     [ "_$file" = '_/dev/stdin'      ] ||
+     [ "_$file" = '_/dev/fd/0'       ] ||
+     [ "_$file" = '_/proc/self/fd/0' ]  ; then
+  file=''
+elif [ -f "$file"                    ] ||
+     [ -c "$file"                    ] ||
+     [ -p "$file"                    ]  ; then
+  [ -r "$file" ] || error_exit 1 'Cannot open the file: '"$file"
 else
   print_usage_and_exit
 fi
-
-# === Validate the arguments =========================================
-if [ ! -r "$file" ] && [ "_$file" != '_-' ]; then
-  error_exit 1 'Cannot open the file'
-fi
-case "$file" in -|/*|./*|../*) :;; *) file="./$file";; esac
+case "$file" in ''|-|/*|./*|../*) :;; *) file="./$file";; esac
 
 
 ######################################################################
@@ -89,15 +99,6 @@ BEGIN {
   # register all character codes
   for(i=1;i<=255;i++){asc[sprintf("%c",i)]=i;}
 
-  # register some character codes to refer quickly
-  #chr_80_1 = sprintf("\200");
-  chr_C0_X = sprintf("\300");
-  chr_E0_2 = sprintf("\340");
-  chr_F0_3 = sprintf("\360");
-  chr_F8_4 = sprintf("\370");
-  chr_FC_5 = sprintf("\374");
-  chr_FE_6 = sprintf("\376");
-
   # return code
   ret = 0;
 }
@@ -106,15 +107,15 @@ BEGIN {
   if (NR>1) { ret=1; exit; }
   for (i=1; i<=length($0); i++) {
     s = substr($0,i,1);
-    #if        (s < chr_80_1) {
+    #if        (s < \200) {
     #  s_out = s_out s;
     #  continue;
     #}
-    if        (s < chr_C0_X) {
+    if        (s < \300) {
       ret=11; exit;
-    } else if (s < chr_E0_2) {
+    } else if (s < \340) {
       ret=12; exit;
-    } else if (s < chr_F0_3) {
+    } else if (s < \360) {
       s1 = substr($0,i+1,1);
       s2 = substr($0,i+2,1);
       utf8c = asc[s]*65536 + asc[s1]*256 + asc[s2];
@@ -150,11 +151,11 @@ BEGIN {
         ret=28; exit;
       }
       i += 2;
-    } else if (s < chr_F8_4) {
+    } else if (s < \370) {
       ret=13; exit;
-    } else if (s < chr_FC_5) {
+    } else if (s < \374) {
       ret=14; exit;
-    } else if (s < chr_FE_6) {
+    } else if (s < \376) {
       ret=15; exit;
     } else {
       ret=16; exit;
@@ -166,4 +167,4 @@ END {
   ret = (NR!=0) ? ret : 2;
   exit ret;
 }
-' "$file"
+' ${file:+"$file"}

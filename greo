@@ -4,15 +4,19 @@
 #
 # GREO - "Global Regular Expression and Overwrite"
 #
-# USAGE: greo [options] regexp(BRE) replacement file#1 [file#2...]
-# ARGS : regexp(BRE), replacement
+# USAGE: greo [options] regexp replacement file#1 [file#2...]
+# ARGS : regexp, replacement
 #            These are the 1st and 2nd arguments of s/1/2/g.
 #            Available meta-chr. set as regular expression is
 #            Basic Regular Expression, you can see on sed manual.
 #            However, you do not have to escape "/" in the strings.
 #        file#n
 #            A file to overwrite
-# OPTS : -F, --fixed-strings (compatible with the same options of grep)
+# OPTS : -E, --extended-regexp
+#            Regard the arguments "regexp" as an extended regular
+#            expression (ERE) instead of a basic one (BRE). But you cannot
+#            use the option when an ERE supported sed command unavailable.
+#        -F, --fixed-strings (compatible with the same options of grep)
 #            Regard both arguments ("regexp", "replacement") as
 #            not regexp strings but simple string
 #        -R, -r, --recursive (compatible with the same options of grep)
@@ -31,10 +35,10 @@
 #    current dir.
 #      $ greo -p 'typo' 'type' *
 #
-# 2. Replace the date written in comment into today (2017-03-05) in all of the
+# 2. Replace the date written in comment into today (202017-05-02) in all of the
 #    files which has modified within 24 hours in "src" directory recursively.
 #      $ find './src' -type f -mtime -1 |
-#      > xargs greo -p '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' '2017-03-05'
+#      > xargs greo -p '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' '202017-05-02'
 #
 # 3. I want to replace all places of string "-R" into "-r", but the strings of
 #    which start by "-" will be misunderstood as an option. How should I type
@@ -42,7 +46,7 @@
 #      $ greo -p -- '-R' '-r' *
 #
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-03-05
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 202017-05-02
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -60,7 +64,8 @@
 set -u
 umask 0022
 export LC_ALL=C
-export PATH="$(command -p getconf PATH)${PATH:+:}${PATH:-}"
+export PATH="$(command -p getconf PATH)${PATH+:}${PATH-}"
+export UNIX_STD=2003  # to make HP-UX conform to POSIX
 
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
@@ -73,7 +78,11 @@ print_usage_and_exit () {
 	              However, you do not have to escape "/" in the strings.
 	          file #n
 	              A file to overwrite
-	Options : -F, --fixed-strings (compatible with the same options of grep)
+	Options : -E, --extended-regexp
+	              Regard the arguments "regexp" as an extended regular
+	              expression (ERE) instead of a basic one (BRE). But you cannot
+	              use the option when an ERE supported sed command unavailable.
+	          -F, --fixed-strings (compatible with the same options of grep)
 	              Regard both arguments ("regexp", "replacement") as
 	              not regexp strings but simple string
 	          -R, -r, --recursive (compatible with the same options of grep)
@@ -86,7 +95,7 @@ print_usage_and_exit () {
 	              * Quickly overwriting but permission, owner/group, link, ACL
 	                informations will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 2017-03-05 04:49:02 JST
+	Version : 202017-05-02 21:11:01 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -188,6 +197,7 @@ mktempf0() {
 
 # === Set default values =============================================
 optF=0
+optE=0
 optR=0
 optp=0
 optt=0
@@ -201,27 +211,29 @@ while :; do
     '') case "$1" in
           -)       case $# in 1) break;; esac
                    ;;
-          -[prRF]*) s=$(printf '%s\n' "${1#-}"                           |
-                        awk '{opt = "_"; err="";                         #
-                              l = length($0);                            #
-                              for (n=1;n<=l;n++) {                       #
-                                c = substr($0, n, 1);                    #
-                                if      (c=="p") { opt = opt "p";      } #
-                                else if (c=="r") { opt = opt "R";      } #
-                                else if (c=="R") { opt = opt "R";      } #
-                                else if (c=="F") { opt = opt "F";      } #
-                               #else if (c=="X") { opt = opt "X";break;} #
-                                else             { err = "!";          } #
-                              }                                          #
-                              arg = (n<l) ? substr($0,n+1) : "";         #
-                              printf("%s%s %s",err,opt,arg);           }')
+          -[EFpRr]*) s=$(printf '%s\n' "${1#-}"                           |
+                         awk '{opt = "_"; err="";                         #
+                               l = length($0);                            #
+                               for (n=1;n<=l;n++) {                       #
+                                 c = substr($0, n, 1);                    #
+                                 if      (c=="E") { opt = opt "E";      } #
+                                 else if (c=="F") { opt = opt "F";      } #
+                                 else if (c=="p") { opt = opt "p";      } #
+                                 else if (c=="R") { opt = opt "R";      } #
+                                 else if (c=="r") { opt = opt "R";      } #
+                                #else if (c=="X") { opt = opt "X";break;} #
+                                 else             { err = "!";          } #
+                               }                                          #
+                               arg = (n<l) ? substr($0,n+1) : "";         #
+                               printf("%s%s %s",err,opt,arg);           }')
                      arg=${s#* }
                      s=${s%% *}
                      case "$s" in '!'*) print_usage_and_exit;; esac
+                     case "$s" in  *E*) optE=1; optF=0      ;; esac
+                     case "$s" in  *F*) optF=1; optE=0      ;; esac
                      case "$s" in  *p*) optp=1              ;; esac
                      case "$s" in  *R*) optR=1              ;; esac
-                     case "$s" in  *F*) optF=1              ;; esac
-                    #case "$s" in  *X*) optmode='X'         ;; esac
+                     #case "$s" in  *X*) optmode='X'         ;; esac
                      shift;
                      case "$arg" in '') continue;; esac
                      ;;
@@ -235,8 +247,13 @@ while :; do
                      shift
                      continue
                      ;;
+          --extended-regexp)
+                     optE=1; optF=0
+                     shift
+                     continue
+                     ;;
           --fixed-strings)
-                     optF=1
+                     optF=1; optE=0
                      shift
                      continue
                      ;;
@@ -281,8 +298,24 @@ esac
 # Prepare for the Main Routine
 ######################################################################
 
-# === Decide the option string for grep ==============================
+# === Decide the option string for grep and sed ======================
 opt4grep=''
+opt4sed=''
+CMDSED='sed'
+case $optE       in  0) :;; *)
+  if   [ $(echo ABC |  sed -E 's/.+/OK/' 2>/dev/null) = 'OK' ]; then
+    opt4sed='-E'
+  elif [ $(echo ABC |  sed -r 's/.+/OK/' 2>/dev/null) = 'OK' ]; then
+    opt4sed='-r'
+  elif [ $(echo ABC | gsed -r 's/.+/OK/' 2>/dev/null) = 'OK' ]; then
+    opt4sed='-r'
+    CMDSED='gsed'
+  else
+    error_exit 1 'No ERE supported sed is found. You cannot use -E option.'
+  fi
+  opt4grep="${opt4grep}E"
+  ;;
+esac
 case $optF       in  0) :;; *) opt4grep="${opt4grep}F";; esac
 case $optR       in  0) :;; *) opt4grep="${opt4grep}R";; esac
 case "$opt4grep" in '') :;; *) opt4grep="-${opt4grep}";; esac
@@ -356,7 +389,7 @@ case $optF in
                sed 's/\//\\\//g'      )
      ;;
   *) pat4grep=$pat
-     pat4sed=$(printf '%s\n' "$1"                |
+     pat4sed=$(printf '%s\n' "$pat"              |
                # --- escape all of BRE meta chrs.#
                sed 's/\([].\*/[]\)/\\\1/g'       |
                sed '1s/^^/\\^/'                  |
@@ -423,27 +456,27 @@ while IFS= read -r file0; do                                          #
                                                                       #
   # 2) --- "greo" a file                                              #
   case $optt in                                                       #
-    0) (cat "$file"; echo '')              |                          #
-       sed "s/$pat4sed/$sub4sed/g" "$file" |                          #
-       awk 'BEGIN{ORS=""; OFS="";          #                          #
-                  getline line;            #                          #
-                  print line;              #                          #
-                  dlm=sprintf("\n");       #                          #
-                  while (getline line) {   #                          #
-                    print dlm,line;        #                          #
-                  }                     }' > "$Tempfile" &&           #
-       cat "$Tempfile"                     > "$file"                  #
+    0) (cat "$file"; echo '')                   |             #       #
+       $CMDSED $opt4sed "s/$pat4sed/$sub4sed/g" |             #       #
+       awk 'BEGIN{ORS=""; OFS="";               #             #       #
+                  getline line;                 #             #       #
+                  print line;                   #             #       #
+                  dlm=sprintf("\n");            #             #       #
+                  while (getline line) {        #             #       #
+                    print dlm,line;             #             #       #
+                  }                     }'      > "$Tempfile" &&      #
+       cat "$Tempfile"                          > "$file"             #
        ;;                                                             #
-    *) ( rm "$file"                             &&                    #
-         { (cat; echo '')                      |                      #
-           sed "s/$pat4sed/$sub4sed/g"         |                      #
-           awk 'BEGIN{ORS=""; OFS="";          #                      #
-                      getline line;            #                      #
-                      print line;              #                      #
-                      dlm=sprintf("\n");       #                      #
-                      while (getline line) {   #                      #
-                        print dlm,line;        #                      #
-                      }                     }' ; } > "$file"          #
+    *) ( rm "$file"                                   &&              #
+         { (cat; echo '')                           | #               #
+           $CMDSED $opt4sed "s/$pat4sed/$sub4sed/g" | #               #
+           awk 'BEGIN{ORS=""; OFS="";               # #               #
+                      getline line;                 # #               #
+                      print line;                   # #               #
+                      dlm=sprintf("\n");            # #               #
+                      while (getline line) {        # #               #
+                        print dlm,line;             # #               #
+                      }                     }'      ; } > "$file"     #
        ) <"$file"                                                     #
        ;;                                                             #
   esac                                                                #
