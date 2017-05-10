@@ -14,7 +14,7 @@
 # Retuen  : Return 0 only when timestamps of all files were able to be
 #           gotten.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-05-09
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-05-11
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -56,7 +56,7 @@ void print_usage_and_exit(void) {
   WRN("          * The latter format is set by -l option.\n"                  );
   WRN("Retuen  : Return 0 only when timestamps of all files were able to be\n");
   WRN("          gotten. \n"                                                  );
-  WRN("Version : 2017-05-09 23:57:25 JST\n"                                   );
+  WRN("Version : 2017-05-11 00:18:56 JST\n"                                   );
   WRN("          (POSIX C language)\n"                                        );
   exit(1);
 }
@@ -109,18 +109,18 @@ main(int argc, char *argv[]){
   if (i >= argc) { print_usage_and_exit(); }
 
   /*=== Swtich to the long format mode if -l option has been set ===*/
-	switch (iFmttype) {
-		case  0: strcpy(szFmt  ,"%Y%m%d%H%M%S"       );
-		         strcpy(szDummy,"%-14s %-14s %-14s " );
-		         break;
-		case  1: strcpy(szFmt  ,"%Y-%m-%dT%H:%M:%S%z");
-		         strcpy(szDummy,"%-24s %-24s %-24s " );
-		         break;
-		case  2: strcpy(szFmt  ,"%s"                 );
-		         strcpy(szDummy,"%-10s %-10s %-10s " );
-		         break;
-		default: error_exit(1, "Unexpected Error!");
-	}
+  switch (iFmttype) {
+    case  0: strcpy(szFmt  ,"%Y%m%d%H%M%S"       );
+             strcpy(szDummy,"%-14s %-14s %-14s " );
+             break;
+    case  1: strcpy(szFmt  ,"%Y-%m-%dT%H:%M:%S%z");
+             strcpy(szDummy,"%-24s %-24s %-24s " );
+             break;
+    case  2: strcpy(szFmt  ,"%s"                 );
+             strcpy(szDummy,"%-10s %-10s %-10s " );
+             break;
+    default: error_exit(1, "Unexpected Error!");
+  }
 
   /*=== Main loop ==================================================*/
   for (   ; i<argc; i++) {
