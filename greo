@@ -27,7 +27,7 @@
 #        --quick-overwrite
 #            Replace the file(s) without tempfile (only for professional)
 #            * Quickly overwriting but permission, owner/group, link, ACL
-#              informations will be reset
+#              information will be reset
 #        --  Finish recognizing the following arguments as options
 #
 # === Example ===
@@ -46,7 +46,7 @@
 #      $ greo -p -- '-R' '-r' *
 #
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-05-03
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-06-29
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -93,9 +93,9 @@ print_usage_and_exit () {
 	          --quick-overwrite
 	              Replace the file(s) without tempfile (only for professional)
 	              * Quickly overwriting but permission, owner/group, link, ACL
-	                informations will be reset
+	                information will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 2017-05-03 01:36:50 JST
+	Version : 2017-06-29 12:24:58 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
