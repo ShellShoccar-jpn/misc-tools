@@ -17,7 +17,7 @@
 #                  converting
 #
 # Designed originally by Nobuaki Tounaka
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-05-03
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-07-18
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -35,6 +35,7 @@
 set -u
 umask 0022
 export LC_ALL=C
+type getconf >/dev/null 2>&1 &&
 export PATH="$(command -p getconf PATH)${PATH+:}${PATH-}"
 export UNIX_STD=2003  # to make HP-UX conform to POSIX
 
@@ -48,7 +49,7 @@ print_usage_and_exit () {
 	                    as a field formatted string instead of <file>
 	          +<n>h ... Regards the top <n> lines as comment and Print without
 	                    converting
-	Version : 2017-05-03 01:36:50 JST
+	Version : 2017-07-18 00:23:25 JST
 	          (POSIX.1 Bourne Shell/POSIX.1 commands/UTF-8)
 	USAGE
   exit 1

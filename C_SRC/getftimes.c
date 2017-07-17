@@ -14,7 +14,7 @@
 # Retuen  : Return 0 only when timestamps of all files were able to be
 #           gotten.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-05-11
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-07-18
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -56,7 +56,7 @@ void print_usage_and_exit(void) {
   WRN("          * The latter format is set by -l option.\n"                  );
   WRN("Retuen  : Return 0 only when timestamps of all files were able to be\n");
   WRN("          gotten. \n"                                                  );
-  WRN("Version : 2017-05-11 00:18:56 JST\n"                                   );
+  WRN("Version : 2017-07-18 00:23:25 JST\n"                                   );
   WRN("          (POSIX C language)\n"                                        );
   exit(1);
 }

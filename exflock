@@ -44,7 +44,7 @@
 #              :
 #          kill $flock_pid
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-05-03
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-07-18
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -64,6 +64,7 @@ readonly DEFAULT_MAXLIFETIME=45
 set -u
 umask 0022
 export LC_ALL=C
+type getconf >/dev/null 2>&1 &&
 export PATH="$(command -p getconf PATH)${PATH+:}${PATH-}"
 
 # === Define the functions for printing usage and error message ======
@@ -76,7 +77,7 @@ print_usage_and_exit () {
 	                          (0 means infinity, and default=$DEFAULT_MAXLIFETIME)
 	          * See the document at the source code of this command
 	            for more infomation
-	Version : 2017-05-03 01:36:50 JST
+	Version : 2017-07-18 00:23:25 JST
 	USAGE
   exit 1
 }
