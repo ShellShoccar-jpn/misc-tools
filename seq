@@ -18,7 +18,7 @@
 #        -w ............. Print all numbers with the same width, by padding
 #                         with leading zeros.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-07-18
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-08-09
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -51,7 +51,7 @@ print_usage_and_exit () {
 	            -f <format>, -s <string>, -w
 	          But --by-myself is the only original option, it prevent
 	          from use the built-in same name command even if available
-	Version : 2017-07-18 02:39:39 JST
+	Version : 2017-08-09 00:59:52 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	            * Although the bult-in seq produces better performance
 	              than the POSIX commands set
@@ -69,12 +69,20 @@ case "${1:-}" in
   '--by-myself')
      shift; by_myself=1
      ;;
-  *) case "$(d=${0%/*}/;[ "_$d" = "_$0/" ]||cd "$d";echo "$(pwd)/${0##*/}")" in
-       "$(command -v seq 2>/dev/null)") by_myself=1;;
-     esac
+  *) export mydir=$(d=${0%/*}/;[ "_$d" = "_$0/" ]||cd "$d";echo "$(pwd)")
+     path0=${PATH:-}
+     PATH=$(printf  '%s\n' "$path0"                |
+            tr      ':' '\n'                       |
+            awk     '$0!=ENVIRON["mydir"]{print;}' |
+            tr      '\n' ':'                       |
+            grep -v '^:$'                          )
+     CMD_builtin=$(command -v seq 2>/dev/null || :)
+     case "$CMD_builtin" in '') by_myself=1;; esac
+     PATH=$path0
+     unset mydir
      ;;
 esac
-case $by_myself in 0) exec seq ${1+"$@"}; exit 1;; esac
+case $by_myself in 0) exec "$CMD_builtin" ${1+"$@"}; exit 1;; esac
 
 
 ######################################################################
