@@ -24,6 +24,8 @@
 #        -p, --perform, --start
 #            Do GREO actually, if you run this command without the
 #            options, it will be work as rehearsal mode
+#        -t, --times
+#            Preserve modification times
 #        --quick-overwrite
 #            Replace the file(s) without tempfile (only for professional)
 #            * Quickly overwriting but permission, owner/group, link, ACL
@@ -35,10 +37,10 @@
 #    current dir.
 #      $ greo -p 'typo' 'type' *
 #
-# 2. Replace the date written in comment into today (2017-07-18) in all of the
+# 2. Replace the date written in comment into today (2017-11-17) in all of the
 #    files which has modified within 24 hours in "src" directory recursively.
 #      $ find './src' -type f -mtime -1 |
-#      > xargs greo -p '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' '2017-07-18'
+#      > xargs greo -p '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' '2017-11-17'
 #
 # 3. I want to replace all places of string "-R" into "-r", but the strings of
 #    which start by "-" will be misunderstood as an option. How should I type
@@ -46,7 +48,7 @@
 #      $ greo -p -- '-R' '-r' *
 #
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-07-18
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-11-17
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -91,12 +93,14 @@ print_usage_and_exit () {
 	          -p, --perform, --start
 	              Do GREO actually, if you run this command without the
 	              options, it will be work as rehearsal mode
+	          -t, --times
+	              Preserve modification times
 	          --quick-overwrite
 	              Replace the file(s) without tempfile (only for professional)
 	              * Quickly overwriting but permission, owner/group, link, ACL
 	                information will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 2017-07-18 02:39:39 JST
+	Version : 2017-11-17 12:54:05 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -201,6 +205,7 @@ optF=0
 optE=0
 optR=0
 optp=0
+optq=0
 optt=0
 optHH=''
 
@@ -212,7 +217,8 @@ while :; do
     '') case "$1" in
           -)       case $# in 1) break;; esac
                    ;;
-          -[EFpRr]*) s=$(printf '%s\n' "${1#-}"                           |
+          -[EFpRrt]*)
+                     s=$(printf '%s\n' "${1#-}"                           |
                          awk '{opt = "_"; err="";                         #
                                l = length($0);                            #
                                for (n=1;n<=l;n++) {                       #
@@ -222,6 +228,7 @@ while :; do
                                  else if (c=="p") { opt = opt "p";      } #
                                  else if (c=="R") { opt = opt "R";      } #
                                  else if (c=="r") { opt = opt "R";      } #
+                                 else if (c=="t") { opt = opt "t";      } #
                                 #else if (c=="X") { opt = opt "X";break;} #
                                  else             { err = "!";          } #
                                }                                          #
@@ -234,6 +241,7 @@ while :; do
                      case "$s" in  *F*) optF=1; optE=0      ;; esac
                      case "$s" in  *p*) optp=1              ;; esac
                      case "$s" in  *R*) optR=1              ;; esac
+                     case "$s" in  *t*) optt=1              ;; esac
                      #case "$s" in  *X*) optmode='X'         ;; esac
                      shift;
                      case "$arg" in '') continue;; esac
@@ -259,7 +267,11 @@ while :; do
                      continue
                      ;;
           --quick-overwrite|--quick-update)
-                     optt=1
+                     optq=1
+                     shift
+                     continue
+                     ;;
+          --times)   optt=1
                      shift
                      continue
                      ;;
@@ -427,13 +439,13 @@ case $optp in 0)
 ######################################################################
 
 # === Make a temporary file if necessary =============================
-case "$optt" in 0)
+if ([ "$optq" -eq 0 ] || [ "$optt" -ne 0 ]); then
   trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM
   Tempfile=$(mktempf0)
   if [ $? -ne 0 ] || [ -z "$Tempfile" ]; then
     error_exit 1 'Cannot create a temporary file'
   fi
-;; esac
+fi
 
 # === List target files ============================================= #
 grep $opt4grep $optHH "$pat4grep" $devnull "$@"                       |
@@ -456,29 +468,33 @@ while IFS= read -r file0; do                                          #
   case "$file" in /*|./*|../*) :;; *) file="./$file";; esac           #
                                                                       #
   # 2) --- "greo" a file                                              #
-  case $optt in                                                       #
-    0) (cat "$file"; echo '')                   |             #       #
-       $CMDSED $opt4sed "s/$pat4sed/$sub4sed/g" |             #       #
-       awk 'BEGIN{ORS=""; OFS="";               #             #       #
-                  getline line;                 #             #       #
-                  print line;                   #             #       #
-                  dlm=sprintf("\n");            #             #       #
-                  while (getline line) {        #             #       #
-                    print dlm,line;             #             #       #
-                  }                     }'      > "$Tempfile" &&      #
-       cat "$Tempfile"                          > "$file"             #
+  case $optq in                                                       #
+    0) (cat "$file"; echo '')                   |                  #  #
+       $CMDSED $opt4sed "s/$pat4sed/$sub4sed/g" |                  #  #
+       awk 'BEGIN{ORS=""; OFS="";               #                  #  #
+                  getline line;                 #                  #  #
+                  print line;                   #                  #  #
+                  dlm=sprintf("\n");            #                  #  #
+                  while (getline line) {        #                  #  #
+                    print dlm,line;             #                  #  #
+                  }                     }'      > "$Tempfile"      && #
+       case $optt in 0) :;; *) touch -r "$file" "$Tempfile";; esac && #
+       cat "$Tempfile" > "$file"                                   && #
+       case $optt in 0) :;; *) touch -r "$Tempfile" "$file";; esac    #
        ;;                                                             #
-    *) ( rm "$file"                                   &&              #
-         { (cat; echo '')                           | #               #
-           $CMDSED $opt4sed "s/$pat4sed/$sub4sed/g" | #               #
-           awk 'BEGIN{ORS=""; OFS="";               # #               #
-                      getline line;                 # #               #
-                      print line;                   # #               #
-                      dlm=sprintf("\n");            # #               #
-                      while (getline line) {        # #               #
-                        print dlm,line;             # #               #
-                      }                     }'      ; } > "$file"     #
-       ) <"$file"                                                     #
+    *) case $optt in 0) :;; *) touch -r "$file" "$Tempfile";; esac && #
+       ( rm "$file"                                                && #
+         { (cat; echo '')                           |              #  #
+           $CMDSED $opt4sed "s/$pat4sed/$sub4sed/g" |              #  #
+           awk 'BEGIN{ORS=""; OFS="";               #              #  #
+                      getline line;                 #              #  #
+                      print line;                   #              #  #
+                      dlm=sprintf("\n");            #              #  #
+                      while (getline line) {        #              #  #
+                        print dlm,line;             #              #  #
+                      }                     }'      ; } > "$file"  #  #
+       ) <"$file"                                                  && #
+       case $optt in 0) :;; *) touch -r "$Tempfile" "$file";; esac    #
        ;;                                                             #
   esac                                                                #
   if [ $? -eq 0 ]; then                                               #
