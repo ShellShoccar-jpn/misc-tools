@@ -6,16 +6,16 @@
 #
 # USAGE: greo [options] regexp replacement file#1 [file#2...]
 # ARGS : regexp, replacement
-#            These are the 1st and 2nd arguments of s/1/2/g.
-#            Available meta-chr. set as regular expression is
+#            These are the 1st and 2nd arguments on s/1/2/g.
+#            Available meta-chrs. set as regular expression are
 #            Basic Regular Expression, you can see on sed manual.
 #            However, you do not have to escape "/" in the strings.
 #        file#n
 #            A file to overwrite
 # OPTS : -E, --extended-regexp
-#            Regard the arguments "regexp" as an extended regular
-#            expression (ERE) instead of a basic one (BRE). But you cannot
-#            use the option when an ERE supported sed command unavailable.
+#            Regard the arguments "regexp" as extended regular expression
+#            (ERE) instead of a basic one (BRE). But you cannot use the
+#            option when an ERE supported sed command unavailable.
 #        -F, --fixed-strings (compatible with the same options of grep)
 #            Regard both arguments ("regexp", "replacement") as
 #            not regexp strings but simple string
@@ -37,10 +37,10 @@
 #    current dir.
 #      $ greo -p 'typo' 'type' *
 #
-# 2. Replace the date written in comment into today (2017-11-17) in all of the
+# 2. Replace the date written in comment into today (2017-11-18) in all of the
 #    files which has modified within 24 hours in "src" directory recursively.
 #      $ find './src' -type f -mtime -1 |
-#      > xargs greo -p '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' '2017-11-17'
+#      > xargs greo -p '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' '2017-11-18'
 #
 # 3. I want to replace all places of string "-R" into "-r", but the strings of
 #    which start by "-" will be misunderstood as an option. How should I type
@@ -48,7 +48,7 @@
 #      $ greo -p -- '-R' '-r' *
 #
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-11-17
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-11-18
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -82,9 +82,9 @@ print_usage_and_exit () {
 	          file #n
 	              A file to overwrite
 	Options : -E, --extended-regexp
-	              Regard the arguments "regexp" as an extended regular
-	              expression (ERE) instead of a basic one (BRE). But you cannot
-	              use the option when an ERE supported sed command unavailable.
+	              Regard the arguments "regexp" as extended regular expression
+	              (ERE) instead of a basic one (BRE). But you cannot use the
+	              option when an ERE supported sed command unavailable.
 	          -F, --fixed-strings (compatible with the same options of grep)
 	              Regard both arguments ("regexp", "replacement") as
 	              not regexp strings but simple string
@@ -100,7 +100,7 @@ print_usage_and_exit () {
 	              * Quickly overwriting but permission, owner/group, link, ACL
 	                information will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 2017-11-17 12:54:05 JST
+	Version : 2017-11-18 12:17:50 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -474,7 +474,7 @@ while IFS= read -r file0; do                                          #
        awk 'BEGIN{ORS=""; OFS="";               #                  #  #
                   getline line;                 #                  #  #
                   print line;                   #                  #  #
-                  dlm=sprintf("\n");            #                  #  #
+                  dlm="\n";                     #                  #  #
                   while (getline line) {        #                  #  #
                     print dlm,line;             #                  #  #
                   }                     }'      > "$Tempfile"      && #
@@ -483,13 +483,13 @@ while IFS= read -r file0; do                                          #
        case $optt in 0) :;; *) touch -r "$Tempfile" "$file";; esac    #
        ;;                                                             #
     *) case $optt in 0) :;; *) touch -r "$file" "$Tempfile";; esac && #
-       ( rm "$file"                                                && #
+       ( rm "$file"                                 &&             #  #
          { (cat; echo '')                           |              #  #
            $CMDSED $opt4sed "s/$pat4sed/$sub4sed/g" |              #  #
            awk 'BEGIN{ORS=""; OFS="";               #              #  #
                       getline line;                 #              #  #
                       print line;                   #              #  #
-                      dlm=sprintf("\n");            #              #  #
+                      dlm="\n";                     #              #  #
                       while (getline line) {        #              #  #
                         print dlm,line;             #              #  #
                       }                     }'      ; } > "$file"  #  #
