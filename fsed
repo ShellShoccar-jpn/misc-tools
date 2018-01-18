@@ -11,7 +11,7 @@
 #   expression has, so that you can very easily substitute strings
 #   include various meta-characters, e.g. ^, $, \, /, &, and so on.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-07-18
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-01-18
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -37,7 +37,7 @@ export UNIX_STD=2003  # to make HP-UX conform to POSIX
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <pattern_str> <substitute_str> <file> [file...]
-	Version : 2017-07-18 02:39:39 JST
+	Version : 2018-01-18 14:58:38 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -61,10 +61,11 @@ pat=$(printf '%s\n' "$1"          |
       sed 's/\([].\*/[]\)/\\\1/g' |
       sed '1s/^^/\\^/'            |
       sed '$s/$$/\\$/'            )
-sub=$(printf '%s\n' "$2"       |
+sub=$(printf '%s\n' "${2}_"    |
       sed 's/\([\&/]\)/\\\1/g' |
       sed 's/$/\\/'            |
       sed '$s/\\$//'           )
+sub=${sub%_}
 shift 2
 
 
