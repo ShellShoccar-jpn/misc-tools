@@ -2,18 +2,16 @@
 
 ######################################################################
 #
-# GREO - "Global Regular Expression and Overwrite"
+# GRES - "Global Regular Expression and Substitute"
 #
-# USAGE: greo [options] regexp replacement file#1 [file#2...]
+# USAGE: gres [options] regexp replacement [file#1 [file#2 [...]]]
 # ARGS : regexp, replacement
 #            These are the 1st and 2nd arguments on s/1/2/g.
 #            Available meta-chrs. set as regular expression are
 #            Basic Regular Expression, you can see on sed manual.
 #            However, you do not have to escape "/" in the strings.
 #        file#n
-#            A file to overwrite (To avoid misunderstanding, you have to
-#            use "./-" instead of "-" if "-" means not STDIN but a regular
-#            file)
+#            A file to open ("-" means STDIN)
 # OPTS : -E, --extended-regexp
 #            Regard the arguments "regexp" as extended regular expression
 #            (ERE) instead of a basic one (BRE). But you cannot use the
@@ -23,31 +21,23 @@
 #            not regexp strings but simple string
 #        -R, -r, --recursive (compatible with the same options of grep)
 #            Read all files under each directory, recursively
-#        -p, --perform, --start
-#            Do GREO actually, if you run this command without the
-#            options, it will be work as rehearsal mode
-#        -t, --times
-#            Preserve modification times
-#        --quick-overwrite
-#            Replace the file(s) without tempfile (only for professional)
-#            * Quickly overwriting but permission, owner/group, link, ACL
-#              information will be reset
 #        --  Finish recognizing the following arguments as options
 #
 # === Example ===
-# 1. Replace all places of the word "typo" with "type" in the files on the
-#    current dir.
-#      $ greo -p 'typo' 'type' *
+# 1. Substitute all places of the word "typo" with "type" in the files on
+#    the current dir.
+#      $ gres 'typo' 'type' *
 #
-# 2. Replace the date written in comment into today (2017-11-18) in all of the
-#    files which has modified within 24 hours in "src" directory recursively.
+# 2. Substitute the date written in comment into today (2018-02-25) in
+#    all of the files which has modified within 24 hours in "src" directory
+#    recursively.
 #      $ find './src' -type f -mtime -1 |
-#      > xargs greo -p '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' '2017-11-18'
+#      > xargs gres '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' '2018-02-25'
 #
 # 3. I want to replace all places of string "-R" into "-r", but the strings of
 #    which start by "-" will be misunderstood as an option. How should I type
 #    for?
-#      $ greo -p -- '-R' '-r' *
+#      $ gres -- '-R' '-r' *
 #
 #
 # Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-02-25
@@ -75,16 +65,14 @@ export UNIX_STD=2003  # to make HP-UX conform to POSIX
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
-	Usage   : ${0##*/} [options] regexp(BRE) replacement file#1 [file#2...]
+	Usage   : ${0##*/} [options] regexp replacement [file#1 [file#2 [...]]]
 	Args    : regexp(BRE), replacement
 	              These are the 1st and 2nd arguments of s/1/2/g.
 	              Available meta-chr. set as regular expression is
 	              Basic Regular Expression, you can see on sed manual.
 	              However, you do not have to escape "/" in the strings.
 	          file#n
-	              A file to overwrite (To avoid misunderstanding, you have to
-	              use "./-" instead of "-" if "-" means not STDIN but a regular
-	              file)
+	              A file to open ("-" means STDIN)
 	Options : -E, --extended-regexp
 	              Regard the arguments "regexp" as extended regular expression
 	              (ERE) instead of a basic one (BRE). But you cannot use the
@@ -94,17 +82,8 @@ print_usage_and_exit () {
 	              not regexp strings but simple string
 	          -R, -r, --recursive (compatible with the same options of grep)
 	              Read all files under each directory, recursively
-	          -p, --perform, --start
-	              Do GREO actually, if you run this command without the
-	              options, it will be work as rehearsal mode
-	          -t, --times
-	              Preserve modification times
-	          --quick-overwrite
-	              Replace the file(s) without tempfile (only for professional)
-	              * Quickly overwriting but permission, owner/group, link, ACL
-	                information will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 2018-02-25 14:46:29 JST
+	Version : 2018-02-25 18:10:22 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -113,91 +92,9 @@ error_exit() {
   ${2+:} false && echo "${0##*/}: $2" 1>&2
   exit $1
 }
-exit_trap() {
-  trap '-' EXIT HUP INT QUIT PIPE ALRM TERM
-  rm -f "${Tempfile:-}"
-  exit ${1:-0}
-}
 
-# === FUNC : the alternative of the "mktemp -t" ======================
+# === Misc variable definition =======================================
 LFs=$(printf '\\\n_');LFs=${LFs%_} # Use as a "\n" in s-command of sed
-mktempf0() {
-  # --- parameters, etc. ---------------------------------------------
-  num_of_digits=16  # Length of Random String
-  n=10              # Max Times of Retrying
-  chrs='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_'
-                    # Available letters
-  # --- call built-in mktemp if exists -------------------------------
-  type mktemp >/dev/null 2>&1 && {
-    mktemp -t tmp.${0##*/}.$$.XXXXXXXXXXXXXXXX
-    return $?
-  }
-  # --- set the temporary directory ----------------------------------
-  Dir_tmp=$(set | grep -q ^TMPDIR= | sed 's/^[^=]\{1,\}=//');
-  case "$Dir_tmp" in
-    '') Dir_tmp='/tmp'      ;;
-    /)  Dir_tmp=''          ;;
-    *)  Dir_tmp=${Dir_tmp%/};;
-  esac
-  # --- mktemp loop --------------------------------------------------
-  while [ $n -ge 0 ]; do
-    # --- Generate Ramdom string -------------------------------------
-    # calculate the number of words which required
-    nw=$(echo "${num_of_digits}*l(${#chrs})/11.09+1" | # 11.09=ln(65536)
-         bc -l                                       |
-         sed 's/\..*$//'                             )
-    # make a random hexadecimal digit
-    if [ -c /dev/urandom ]; then
-      hstr=$(dd if=/dev/urandom bs=2 count=$nw 2>/dev/null |
-             od -A n -t x2 -v                              |
-             tr 'abcdef ' 'ABCDEF\n'                       |
-             tr -Cd 0123456789ABCDEF                       )
-    else
-      hstr=$( (ps -Ao pid,etime,pcpu,vsz; date)         |
-             od -t d4 -A n -v                           |
-             sed 's/[^0-9]\{1,\}/'"$LFs"'/g'            |
-             grep '[0-9]'                               |
-             tail -n 42                                 |
-             sed 's/.*\(.\{8\}\)$/\1/g'                 |
-             awk 'BEGIN{a=-2147483648;}                 #
-                       {a+=$1;        }                 #
-                  END  {                                #
-                    srand(a);                           #
-                    for(i=0;i<'$nw';i++){               #
-                      printf("%02X",int(rand()*65536)); #
-                    }                                   #
-                  }'                                    )
-    fi
-    # make a random string from the hexadecimal digit
-    s=$(echo "obase=${#chrs};ibase=16;$hstr"                     |
-        bc                                                       |
-        tr -d '\\\n'                                             |
-        tr ' ' '\n'                                              |
-        awk 'BEGIN  {for(i=1;i<'$num_of_digits';i++){print 0;}}  #
-             /[0-9]/{print;                                   }' |
-        awk 'BEGIN  {ORS="";                                     #
-                     s="'"$chrs"'";                              #
-                     for(i=0;i<length(s);i++){                   #
-                       c[i]=substr(s,i+1,1);                     #
-                     }                        }                  #
-             /[0-9]/{print c[$0*1];           }'                 |
-        tail -c $num_of_digits                                   )
-    # --- Making the file path ---------------------------------------
-    Path_target="${Dir_tmp}/tmp.${0##*/}.$$.$s"
-    # --- Making the file --------------------------------------------
-    (set -C; umask 177; : > "$Path_target") 2>/dev/null || {
-      [ -f "$Path_target" ] && { n=$((n-1)); continue; }
-      n=-1; break;
-    }
-    break
-  done
-  # --- print error message when failed to make a file ---------------
-  case "$n" in -1) return 1;; esac
-  # --- print the path of the file -----------------------------------
-  printf '%s\n' "$Path_target"
-  # --- return successfully ------------------------------------------
-  return 0
-}
 
 
 ######################################################################
@@ -208,11 +105,8 @@ mktempf0() {
 optF=0
 optE=0
 optR=0
-optp=0
-optq=0
-optt=0
 optHH=''
-case "${0##*/}" in 'egreo') optE=1;; 'fgreo') optF=1;; esac
+case "${0##*/}" in 'egres') optE=1;; 'fgres') optF=1;; esac
 
 # === Parse arguments (except files) =================================
 optmode=''
@@ -222,7 +116,7 @@ while :; do
     '') case "$1" in
           -)       case $# in 1) break;; esac
                    ;;
-          -[EFpRrt]*)
+          -[EFRr]*)
                      s=$(printf '%s\n' "${1#-}"                           |
                          awk '{opt = "_"; err="";                         #
                                l = length($0);                            #
@@ -230,10 +124,8 @@ while :; do
                                  c = substr($0, n, 1);                    #
                                  if      (c=="E") { opt = opt "E";      } #
                                  else if (c=="F") { opt = opt "F";      } #
-                                 else if (c=="p") { opt = opt "p";      } #
                                  else if (c=="R") { opt = opt "R";      } #
                                  else if (c=="r") { opt = opt "R";      } #
-                                 else if (c=="t") { opt = opt "t";      } #
                                 #else if (c=="X") { opt = opt "X";break;} #
                                  else             { err = "!";          } #
                                }                                          #
@@ -251,11 +143,6 @@ while :; do
                      shift;
                      case "$arg" in '') continue;; esac
                      ;;
-          --perform|--start)
-                     optp=1
-                     shift
-                     continue
-                     ;;
           --recursive)
                      optR=1
                      shift
@@ -268,15 +155,6 @@ while :; do
                      ;;
           --fixed-strings)
                      optF=1;
-                     shift
-                     continue
-                     ;;
-          --quick-overwrite|--quick-update)
-                     optq=1
-                     shift
-                     continue
-                     ;;
-          --times)   optt=1
                      shift
                      continue
                      ;;
@@ -306,10 +184,14 @@ while :; do
   optmode=''
 done
 case "$#" in
-  [012]) print_usage_and_exit   ;;
-      *) pat=$1; sub=$2; shift 2;;
+  [01]) print_usage_and_exit   ;;
+     *) pat=$1; sub=$2; shift 2;;
   *) 
 esac
+case "$#" in 0) set -- -;; esac
+case "$optR/$#/$1" in '1/1/-')
+  error_exit 1 'You cannot use recursive option (-R,-r,--recursive) for STDIN'
+;; esac
 
 # === Validate options ===============================================
 case "$optE$optF" in 11)
@@ -321,8 +203,7 @@ esac
 # Prepare for the Main Routine
 ######################################################################
 
-# === Decide the option string for grep and sed ======================
-opt4grep=''
+# === Decide the option string for sed ===============================
 opt4sed=''
 CMDSED='sed'
 case $optE       in  0) :;; *)
@@ -331,26 +212,17 @@ case $optE       in  0) :;; *)
   elif [ $(echo ABC |  sed -r 's/.+/OK/' 2>/dev/null) = 'OK' ]; then
     opt4sed='-r'
   elif [ $(echo ABC | gsed -r 's/.+/OK/' 2>/dev/null) = 'OK' ]; then
-    opt4sed='-r'
+    opt4sed='-r's
     CMDSED='gsed'
   else
     error_exit 1 'No ERE supported sed is found. You cannot use -E option.'
   fi
-  opt4grep="${opt4grep}E"
   ;;
-esac
-case $optF       in  0) :;; *) opt4grep="${opt4grep}F";; esac
-case $optR       in  0) :;; *) opt4grep="${opt4grep}R";; esac
-case "$opt4grep" in '') :;; *) opt4grep="-${opt4grep}";; esac
-case "$optR$#" in
-  '01') devnull='/dev/null';; # Dummy file to make grep print the filename
-     *) devnull=''         ;;
 esac
 
 # === Decide the strings for grep and sed ============================
 case $optF in
-  0) pat4grep=$pat
-     pat4sed=$(printf '%s\n' "$pat"                                          |
+  0) pat4sed=$(printf '%s\n' "$pat"                                          |
                # --- escape all of "/" ------------------------------------- #
                awk '                                                         #
                  BEGIN{                                                      #
@@ -412,8 +284,7 @@ case $optF in
                sed 's/\//\\\//g'       )
      sub4sed=${sub4sed%_}
      ;;
-  *) pat4grep=$pat
-     pat4sed=$(printf '%s\n' "$pat"              |
+  *) pat4sed=$(printf '%s\n' "$pat"              |
                # --- escape all of BRE meta chrs.#
                sed 's/\([].\*/[]\)/\\\1/g'       |
                sed '1s/^^/\\^/'                  |
@@ -429,96 +300,31 @@ esac
 
 
 ######################################################################
-# Main Routine (reharsal mode)
-######################################################################
-
-case $optp in 0)
-  echo '*** Now working as rehearsal mode. (option "-p" lets me be a take)' 1>&2
-  if find "$@" 2>/dev/null | grep -q ':' 2>/dev/null; then
-    printf '%s: %s' "${0##*/}" 'WARNING!! Some filepathed contain ":".' 1>&2
-    printf '%s\n'              ' These cause destroying other files.'   1>&2
-  fi
-  if grep $opt4grep $optHH "$pat4grep" $devnull "$@" 2>/dev/null; then
-    exit 0
-  else
-    error_exit $? 'No file matched'
-  fi
-;; esac
-
-
-######################################################################
 # Main Routine
 ######################################################################
 
-# === Make a temporary file if necessary =============================
-if ([ "$optq" -eq 0 ] || [ "$optt" -ne 0 ]); then
-  trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM
-  Tempfile=$(mktempf0)
-  if [ $? -ne 0 ] || [ -z "$Tempfile" ]; then
-    error_exit 1 'Cannot create a temporary file'
-  fi
-fi
-
-# === List target files ============================================= #
-grep $opt4grep $optHH "$pat4grep" $devnull "$@"                       |
-sed 's/:.*$//'                                                        |
-uniq                                                                  |
-                                                                      #
-# === GREOing ======================================================= #
-while IFS= read -r file0; do                                          #
-  file=$file0                                                         #
-  # 1) --- validate file                                              #
-  if   [ -f "$file"      ]; then                                      #
-    :                                                                 #
-  elif [ -e "$file"      ]; then                                      #
-    echo "Failure: not a regular file: $file0"                        #
-    continue                                                          #
-  else                                                                #
-    echo "Failure: file not found: $file0"                            #
-    continue                                                          #
-  fi                                                                  #
-  case "$file" in /*|./*|../*) :;; *) file="./$file";; esac           #
-                                                                      #
-  # 2) --- "greo" a file                                              #
-  case $optq in                                                       #
-    0) (cat "$file"; echo '')                   |                  #  #
-       $CMDSED $opt4sed "s/$pat4sed/$sub4sed/g" |                  #  #
-       awk 'BEGIN{ORS=""; OFS="";               #                  #  #
-                  getline line;                 #                  #  #
-                  print line;                   #                  #  #
-                  dlm="\n";                     #                  #  #
-                  while (getline line) {        #                  #  #
-                    print dlm,line;             #                  #  #
-                  }                     }'      > "$Tempfile"      && #
-       case $optt in 0) :;; *) touch -r "$file" "$Tempfile";; esac && #
-       cat "$Tempfile" > "$file"                                   && #
-       case $optt in 0) :;; *) touch -r "$Tempfile" "$file";; esac    #
-       ;;                                                             #
-    *) case $optt in 0) :;; *) touch -r "$file" "$Tempfile";; esac && #
-       ( rm "$file"                                 &&             #  #
-         { (cat; echo '')                           |              #  #
-           $CMDSED $opt4sed "s/$pat4sed/$sub4sed/g" |              #  #
-           awk 'BEGIN{ORS=""; OFS="";               #              #  #
-                      getline line;                 #              #  #
-                      print line;                   #              #  #
-                      dlm="\n";                     #              #  #
-                      while (getline line) {        #              #  #
-                        print dlm,line;             #              #  #
-                      }                     }'      ; } > "$file"  #  #
-       ) <"$file"                                                  && #
-       case $optt in 0) :;; *) touch -r "$Tempfile" "$file";; esac    #
-       ;;                                                             #
-  esac                                                                #
-  if [ $? -eq 0 ]; then                                               #
-    echo "Success: GREOed: $file0"                                    #
-  else                                                                #
-    echo "Failure: failed to greo halfway: $file0"                    #
-  fi                                                                  #
-done
+case "$optR" in
+  0) (cat ${1+"$@"}; echo '')                             |
+     "$CMDSED" $opt4sed "s/$pat/$sub/g"                   |
+     awk 'BEGIN{ORS=""; OFS="";                           #
+                getline line;                             #
+                print line;                               #
+                dlm=sprintf("\n");                        #
+                while (getline line) {print dlm,line;} }';;
+  *) find "$@" -type f                                    |
+     xargs cat                                            |
+     (cat; echo '')                                       |
+     "$CMDSED" $opt4sed "s/$pat/$sub/g"                   |
+     awk 'BEGIN{ORS=""; OFS="";                           #
+                getline line;                             #
+                print line;                               #
+                dlm=sprintf("\n");                        #
+                while (getline line) {print dlm,line;} }';;
+esac
 
 
 ######################################################################
 # Finish
 ######################################################################
 
-exit_trap 0
+exit 0
