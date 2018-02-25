@@ -104,7 +104,7 @@ print_usage_and_exit () {
 	              * Quickly overwriting but permission, owner/group, link, ACL
 	                information will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 2018-02-25 14:46:29 JST
+	Version : 2018-02-25 19:54:42 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -119,8 +119,10 @@ exit_trap() {
   exit ${1:-0}
 }
 
+# === Define misc variables ==========================================
+LF=$(printf '\\\n_');LF=${LF%_} # <0x0a>
+
 # === FUNC : the alternative of the "mktemp -t" ======================
-LFs=$(printf '\\\n_');LFs=${LFs%_} # Use as a "\n" in s-command of sed
 mktempf0() {
   # --- parameters, etc. ---------------------------------------------
   num_of_digits=16  # Length of Random String
@@ -155,7 +157,7 @@ mktempf0() {
     else
       hstr=$( (ps -Ao pid,etime,pcpu,vsz; date)         |
              od -t d4 -A n -v                           |
-             sed 's/[^0-9]\{1,\}/'"$LFs"'/g'            |
+             sed 's/[^0-9]\{1,\}/'"\\$LFs"'/g'          |
              grep '[0-9]'                               |
              tail -n 42                                 |
              sed 's/.*\(.\{8\}\)$/\1/g'                 |
@@ -314,6 +316,9 @@ esac
 # === Validate options ===============================================
 case "$optE$optF" in 11)
   error_exit 1 'conflicting matchers specified';;
+esac
+case "$pat" in *"$LF"*)
+  error_exit 1 '<0x0A> in "regexp" argument is not allowed';;
 esac
 
 

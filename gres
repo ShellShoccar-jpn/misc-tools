@@ -83,7 +83,7 @@ print_usage_and_exit () {
 	          -R, -r, --recursive (compatible with the same options of grep)
 	              Read all files under each directory, recursively
 	          --  Finish recognizing the following arguments as options
-	Version : 2018-02-25 18:10:22 JST
+	Version : 2018-02-25 19:54:42 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -93,8 +93,8 @@ error_exit() {
   exit $1
 }
 
-# === Misc variable definition =======================================
-LFs=$(printf '\\\n_');LFs=${LFs%_} # Use as a "\n" in s-command of sed
+# === Define misc variables ==========================================
+LF=$(printf '\n_');LF=${LF%_} # <0x0a>
 
 
 ######################################################################
@@ -196,6 +196,9 @@ case "$optR/$#/$1" in '1/1/-')
 # === Validate options ===============================================
 case "$optE$optF" in 11)
   error_exit 1 'conflicting matchers specified';;
+esac
+case "$pat" in *"$LF"*)
+  error_exit 1 '<0x0A> in "regexp" argument is not allowed';;
 esac
 
 

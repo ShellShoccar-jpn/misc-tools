@@ -11,7 +11,7 @@
 #   expression has, so that you can very easily substitute strings
 #   include various meta-characters, e.g. ^, $, \, /, &, and so on.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-01-18
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-02-25
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -37,7 +37,7 @@ export UNIX_STD=2003  # to make HP-UX conform to POSIX
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <pattern_str> <substitute_str> <file> [file...]
-	Version : 2018-01-18 14:58:38 JST
+	Version : 2018-02-25 19:57:22 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -46,6 +46,9 @@ warning() {
   ${1+:} false && echo "${0##*/}: $1" 1>&2
 }
 
+# === Define misc variables ==========================================
+LF=$(printf '\\\n_');LF=${LF%_} # <0x0a>
+
 
 ######################################################################
 # Argument Parsing
@@ -53,10 +56,10 @@ warning() {
 
 # === Parse arguments (except files) =================================
 case $# in [01]) print_usage_and_exit;; esac
-[ $(printf '%s\n' "$1" | wc -l | awk '{print $1}') -eq 1 ] || {
+case "$1" in *"$LF"*)
   echo "${0##*/}: It is impossible to contain <0x0A> in <pattern_str>" 1>&2
   exit 1
-}
+esac
 pat=$(printf '%s\n' "$1"          |
       sed 's/\([].\*/[]\)/\\\1/g' |
       sed '1s/^^/\\^/'            |
