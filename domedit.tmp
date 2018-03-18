@@ -1,0 +1,849 @@
+#!/bin/sh
+
+######################################################################
+#
+# DOMEDIT - Edit HTML DOM tags
+#
+# USAGE: domedit [options] <html_template> <prog_file>
+#
+#        <html_template> HTML file you want to edit
+#        <prog_file> ... Program and data file to edit the HTML DOM tags
+#        -s<c> ......... Replaces every <c> character which <data_file>
+#                        has on value field into white space (" ") 
+#                        of strings with <c>. But backslash escaped
+#                        one (\<c>) will be guarded as it is. (\<c>)
+#        -e ............ Disable the backslash guard of the "-s<c>"
+#                        So, \<c> will be substituted with <c>
+#        -n<string> .... Treat the strings in <data_file> which are
+#                        completely the same as <string> as null
+#        -d, -i ........ Obsolete names and work equivalently as
+#                        -s, -n respectively
+#
+# <prog_file>:
+# 1. Example
+#      -----
+#      div.chapter.fisrt set style="font-weight: bold;"
+#      p                 del style
+#      textarea#message  ins Warning:\nPlease fix the red marked columns.
+#      #inq_name         set style="border: 1px solid red;"
+#      #inq_name         del title="Write your name here"
+#      -----
+# 2. Format
+#    * The file consists of 3 fields in each line, <selector>, <action>,
+#      and <data>.
+#    * The fields should be separated with single whitespace. Especially,
+#      the separator between the 2nd and 3rd field MUST BE single one.
+#    * Example: div.chapter.fisrt set style="font-weight: bold;"
+# 3. About the Fields
+#    <selector>: Basicly, it's the same as the CSS's one but a subset
+#                version. The following expressions are acceptable.
+#                  "tag", "#id", ".class", "tag#id", "tag#.class"
+#                multiple class (up to 5 classes) is also acceptable as the
+#                former example.
+#    <action>  : What you want to do when the tag matched with its
+#                <selector> has found. The following words are acceptable.
+#                  "set" ... set the following <data> as a tag property.
+#                            (same as the "element.setAttribute" method)
+#                  "ins" ... insert the following <data> into the tag
+#                            (same as the "element.innerHTML" property)
+#                  "del" ... delete the property which is the same name
+#                            which is specified in the <data> field
+#                            (same as the "element.removeAttribute" method)
+#    <data>    : String which will be used for editing. (See <action>)
+#                You can use backslash escape sequence which is the
+#                same as printf's one, but don't have to escape the
+#                characters, double quotation, single quotation because
+#                it is applied by this command automatically.
+#
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-11-10
+#
+# This is a public-domain software (CC0). It means that all of the
+# people can use this for any purposes with no restrictions at all.
+# By the way, we are fed up with the side effects which are brought
+# about by the major licenses.
+#
+######################################################################
+
+
+######################################################################
+# Initial Configuration
+######################################################################
+
+# === Initialize shell environment ===================================
+set -u
+umask 0022
+export LC_ALL=C
+type command >/dev/null 2>&1 && type getconf >/dev/null 2>&1 &&
+export PATH="$(command -p getconf PATH)${PATH+:}${PATH-}"
+export UNIX_STD=2003  # to make HP-UX conform to POSIX
+
+# === Define the functions for printing usage and error message ======
+print_usage_and_exit () {
+  cat <<-USAGE 1>&2
+	Usage   : ${0##*/} [options] <html_template> <prog_file>
+	Args    : <html_template> HTML file you want to edit
+	          <prog_file> ... Program and data file to edit the HTML DOM tags
+	Options : -s<c> ......... Replaces every <c> character which <data_file>
+	                          has on value field into white space (" ") 
+	                          of strings with <c>. But backslash escaped
+	                          one (\<c>) will be guarded as it is. (\<c>)
+	          -e ............ Disable the backslash guard of the "-s<c>"
+	                          So, \<c> will be substituted with <c>
+	          -n<string> .... Treat the strings in <data_file> which are
+	                          completely the same as <string> as null
+	          -d, -i ........ Obsolete names and work equivalently as
+	                          -s, -n respectively
+	About <prog_file>:
+	1. Example
+	     -----
+	     div.chapter.fisrt set style="font-weight: bold;"
+	     p                 del style
+	     textarea#message  ins Warning:\nPlease fix the red marked columns.
+	     #inq_name         set style="border: 1px solid red;"
+	     #inq_name         del title="Write your name here"
+	     -----
+	2. Format
+	   * The file consists of 3 fields in each line, <selector>, <action>,
+	     and <data>.
+	   * The fields should be separated with single whitespace. Especially,
+	     the separator between the 2nd and 3rd field MUST BE single one.
+	3. About the Fields
+	   <selector>: Basicly, it's the same as the CSS's one but a subset
+	               version. The following expressions are acceptable.
+	                 "tag", "#id", ".class", "tag#id", "tag#.class"
+	               multiple class (up to 5 classes) is also acceptable as the
+	               former example.
+	   <action>  : What you want to do when the tag matched with its
+	               <selector> has found. The following words are acceptable.
+	                 "set" ... set the following <data> as a tag property.
+	                           (same as the "element.setAttribute" method)
+	                 "ins" ... insert the following <data> into the tag
+	                           (same as the "element.innerHTML" property)
+	                 "del" ... delete the property which is the same name
+	                           which is specified in the <data> field
+	                           (same as the "element.removeAttribute" method)
+	   <data>    : String which will be used for editing. (See <action>)
+	               You can use backslash escape sequence which is the
+	               same as printf's one, but don't have to escape the
+	               characters, double quotation, single quotation because
+	               it is applied by this command automatically.
+	Version : 2017-11-10 01:26:05 JST
+	          Open usp Tukubai (POSIX Bourne Shell/POSIX commands)
+	USAGE
+  exit 1
+}
+error_exit() {
+  ${2+:} false && echo "${0##*/}: $2" 1>&2
+  exit $1
+}
+
+
+######################################################################
+# Parse Arguments
+######################################################################
+
+# === Get the options and the filepath ===============================
+# --- initialize option parameters -----------------------------------
+opts=''
+opts_is_set=0
+opte_is_set=0
+optn=''
+file_tmpl=''
+file_prog=''
+#
+# --- get them -------------------------------------------------------
+case $# in 0) print_usage_and_exit;; esac
+optmode=''
+i=0
+for arg in "$@"; do
+  i=$((i+1))
+  if [ $i -eq $# ]; then
+    [ -z "$optmode" ] || print_usage_and_exit
+    if [ -n "$file_tmpl" ]; then
+      file_prog=$arg
+    else
+      file_tmpl=$arg
+    fi
+    break
+  fi
+  case "$optmode $arg" in
+    ' -e')  opte_is_set=1; continue        ;;
+    ' -e'*) opte_is_set=1; arg="-${arg#-e}";;
+  esac
+  case "$optmode" in
+     '') case "$arg" in
+           -[sd]*)
+             s=$(printf '%s' "${arg#??}_" | dd bs=1 count=2 2>/dev/null)
+             opts=${s%?}
+             opts_is_set=1
+             ;;
+           -[ni]*)
+             optn=${arg#??}
+             ;;
+           *)
+             file_tmpl=$arg
+             ;;
+         esac
+         ;;
+  esac
+done
+
+# === Validate the arguments =========================================
+[ -n "$file_tmpl"                         ] || print_usage_and_exit
+use_stdin=0
+if   [ "_$file_tmpl" = '_'                ] ||
+     [ "_$file_tmpl" = '_-'               ] ||
+     [ "_$file_tmpl" = '_/dev/stdin'      ] ||
+     [ "_$file_tmpl" = '_/dev/fd/0'       ] ||
+     [ "_$file_tmpl" = '_/proc/self/fd/0' ]  ; then
+  use_stdin=$((use_stdin+1))
+  file_tmpl='-'
+elif [ -f "$file_tmpl"                    ] ||
+     [ -c "$file_tmpl"                    ] ||
+     [ -p "$file_tmpl"                    ]  ; then
+  [ -r "$file_tmpl" ] || error_exit 1 'Cannot open the file: '"$file_tmpl"
+  case "$file_tmpl" in /*|./*|../*) :;; *) file_tmpl="./$file_tmpl";; esac
+else
+  print_usage_and_exit
+fi
+if   [ "_$file_prog"  = '_'                ] ||
+     [ "_$file_prog"  = '_-'               ] ||
+     [ "_$file_prog"  = '_/dev/stdin'      ] ||
+     [ "_$file_prog"  = '_/dev/fd/0'       ] ||
+     [ "_$file_prog"  = '_/proc/self/fd/0' ]  ; then
+  use_stdin=$((use_stdin+1))
+  file_prog='-'
+elif [ -f "$file_prog"                     ] ||
+     [ -c "$file_prog"                     ] ||
+     [ -p "$file_prog"                     ]  ; then
+  [ -r "$file_prog" ] || error_exit 1 'Cannot open the file: '"$file_prog"
+  case "$file_prog" in /*|./*|../*) :;; *) file_prog="./$file_prog";; esac
+else
+  print_usage_and_exit
+fi
+[ $use_stdin -gt 1 ] && error_exit 1 'Not allowed to open STDIN more than once'
+
+
+######################################################################
+# Main Routine
+######################################################################
+
+export opts opts_is_set opte_is_set optn file_tmpl file_prog
+exec awk '
+# ====================================================================
+# Main Routine (in AWK script)
+# ====================================================================
+BEGIN {
+  # === Prepare ======================================================
+  OFS=""; ORS="";
+  file_t     =ENVIRON["file_tmpl"  ]   ;
+  file_p     =ENVIRON["file_prog"  ]   ;
+  opts       =ENVIRON["opts"       ] "";
+  opts_is_set=ENVIRON["opts_is_set"]+ 0;
+  opte_is_set=ENVIRON["opte_is_set"]+ 0;
+  optn       =ENVIRON["optn"       ] "";
+
+  for (i=0; i<256; i++) {s=sprintf("%c",i);esc[s]=s;}
+  esc["n" ]="\n"  ; esc["r" ]="\r"  ; esc["t" ]="\t"  ; esc["\\"]="\\"  ;
+  esc["a" ]="\007"; esc["b" ]="\010"; esc["f" ]="\014"; esc["v" ]="\013";
+  esc[""  ]="\\"  ;
+  if (opts_is_set) {esc[opts]=((opte_is_set)?"":"\\") opts;}
+
+  # === Remember the names and its values ============================
+  split("",aTId);naTId=0; split("",a_Id);na_Id=0;
+  split("",aTC1);naTC1=0; split("",aTC2);naTC2=0;
+  split("",aTC3);naTC3=0; split("",aTC4);naTC4=0;
+  split("",aTC5);naTC5=0;
+  split("",a_C1);na_C1=0; split("",a_C2);na_C2=0;
+  split("",a_C3);na_C3=0; split("",a_C4);na_C4=0;
+  split("",a_C5);na_C5=0;
+  split("",aP__);naP__=0; split("",aT__);naT__=0;
+  split("",actdat);
+  split("",iTId);niTId=0; split("",i_Id);ni_Id=0;
+  split("",iTC1);niTC1=0; split("",iTC2);niTC2=0;
+  split("",iTC3);niTC3=0; split("",iTC4);niTC4=0;
+  split("",iTC5);niTC5=0;
+  split("",i_C1);ni_C1=0; split("",i_C2);ni_C2=0;
+  split("",i_C3);ni_C3=0; split("",i_C4);ni_C4=0;
+  split("",i_C5);ni_C5=0;
+  split("",iP__);niP__=0; split("",iT__);niT__=0;
+  nr=0;
+  while (getline line < file_p) {
+    nr++;
+    # --- 1) separate the 3 fields -----------------------------------
+    sub(/^[ \t]+/,"",line);
+    if        (match(line,/^\[[^]]*\]/) {
+      sel =substr(line,1             ,RLENGTH );
+      line=substr(line,RLENGTH+2              );
+      sub(/^[ \t]+/,"",line);
+    } else if (match(line,/[ \t]+/    ) {
+      sel =substr(line,1             ,RSTART-1);
+      line=substr(line,RSTART+RLENGTH         );
+    } else                              {
+      continue;
+    }
+    act=substr(line,1,3); dat=substr(line,5);
+    # --- 2) validate the action field -------------------------------
+    act=tolower(act);
+    if ((act!="set")&&(act!="ins")&&(act!="del")) {continue;}
+    # --- 3) validate and normalize the selector field ---------------
+    if        (match(sel,/^[A-Za-z0-9_]+#/ )) {
+      sel = tolower(substr(sel,1,RLENGTH-1)) substr(sel,RLENGTH);
+      if (act!="ins") {
+        aTId[sel]=(sel in aTId) ? aTId[sel] FS nr : nr ""; naTId++;
+      } else          {
+        iTId[sel]=(sel in iTId) ? iTId[sel] FS nr : nr ""; niTId++;
+      }
+    } else if (match(sel,/^#/              )) {
+      if (act!="ins") {
+        a_Id[sel]=(sel in a_Id) ? a_Id[sel] FS nr : nr ""; na_Id++;
+      } else          {
+        i_Id[sel]=(sel in i_Id) ? i_Id[sel] FS nr : nr ""; ni_Id++;
+      }
+    } else if (match(sel,/^[A-Za-z0-9_]+\./)) {
+      s=substr(sel,RLENGTH+1); s1=s; gsub(/[^.]/,"",s1);
+      i=length(s1)+1;
+      if (i> 5) {continue;}
+      split(s,ar,".");
+      if (i> 1) {qsort_asc(ar,i);}
+      sel=tolower(substr(sel,1,RLENGTH-1));
+      for (j=1;j<=i;j++) {sel=sel "." ar[j];}
+      if (act!="ins") {
+        if      (i==1) {aTC1[sel]=(sel in aTC1)?aTC1[sel] FS nr:nr "";naTC1++;}
+        else if (i==2) {aTC2[sel]=(sel in aTC2)?aTC2[sel] FS nr:nr "";naTC2++;}
+        else if (i==3) {aTC3[sel]=(sel in aTC3)?aTC3[sel] FS nr:nr "";naTC3++;}
+        else if (i==4) {aTC4[sel]=(sel in aTC4)?aTC4[sel] FS nr:nr "";naTC4++;}
+        else           {aTC5[sel]=(sel in aTC5)?aTC5[sel] FS nr:nr "";naTC5++;}
+      } else          {
+        if      (i==1) {iTC1[sel]=(sel in iTC1)?iTC1[sel] FS nr:nr "";niTC1++;}
+        else if (i==2) {iTC2[sel]=(sel in iTC2)?iTC2[sel] FS nr:nr "";niTC2++;}
+        else if (i==3) {iTC3[sel]=(sel in iTC3)?iTC3[sel] FS nr:nr "";niTC3++;}
+        else if (i==4) {iTC4[sel]=(sel in iTC4)?iTC4[sel] FS nr:nr "";niTC4++;}
+        else           {iTC5[sel]=(sel in iTC5)?iTC5[sel] FS nr:nr "";niTC5++;}
+      }
+    } else if (match(sel,/^\./             )) {
+      s=substr(sel,2); s1=s; gsub(/[^.]/,"",s1);
+      i=length(s1)+1;
+      if (i> 5) {continue;}
+      split(s,ar,".");
+      if (i> 1) {qsort_asc(ar,i);}
+      sel="";
+      for (j=1;j<=i;j++) {sel=sel "." ar[j];}
+      if (act!="ins") {
+        if      (i==1) {a_C1[sel]=(sel in a_C1)?a_C1[sel] FS nr:nr "";na_C1++;}
+        else if (i==2) {a_C2[sel]=(sel in a_C2)?a_C2[sel] FS nr:nr "";na_C2++;}
+        else if (i==3) {a_C3[sel]=(sel in a_C3)?a_C3[sel] FS nr:nr "";na_C3++;}
+        else if (i==4) {a_C4[sel]=(sel in a_C4)?a_C4[sel] FS nr:nr "";na_C4++;}
+        else           {a_C5[sel]=(sel in a_C5)?a_C5[sel] FS nr:nr "";na_C5++;}
+      } else          {
+        if      (i==1) {i_C1[sel]=(sel in i_C1)?i_C1[sel] FS nr:nr "";ni_C1++;}
+        else if (i==2) {i_C2[sel]=(sel in i_C2)?i_C2[sel] FS nr:nr "";ni_C2++;}
+        else if (i==3) {i_C3[sel]=(sel in i_C3)?i_C3[sel] FS nr:nr "";ni_C3++;}
+        else if (i==4) {i_C4[sel]=(sel in i_C4)?i_C4[sel] FS nr:nr "";ni_C4++;}
+        else           {i_C5[sel]=(sel in i_C5)?i_C5[sel] FS nr:nr "";ni_C5++;}
+      }
+    } else if (match(sel,/^[A-Za-z0-9_]+$/ )) {
+      if (act!="ins") {
+        aT__[sel]=(sel in aT__) ? aT__[sel] FS nr : nr ""; naT__++;
+      } else          {
+        iT__[sel]=(sel in iT__) ? iT__[sel] FS nr : nr ""; niT__++;
+      }
+    } else if (match(sel,/^\[[^]]+\]$/     )) {
+      sel=substr(sel,2,RLENGTH-2);
+      if (act!="ins") {
+        aT__[sel]=(sel in aT__) ? aT__[sel] FS nr : nr ""; naT__++;
+      } else          {
+        iT__[sel]=(sel in iT__) ? iT__[sel] FS nr : nr ""; niT__++;
+      }
+    } else                                    {
+      continue;
+    }
+    # --- 4) escape the string in data field -------------------------
+    s  =dat;
+    if (s==optn) {s="";}
+    dat="";
+    for (i=1; i<=length(s); i++) {
+      c=substr(s,i,1);
+      if      (c=="\042"                  ) {    dat=dat "&quot;"          ;}
+      else if (c=="\047"                  ) {    dat=dat "&apos;"          ;}
+     #else if (c=="&"                     ) {    dat=dat "&amp;"           ;}
+      else if (c=="\\"                    ) {i++;dat=dat esc[substr(s,i,1)];}
+      else if ((opts_is_set==1)&&(c==opts)) {    dat=dat " "               ;}
+      else                                  {    dat=dat c                 ;}
+    }
+    # --- 5) remember the action and data field ----------------------
+    actdat[nr]=act FS dat;
+  }
+
+  # === Replacing HTML Form Values ===================================
+  tag="";
+  if(getline line < file_t){line=line "\n";}
+  while (line!="") {
+    if        (tag==""                     ) {
+      # --- out of tag -----------------------------------------------
+      print_until_the_start_of_a_tag();
+      tag=tolower(str);
+    } else if (tag=="!--"                  ) {
+      # --- in comment area ------------------------------------------
+      print_to_the_end_of_comment();
+      tag="";
+    } else if (match(tag,/^[A-Za-z0-9_]+$/)) {
+      # --- in an ordinary tag ---------------------------------------
+      tag_s=""; split("",tag_p); split("",tag_v);
+      for (i=1; ; i++) {
+        read_strs_to_property_name();
+        if (str==">" || str=="/>") {tag_s=tag_s str0 str;break;}
+        pro=str; s=tolower(pro);
+        if      (s=="id"     ) {pn="i" ;}
+        else if (s=="class"  ) {pn="c" ;}
+        else                   {pn=i "";}
+        tag_s    =tag_s str0 "(" pn ")";
+        tag_p[pn]=pro                  ;
+        if     (str2=="=\042") {read_str_in_dq();tag_v[pn]=str2 str "\042";}
+        else if(str2==""     ) {                 str      =str            ;}
+        else if(str2=="=\047") {read_str_in_sq();tag_v[pn]=str2 str "\047";}
+        else                   {read_str_in_nq();tag_v[pn]=str2 str       ;}
+      }
+      # ToDo prog行とマッチング
+      # ここのactは複数回ループすることを考えるようにする
+      if        (act=="set") {
+        # ToDo 挿入
+        restore_and_print_the_tag();
+        tag="";
+      } else if (act=="del") {
+        # ToDo 削除
+        restore_and_print_the_tag();
+        tag="";
+      } else if (act=="ins") {
+        restore_and_print_the_tag();
+        while (line!="") {
+          read_until_the_start_of_a_tag();
+          tag2=tolower(str);
+          if (tag2=="/" tag) {break;}
+          str="";
+          while (str!=">" && str!="/>") {
+            read_strs_to_property_name();
+          }
+        }
+        # ToDo 中身を表示（<textarea>か<pre>の場合はデータの先頭を改行）
+        s=str0 str;
+        if (match(s,/<[^<]+$/)) {print substr(s,RSTART);                    }
+        else                    {print "unexp-err #2\n" | "cat 1>&2";exit 1;}
+        #
+        tag=tag2;
+      }
+    } else                                   {
+      # --- in any other (untreated) tag -----------------------------
+      while (str!=">") {
+        print_for_untreated_tags();
+        if        (str=="\042") {
+          read_str_in_dq();
+          print str,"\042";
+        } else if (str=="\047") {
+          read_str_in_sq();
+          print str,"\047";
+        }
+      }
+      tag="";
+    }
+  }
+}
+
+
+# ====================================================================
+# Functions for Retrieving HTML String
+# * Global variables "str0", "str", "str2" and "line" will be overwritten
+# * The variable "line" must be already loaded any string before calling
+#   if available. Or, these functions will finish immediately.
+# * These functions also have to loaded any string to "line" if available
+#   for the next function.
+# ====================================================================
+
+# === Print : the area from anywhere to tagname ======================
+# [Action] : * Print the string until the first found tagname
+#            * Memorize
+#              -> variable "str" ... the first found tagname
+#            * Advance the cursor NEXT TO the tagname string
+# [Until]  : "(TAGNAME)"
+# [Regexp] : /.+<(TAGNAME)/
+function print_until_the_start_of_a_tag( step,i) {
+  str=""; step=0;
+  while (line!="") {
+    if        (step==0) {
+      i=index(line,"<");
+      if (i==0)                            {
+        print line;
+        line= ""  ;
+      } else if (substr(line,i,4)=="<!--") {
+        str = "!--"                 ;
+        print substr(line,1  ,i) str;
+        line= substr(line,i+4  )    ;
+        break;
+      } else                               {
+        print substr(line,1,i);
+        line= substr(line,i+1);
+        step++;
+      }
+    } else if (step==1) {
+      match(line,/^[ \t\n]+/);
+      if (RSTART>0) {
+        print substr(line,1        ,RLENGTH);
+        line= substr(line,RLENGTH+1        );
+      } else        {
+        step++;
+      }
+    } else if (step==2) {
+      match(line,/^\/?[^ \t\n>\/]+/);
+      if (RSTART>0) {
+        str = substr(line,1             ,RLENGTH);
+        print str                                ;
+        line= substr(line,RSTART+RLENGTH        );
+        break;
+      } else        {
+        # unnamed tag (It is strange, but I accept it)
+        break;
+      }
+    }
+    if (line=="") {if(getline line < file_t){line=line "\n";}}
+  }
+}
+
+# === Read : the area from anywhere to tagname =======================
+# [Action] : * Memorize string until the first found tagname
+#              -> variable "str0" .. former string than tag
+#              -> variable "str" ... tagname
+#            * Advance the cursor NEXT TO the tagname string
+#            * do not print
+# [Until]  : "(TAGNAME)"
+# [Regexp] : /.+<(TAGNAME)/
+function read_until_the_start_of_a_tag( step,i) {
+  str0=""; str=""; step=0;
+  while (line!="") {
+    if        (step==0) {
+      i=index(line,"<");
+      if (i==0)                            {
+        str0=str0 line;
+        line=""       ;
+      } else if (substr(line,i,4)=="<!--") {
+        str =     "!--"             ;
+        str0=str0 substr(line,1  ,i);
+        line=     substr(line,i+4  );
+        break;
+      } else                               {
+        str0=str0 substr(line,1  ,i);
+        line=     substr(line,i+1  );
+        step++;
+      }
+    } else if (step==1) {
+      match(line,/^[ \t\n]+/);
+      if (RSTART>0) {
+        str0=str0 substr(line,1        ,RLENGTH);
+        line=     substr(line,RLENGTH+1        );
+      } else        {
+        step++;
+      }
+    } else if (step==2) {
+      match(line,/^\/?[^ \t\n>\/]+/);
+      if (RSTART>0) {
+        str =substr(line,1             ,RLENGTH);
+        line=substr(line,RSTART+RLENGTH        );
+        break;
+      } else        {
+        # unnamed tag (It is strange, but I accept it)
+        break;
+      }
+    }
+    if (line=="") {if(getline line < file_t){line=line "\n";}}
+  }
+}
+
+# === Print : comment area ===========================================
+# [Action] : * Print
+#            * Advance the cursor
+#            * do not memorize
+# [Until]  : "-->"
+# [Regexp] : /(?<=!--)((?!-->).)*-->/
+function print_to_the_end_of_comment( i) {
+  while (line!="") {
+    i=index(line,"-->");
+    if (i>0) {print substr(line,1,i+2);line=substr(line,i+3);break;}
+    print line;
+    if(getline line < file_t){line=line "\n";}
+  }
+}
+
+# === Print : Inside of untreated tags ===============================
+# [Action] : * Print the string until "(DQ)" or "(SQ)" or ">"
+#            * Memorize the last printed character
+#              -> variable "str" ... "(DQ)" or "(SQ)" or ">"
+#            * Advance the cursor NEXT TO the string
+# [Until]  : "(DQ)" or "(SQ)" or ">"
+# [Regexp] : /[^(DQ)(SQ)>]*/
+function print_for_untreated_tags() {
+  while (line!="") {
+    match(line,/[\042\047>]/)
+    if (RSTART>0) {
+      print substr(line,1       ,RSTART);
+      str = substr(line,RSTART  ,1     );
+      line= substr(line,RSTART+1       );
+      break;
+    }
+    print line;
+    if(getline line < file_t){line=line "\n";}
+  }
+}
+
+# === Read value area (inside string between double quotations) ======
+# [Action] : * Memorize the FORMER string THAN the double quotation
+#              -> variable "str"
+#            * Advance the cursor NEXT TO the double quotation
+#            * do not print
+# [Until]  : "(DQ)"
+# [Regexp] : /(?<=")(VALUE)(?=")/
+function read_str_in_dq( i) {
+  str="";
+  while (line!="") {
+    i=index(line,"\042");
+    if (i>0) {
+      str =str substr(line,1  ,i-1);
+      line=    substr(line,i+1    );
+      match(line,/[ \t\n\/>]+/);
+      if      (RSTART==1) {                                           break;}
+      else if (RSTART >1) {line=substr(line,RSTART);                  break;}
+      else                {if(getline line < file_t){line=line "\n";} break;}
+    } else   {
+      str =str line;
+      if(getline line < file_t){line=line "\n";}
+    }
+  }
+}
+
+# === Read : value area (inside string between single quotations) ====
+# [Action] : * Memorize the FORMER string THAN the single quotation
+#              -> variable "str"
+#            * Advance the cursor NEXT TO the single quotation
+#            * do not print
+# [Until]  : "(SQ)"
+# [Regexp] : /(?<=(SQ))(VALUE)(?=(SQ))/
+function read_str_in_sq( i) {
+  str="";
+  while (line!="") {
+    i=index(line,"\047");
+    if (i>0) {
+      str =str substr(line,1  ,i-1);
+      line=    substr(line,i+1    );
+      match(line,/[ \t\n\/>]+/);
+      if      (RSTART==1) {                                           break;}
+      else if (RSTART >1) {line=substr(line,RSTART);                  break;}
+      else                {if(getline line < file_t){line=line "\n";} break;}
+    } else   {
+      str =str line;
+      if(getline line < file_t){line=line "\n";}
+    }
+  }
+}
+
+# === Read : value area (inside string between single quotations) ====
+# [Action] : * Memorize the string "[^[:space:]]+"
+#              -> variable "str"
+#            * Advance the cursor NEXT TO "[^[:space:]]+"
+#            * do not print
+# [Until]  : "[^[:space:]]+"
+# [Regexp] : /(?<==)(VALUE)/
+function read_str_in_nq() {
+  str="";
+  if (match(line,/^[^ \t\n\/>]+/)) {
+    str =str substr(line,1        ,RLENGTH);
+    line=    substr(line,RLENGTH+1        );
+  }
+}
+
+# === Read : the property name area and its pre-string ===============
+# [Action] : * Memorize the first found property name or the end of tag
+#              -> variable "str0" ... string before the property string
+#                          "str" .... property string or end of tag ("/>",">")
+#                          "str2" ... "=(DQ)" or "=(SQ)" or "=" if exists
+#            * Advance the cursor NEXT TO the string
+#            * do not print
+# [Until]  : "(PROPERTY)" or ">"
+# [Regexp] : /([[:space:]]*)(PROPERTY)(=[(DQ)(SQ)]?)?/
+function read_strs_to_property_name( step,i) {
+  step=0; str0="";str="";str2="";
+# if (line=="") {if(getline line < file_t){line=line "\n";}else{exit;}}
+  while (line!="") {
+    if        (step==0) {
+      match(line,/^[ \t\n]+/);
+      if (RSTART>0) {
+        str0=str0 substr(line,1        ,RLENGTH);
+        line=     substr(line,RLENGTH+1        );
+      } else         {
+        step++;
+      }
+    } else if (step==1) {
+      if        (match(line,/^\/?>/)         ) {
+        str =substr(line,1        ,RLENGTH);
+        line=substr(line,RLENGTH+1        );
+        break;
+      } else if (substr(line,1,1)=="="       ) {
+        step++;
+      } else if (match(line,/^[^ \t\n=>\/]+/)) {
+        str =substr(line,1        ,RLENGTH);
+        line=substr(line,RLENGTH+1        );
+        step++;
+      }
+      # step2
+      if (match(line,/^=[\042\047]?/)) {
+        str2=substr(line,1        ,RLENGTH);
+        line=substr(line,RLENGTH+1        );
+      }
+      break;
+    } else              {
+      print "unexp-err #3\n" | "cat 1>&2";
+      exit 1;
+    }
+    if (line=="") {if(getline line < file_t){line=line "\n";}}
+  }
+}
+
+# ====================================================================
+# Functions for Restoring and Printing
+# ====================================================================
+
+# === Read /([[:space:]]*)(PROPERTY)(=[(DQ)(SQ)]?)?/ =================
+# [in]  : Global var. "tag_s" .. property items layout strings
+#                                tag_s="  (1) (2)>" when <foo  a="b" c="d">
+#                     "tag_p" .. array which contains property strings
+#                                tag_p[1]="a=\"b\"" when the above tag
+#                     "tag_v" .. array which contains value strings
+#                                tag_v[1]="=\"b\"" when the above tag
+# [out] : Stdout ............... Restored tag (without tagname part)
+function restore_and_print_the_tag( str,pn,s1,s2) {
+  str=tag_s;
+  while (str!="") {
+    if (match(str,/\([0-9a-z]+\)/)) {
+      pn =  substr(str,RSTART+1      ,RLENGTH-2) ""                 ;
+      s1=(pn in tag_p)?tag_p[pn]:""; s2=(pn in tag_v)?tag_v[pn]:""  ;
+      print substr(str,1             ,RSTART -1) s1 s2              ;
+      str=  substr(str,RSTART+RLENGTH          )                    ;
+    } else                          {
+      print str;
+      str=  "" ;
+    }
+  }
+}
+
+# ====================================================================
+# Functions of HAME
+# ====================================================================
+
+# === Do "HAME" for <input> ==========================================
+# [in/out] : Global Variabes (edit strings in these for doing "HAME")
+#              "tag_s" ... property items layout strings
+#                          tag_s="  (1) (2)/>" when <foo  a="b" c="d"/>
+#              "tag_p" ... array which contains property strings
+#                          tag_p[1]="a=\"b\"" when the above tag
+#              "tag_v" ... array which contains value strings
+#                          tag_v[1]="=\"b\"" when the above tag
+function input_tag_hame( typ,nam,val,s) {
+  typ=("t" in tag_v)?tolower(tag_v["t"]):""; sub(/^=/,"",typ);
+  if      (match(typ,/^\042[^\042]*\042$/)) {typ=substr(typ,2,RLENGTH-2);}
+  else if (match(typ,/^\047[^\047]*\047$/)) {typ=substr(typ,2,RLENGTH-2);}
+  nam=("n" in tag_v)?        tag_v["n"] :""; sub(/^=/,"",nam);
+  if      (match(nam,/^\042[^\042]*\042$/)) {nam=substr(nam,2,RLENGTH-2);}
+  else if (match(nam,/^\047[^\047]*\047$/)) {nam=substr(nam,2,RLENGTH-2);}
+  if (!(nam in name_list)) {return tag_s;}
+  if (typ=="radio" || typ=="checkbox") {
+    if (!("v" in tag_v)) {return tag_s;}
+    val=tag_v["v"]; sub(/^=/,"",val);
+    if      (match(val,/^\042[^\042]*\042$/)) {val=substr(val,2,RLENGTH-2);}
+    else if (match(val,/^\047[^\047]*\047$/)) {val=substr(val,2,RLENGTH-2);}
+    if (val==""            ) {return tag_s;}
+    s  =nam FS val;
+    if        ((  s in nameval ) && (!("c" in tag_p))) {
+      if (match(tag_s,/[ \t\n]*\/?>$/)) {
+        tag_p["c"]="checked"     ;
+        tag_v["c"]="=\"checked\"";
+        tag_s     =substr(tag_s,1,RSTART-1) " (c)" substr(tag_s,RSTART);
+      } else                            {
+        print "unexp-err #4\n" | "cat 1>&2";
+        exit 1;
+      }
+    } else if ((!(s in nameval)) && (  "c" in tag_p )) {
+      gsub(/[ \t\n]+\(c\)/,"",tag_s);
+      delete tag_p["c"];
+      delete tag_v["c"];
+    }
+  } else                               {
+    tag_v["v"]="=\"" name_list[nam] "\"";
+    if (!("v" in tag_p)) {
+      tag_p["v"]="value";
+      if (match(tag_s,/[ \t\n]*\/?>$/)) {
+        tag_s=substr(tag_s,1,RSTART-1) " (v)" substr(tag_s,RSTART);
+      } else                            {
+        print "unexp-err #5\n" | "cat 1>&2";
+        exit 1;
+      }
+    }
+  }
+  return tag_s;
+}
+
+# ====================================================================
+# Functions for Array Editing
+# ====================================================================
+
+# === Quick Sort (ascii ver.) ========================================
+# [in]     : grp ... array which has the strings
+#                    subscript of the array must be the order number
+#            [n] ... the number of items of the array
+# [out]    : grp ... the array which has been sorted
+#            ret ... the number of items of the array
+function qsort_asc(grp, n,  i) {
+  if (match(n,/^[0-9]+$/)) {    for(i=1;i<=n;i++){    grp[i]=grp[i] "";}}
+  else                     {n=0;for(i in grp    ){n++;grp[i]=grp[i] "";}}
+  qsort_r(grp,1,n);
+  return n;
+}
+function qsort_r(grp, st, ed,   a,b,p,s) {
+  a=st;                            b=ed;
+  p=grp[int((a+b)/2)];
+  while (1) {
+    while(grp[a]<p){a++;}          while(grp[b]>p){b--;}
+    if(a>=b){break;}
+    s=grp[a]; grp[a]=grp[b]; grp[b]=s;
+    a++;                           b--;
+  }
+  if(st<a-1){qsort_r(grp,st,a-1);} if(ed>b+1){qsort_r(grp,b+1,ed);}
+}
+
+# === Enumerate combination patterns =================================
+# [in]     : grp ... array which has the strings
+#                    subscript of the array must be the order number
+#            n ..... the number of items of the array
+#            r ..... the number of items which you want to choose
+#          : ans ... array which you want to got the answer
+# [out]    : ans ... the answer array which this function has given
+#            ret ... the number of items of the answer array
+function nCr(grp, n, r, ans) {
+  return nCr_r(grp,n,r,ans, 1,"",0);
+}
+function nCr_r(grp, n, r, ans, f, str, nans,  i,j,s,d) {
+  if(f>n){return nans;}else if(f>n-r+1){return nans;}
+  d=(str=="")?"":FS;
+  if (r==1) {
+    for (i=f; i<=n; i++) {
+      s= str d grp[i];
+      nans++;
+      ans[nans]=s;
+    }
+  } else    {
+    for (i=f; i<=n; i++) {
+      s= str d grp[i];
+      j=nCr_r(grp, n, r-1, ans, i+1, s, nans);
+      if(nans==j){break;}
+      nans=j;
+    }
+  }
+  return nans;
+}
+'

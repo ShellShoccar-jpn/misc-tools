@@ -4,7 +4,17 @@
 #
 # IS_FURIGANA - Validate All of the Given Letters Are "Furigana"
 #
-# USAGE: is_furigana <file>
+# USAGE: is_furigana [option] file
+# ARGS : file
+#            A file to validate. ("-" means STDIN)
+# OPTS : --hira
+#            Accept only Hiragana
+#        --kata
+#            Accept only Katagana (both Zenkaku and Hankaku)
+#        --hankata
+#            Accept only Hankaku-Katagana
+#        --zenkata
+#            Accept only Zenkaku-Katagana
 # RET  : $? ... 0 will be returned only when all of the given letters are
 #               furigana
 #
@@ -23,7 +33,7 @@
 #    * blank (0x20) will be not also allowd
 #
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-07-18
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-03-17
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -48,8 +58,20 @@ export UNIX_STD=2003  # to make HP-UX conform to POSIX
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
-	Usage   : ${0##*/} <file>
-	Version : 2017-07-18 02:39:39 JST
+	Usage   : ${0##*/} [option] file
+	Args    : file
+	              A file to validate. ("-" means STDIN)
+	Opts    : --hira
+	              Accept only Hiragana
+	          --kata
+	              Accept only Katagana (both Zenkaku and Hankaku)
+	          --hankata
+	              Accept only Hankaku-Katagana
+	          --zenkata
+	              Accept only Zenkaku-Katagana
+	Ret     : $? ... 0 will be returned only when all of the given letters are
+	                 furigana
+	Version : 2017-07-18 22:50:17 JST
 	USAGE
   exit 1
 }
@@ -66,8 +88,20 @@ error_exit() {
 # === Get the filepath ===============================================
 # --- initialize option parameters -----------------------------------
 file=''
+mode=0 # 0:default 1:hira 2:kata 3:zenkata 4:hankata
 #
 # --- get them -------------------------------------------------------
+case "${1:-}" in --*)
+  case "${1#--}" in
+    hira)    mode=1              ;;
+    kata)    mode=2              ;;
+    zenkata) mode=3              ;;
+    hankata) mode=4              ;;
+    *)       print_usage_and_exit;;
+  esac
+  shift
+;; esac
+#
 case $# in
   0) :                   ;;
   1) file=$1             ;;
@@ -95,7 +129,7 @@ case "$file" in ''|-|/*|./*|../*) :;; *) file="./$file";; esac
 # Main Routine
 ######################################################################
 
-exec awk '
+exec awk -v mode=$mode '
 BEGIN {
   # register all character codes
   for(i=1;i<=255;i++){asc[sprintf("%c",i)]=i;}
@@ -108,55 +142,71 @@ BEGIN {
   if (NR>1) { ret=1; exit; }
   for (i=1; i<=length($0); i++) {
     s = substr($0,i,1);
-    #if        (s < \200) {
+    #if        (s < "\200") {
     #  s_out = s_out s;
     #  continue;
     #}
-    if        (s < \300) {
+    if        (s < "\300") {
       ret=11; exit;
-    } else if (s < \340) {
+    } else if (s < "\340") {
       ret=12; exit;
-    } else if (s < \360) {
+    } else if (s < "\360") {
       s1 = substr($0,i+1,1);
       s2 = substr($0,i+2,1);
       utf8c = asc[s]*65536 + asc[s1]*256 + asc[s2];
       if        (utf8c < 14909825) { # out of range
         ret=21; exit;
       } else if (utf8c < 14909888) { # between "ぁ" and "み"
+        if (mode>1) {ret=30+mode;exit;}
         i+=2; continue;
       } else if (utf8c < 14910080) { # out of range
         ret=22; exit;
       } else if (utf8c < 14910103) { # between "む" and "ゖ"
+        if (mode>1) {ret=30+mode;exit;}
         i+=2; continue;
       } else if (utf8c < 14910106) { # out of range
         ret=23; exit;
-      } else if (utf8c < 14910111) { # between "゜" and "ゞ"
+      } else if (utf8c < 14910109) { # between "゛" and "゜"
+        if (mode>3) {ret=30+mode;exit;}
+        i+=2; continue;
+      } else if (utf8c < 14910111) { # between "ゝ" and "ゞ"
+        if (mode>1) {ret=30+mode;exit;}
         i+=2; continue;
       } else if (utf8c < 14910113) { # out of range
         ret=24; exit;
       } else if (utf8c < 14910144) { # between "ァ" and "タ"
+        if ((mode!=0)&&(mode!=2)&&(mode!=3)) {ret=30+mode;exit;}
         i+=2; continue;
       } else if (utf8c < 14910336) { # out of range
         ret=25; exit;
-      } else if (utf8c < 14910399) { # between "ダ" and "ヾ"
+      } else if (utf8c < 14910395) { # between "ダ" and "ヺ"
+        if ((mode!=0)&&(mode!=2)&&(mode!=3)) {ret=30+mode;exit;}
+        i+=2; continue;
+      } else if (utf8c < 14910397) { # between "・" and "ー"
+        if (mode>3) {ret=30+mode;exit;}
+        i+=2; continue;
+      } else if (utf8c < 14910399) { # between "ヽ" and "ヾ"
+        if ((mode!=0)&&(mode!=2)&&(mode!=3)) {ret=30+mode;exit;}
         i+=2; continue;
       } else if (utf8c < 15711653) { # out of range
         ret=26; exit;
       } else if (utf8c < 15711680) { # between "･" and "ｿ"
+        if ((mode!=0)&&(mode!=2)&&(mode!=4)) {ret=30+mode;exit;}
         i+=2; continue;
       } else if (utf8c < 15711872) { # out of range
         ret=27; exit;
       } else if (utf8c < 15711904) { # between "ﾀ" and "ﾟ"
+        if ((mode!=0)&&(mode!=2)&&(mode!=4)) {ret=30+mode;exit;}
         i+=2; continue;
       } else                       { # out of range
         ret=28; exit;
       }
       i += 2;
-    } else if (s < \370) {
+    } else if (s < "\370") {
       ret=13; exit;
-    } else if (s < \374) {
+    } else if (s < "\374") {
       ret=14; exit;
-    } else if (s < \376) {
+    } else if (s < "\376") {
       ret=15; exit;
     } else {
       ret=16; exit;
