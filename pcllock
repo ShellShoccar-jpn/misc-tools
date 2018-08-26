@@ -381,7 +381,7 @@ tmpf_time=$(mktempf0) || {
 # (And also remove the orphaned sh-lock access token file "modifying")
 touch -t $(expire_date_and_time $max_lifetime_secs) "$tmpf_time"
 find './' -type f \( \! -newer "$tmpf_time" \) |
-grep -E '^./[^/]+(|/[^/]+/modifying)$'         | # <- with sh-lock access
+grep -E '^./[^/]+($|/[^/]+/modifying$)'        | # <- with sh-lock access
 # 1:old_ex-files                               # #    token file "modifying"
 xargs grep '^' /dev/null                       |
 grep ':[0-9]\{1,\}$'                           |
