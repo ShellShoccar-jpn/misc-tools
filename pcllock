@@ -33,7 +33,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-07-18
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-27
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -80,7 +80,7 @@ print_usage_and_exit () {
 	          stdout ....... enerated path of the lockfile (just lock-id)
 	Example : write the following line into the crontab file someone owned
 	          * * * * * pcllock -l 300 -w 10 -d /PATH/TO/LOCKDIR
-	Version : 2017-07-18 02:39:39 JST
+	Version : 2018-08-27 23:55:00 JST
 	USAGE
   exit 1
 }
@@ -381,7 +381,7 @@ tmpf_time=$(mktempf0) || {
 # (And also remove the orphaned sh-lock access token file "modifying")
 touch -t $(expire_date_and_time $max_lifetime_secs) "$tmpf_time"
 find './' -type f \( \! -newer "$tmpf_time" \) |
-grep -E '^./[^/]+(|/[^/]+/modifying)$'         | # <- with sh-lock access
+grep -E '^./[^/]+($|/[^/]+\.modifying$)'       | # <- with sh-lock access
 # 1:old_ex-files                               # #    token file "modifying"
 xargs grep '^' /dev/null                       |
 grep ':[0-9]\{1,\}$'                           |
@@ -410,7 +410,7 @@ do
     try=1
   fi
   while [ $try -gt 0 ]; do
-    File_modlk="${Dir_lock}$lockname/$lockname/modifying"
+    File_modlk="${Dir_lock}$lockname/$lockname.modifying"
     (set -C; umask 0000; echo $$ > "$File_modlk") 2>/dev/null || {
       [ $max_waiting_secs -ge 0 ] && try=$((try-1))   # retry if already exists
       case $try in 0) :;; *) sleep 1;; esac
