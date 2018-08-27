@@ -242,7 +242,7 @@ for lockname in ${1+"$@"}; do
   fi
   while [ $try -gt 0 ]; do
     # 1-2) try to create the accesing right token file "modifying"
-    File_modlk="${Dir_path}$lockname/modifying"
+    File_modlk="${Dir_path}$lockname.modifying"
     (set -C; echo $ppid > "$File_modlk") 2>/dev/null || {
       File_modlk=''                                   # retry  if already exists
       [ $max_waiting_secs -ge 0 ] && try=$((try-1))
@@ -269,7 +269,7 @@ for lockname in ${1+"$@"}; do
          ;;
     esac
     # 1-6) finish the loop successfully
-    rm -f "${Dir_path}$lockname/modifying" 2>/dev/null
+    rm -f "${Dir_path}$lockname.modifying" 2>/dev/null
     File_modlk=''
     break
   done

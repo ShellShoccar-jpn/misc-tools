@@ -272,8 +272,8 @@ for lockname in ${1+"$@"}; do
       break                                           # finish if succeed to mv
     }
     # 1-2) try to create the accesing right token file "modifying"
-    File_modlk="$Dir_lock$lockname/$lockname/modifying"
-    (set -C; echo $ppid > 'modifying') 2>/dev/null || {
+    File_modlk="$Dir_lock$lockname/$lockname.modifying"
+    (set -C; echo $ppid > "../$lockname.modifying") 2>/dev/null || {
       File_modlk=''                                   # retry  if already exists
       [ $max_waiting_secs -ge 0 ] && try=$((try-1))
       case $try in 0) :;; *) sleep 1;; esac
@@ -282,7 +282,7 @@ for lockname in ${1+"$@"}; do
     # 1-3) check the current number of the locking processes
     n=$(ls -ld . 2>/dev/null | awk '{print $2-2;}')
     [ $max_num_of_sharing -lt 0 ] || [ $n -lt $max_num_of_sharing ] || {
-      rm -f 'modifying' 2>/dev/null                   # retry  if reached limit
+      rm -f "../$lockname.modifying" 2>/dev/null                   # retry  if reached limit
       File_modlk=''
       [ $max_waiting_secs -ge 0 ] && try=$((try-1))
       case $try in 0) :;; *) sleep 1;; esac
@@ -293,12 +293,12 @@ for lockname in ${1+"$@"}; do
     sublockname="$(date '+%Y%m%d%H%M%S').${s}.$ppid"
     mkdir $sublockname || {
       try=-1                                          # exit loop abnormally
-      rm -f 'modifying' 2>/dev/null
+      rm -f "../$lockname.modifying" 2>/dev/null
       File_modlk=''
       break
     }
     # 1-5) finish the loop successfully
-    rm -f 'modifying' 2>/dev/null
+    rm -f "../$lockname.modifying" 2>/dev/null
     File_modlk=''
     break
   done
