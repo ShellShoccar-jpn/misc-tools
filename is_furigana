@@ -33,7 +33,7 @@
 #    * blank (0x20) will be not also allowd
 #
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-03-17
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-28
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -57,8 +57,8 @@ export UNIX_STD=2003  # to make HP-UX conform to POSIX
 
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
-  cat <<-USAGE 1>&2
-	Usage   : ${0##*/} [option] file
+  cat <<-'USAGE' 1>&2
+	Usage   : is_furigana [option] file
 	Args    : file
 	              A file to validate. ("-" means STDIN)
 	Opts    : --hira
@@ -71,7 +71,7 @@ print_usage_and_exit () {
 	              Accept only Zenkaku-Katagana
 	Ret     : $? ... 0 will be returned only when all of the given letters are
 	                 furigana
-	Version : 2017-07-18 22:50:17 JST
+	Version : 2018-08-28 18:24:51 JST
 	USAGE
   exit 1
 }

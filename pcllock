@@ -12,7 +12,7 @@
 #                               1) this option "-d" if specified
 #                               2) the environment varriable "PLOCKDIR"
 #                                  if specified
-#                               3) "$(pwd)" (default)
+#                               3) $PWD (default)
 #           -w <maxwaiting> ... maximum waiting seconds to succeed unlocking
 #                               a shared lock
 #                               (-1 means waiting infinitely)
@@ -33,7 +33,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-27
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-28
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -57,15 +57,15 @@ export UNIX_STD=2003  # to make HP-UX conform to POSIX
 
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
-  cat <<-USAGE 1>&2
-	Usage   : ${0##*/} [options]
+  cat <<-'USAGE' 1>&2
+	Usage   : pcllock [options]
 	Options : -d <lockdir> ...... the directory for lockfiles.
 	                              The lockfile directory will be decided
 	                              as the following rule.
 	                              1) this option "-d" if specified
 	                              2) the environment varriable "PLOCKDIR"
 	                                 if specified
-	                              3) "$(pwd)" (default)
+	                              3) $PWD (default)
 	          -w <maxwaiting> ... maximum waiting seconds to succeed unlocking
 	                              a shared lock
 	                              (-1 means waiting infinitely)
@@ -80,7 +80,7 @@ print_usage_and_exit () {
 	          stdout ....... enerated path of the lockfile (just lock-id)
 	Example : write the following line into the crontab file someone owned
 	          * * * * * pcllock -l 300 -w 10 -d /PATH/TO/LOCKDIR
-	Version : 2018-08-27 23:55:00 JST
+	Version : 2018-08-28 18:24:51 JST
 	USAGE
   exit 1
 }

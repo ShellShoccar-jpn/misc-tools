@@ -37,7 +37,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-27
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-28
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -61,9 +61,9 @@ export UNIX_STD=2003  # to make HP-UX conform to POSIX
 
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
-  cat <<-USAGE 1>&2
-	Usage   : ${0##*/} [options] <lockname> [lockname ...]
-	Options :  -n <maxsharing> ... the maximum number of sharing lock
+  cat <<-'USAGE' 1>&2
+	Usage   : pshlock [options] <lockname> [lockname ...]
+	Options : -n <maxsharing> ... the maximum number of sharing lock
 	                              This option is for using as a semaphore.
 	                              The default value is -1.
 	                              (-1 means infinity that is sharing lock)
@@ -92,7 +92,7 @@ print_usage_and_exit () {
 	Notice  : The lockfile is written with rw-rw-rw for sharing.
 	          If you want not to share it with others,
 	          you have to give the lockdir rwxrwx--- or rwx------ permisson.
-	Version : 2018-08-27 23:55:00 JST
+	Version : 2018-08-28 18:24:51 JST
 	USAGE
   exit 1
 }

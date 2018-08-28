@@ -19,7 +19,7 @@
 #        stdout ... encoded CGI variables for HTTP POST(GET)
 #                   LF will NOT be added at the end of string
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-07-18
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-28
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -44,8 +44,8 @@ export UNIX_STD=2003  # to make HP-UX conform to POSIX
 
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
-  cat <<-USAGE 1>&2
-	Usage   : ${0##*/} <file> [file...]
+  cat <<-'USAGE' 1>&2
+	Usage   : name-cgi <file> [file...]
 	Argument: file
 	            A source file for you want to convert into HTTP POST string.
 	            The required format is
@@ -59,7 +59,7 @@ print_usage_and_exit () {
 	Return  : $? ....... 0 when all of the arguments are valid
 	          stdout ... encoded CGI variables for HTTP POST(GET)
 	                     LF will NOT be added at the end of string
-	Version : 2017-07-18 02:39:39 JST
+	Version : 2018-08-28 18:24:51 JST
 	USAGE
   exit 1
 }
