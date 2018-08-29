@@ -16,8 +16,8 @@
 #                               maximum waiting seconds to succeed locking
 #                               (-1 means waiting infinitely)
 #                               The default value is 10.
-# Return  : ==0 ... one or more unlocking were success
-#           !=0 ... all failure
+# Return  : $0 ==0 ... one or more unlocking were success
+#              !=0 ... all failure
 #
 # Example : See the header comments of "pexlock" and "pshlock"
 #
@@ -25,7 +25,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-27
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-29
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -62,13 +62,13 @@ print_usage_and_exit () {
 	                              maximum waiting seconds to succeed locking
 	                              (-1 means waiting infinitely)
 	                              The default value is 10.
-	Return  : ==0 ... one or more unlocking were success
-	          !=0 ... all failure
+	Return  : \$? ==0 ... one or more unlocking were success
+	             !=0 ... all failure
 	Example : See the header comments of "pexlock" and "pshlock"
 	Notice  : The lockfile is written with rw-rw-rw for sharing.
 	          If you want not to share it with others,
 	          you have to give the lockdir rwxrwx--- or rwx------ permisson.
-	Version : 2018-08-27 23:55:00 JST
+	Version : 2018-08-29 16:00:08 JST
 __USAGE
   exit 1
 }
