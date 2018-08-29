@@ -37,7 +37,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-27
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-29
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -79,7 +79,7 @@ print_usage_and_exit () {
 	          -w <maxwaiting> ... maximum waiting seconds to succeed locking
 	                              (-1 means waiting infinitely)
 	                              The default value is 10.
-	Return  : $?     ==0 ... one or more locking were success
+	Return  : \$?     ==0 ... one or more locking were success
 	                 !=0 ... all failure
 	          stdout ....... enerated path of the lockfile (just lock-id)
 	Example : lockid=$(pshlock -n 5 -d /tmp/plock -w 10 foo) || exit 1 #<do
@@ -92,7 +92,7 @@ print_usage_and_exit () {
 	Notice  : The lockfile is written with rw-rw-rw for sharing.
 	          If you want not to share it with others,
 	          you have to give the lockdir rwxrwx--- or rwx------ permisson.
-	Version : 2018-08-27 23:55:00 JST
+	Version : 2018-08-29 15:58:22 JST
 	USAGE
   exit 1
 }
