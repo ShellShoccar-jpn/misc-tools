@@ -2,7 +2,7 @@
 
 ######################################################################
 #
-# SENDJPMAIL - Send A E-mail Which Has UTF-8 Characters
+# SENDJPMAIL - Send An E-mail Which Has UTF-8 Characters
 #
 # USAGE: sendjpmail <mailfile>
 #
@@ -23,7 +23,7 @@
 #   * If the following headers is omitted, inserted by this function.
 #     "Content-Type:", "Content-Transfer-Encoding:", "MIME-Version:"
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-07-18
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-29
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -50,8 +50,8 @@ export UNIX_STD=2003  # to make HP-UX conform to POSIX
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <mailfile>
-	Args    : <mailfile> ... Text data as a e-mail
-	Version : 2017-07-18 00:23:25 JST
+	Args    : <mailfile> ... Text data as an e-mail
+	Version : 2018-08-29 16:01:43 JST
 	          (POSIX Bourne Shell/POSIX commands/sendmail command/UTF-8)
 	USAGE
   exit 1
