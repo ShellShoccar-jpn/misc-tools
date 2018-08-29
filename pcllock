@@ -75,12 +75,12 @@ print_usage_and_exit () {
 	                              Older lockfiles than that will be ignored
 	                              and removed.
 	                              (-1 means infinitely)
-	Return  : $?     ==0 ... one or more cleaning were success
+	Return  : \$?     ==0 ... one or more cleaning were success
 	                 !=0 ... all failure
 	          stdout ....... enerated path of the lockfile (just lock-id)
 	Example : write the following line into the crontab file someone owned
 	          * * * * * pcllock -l 300 -w 10 -d /PATH/TO/LOCKDIR
-	Version : 2018-08-29 15:37:20 JST
+	Version : 2018-08-29 15:57:05 JST
 	USAGE
   exit 1
 }
