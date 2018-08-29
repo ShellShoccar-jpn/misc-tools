@@ -14,8 +14,8 @@
 # However, the pipe will be disconnected by itself when the time will
 # have been to <timeout>(default:600sec). That is not to forget to disconnect.
 #
-# Return: ==0 when succeed
-#         !=0 when failed
+# Return: $? ==0 when succeed
+#            !=0 when failed
 #
 # HOW TO APPLY THIS:
 # * e.g., if you want to write the executing log of a shellscript into
@@ -47,7 +47,7 @@
 #   That means, you can join various filters to fd=2 (stderr). Although
 #   it is very tricky. ;-)
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-07-18
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-29
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -76,7 +76,7 @@ print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [-t timeout] <named_pipe_to_use> [output_file]
 	          * See the document at the source code of this command
-	Version : 2017-07-18 02:39:39 JST
+	Version : 2018-08-29 16:06:49 JST
 	USAGE
   exit 1
 }
