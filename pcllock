@@ -12,7 +12,7 @@
 #                               1) this option "-d" if specified
 #                               2) the environment varriable "PLOCKDIR"
 #                                  if specified
-#                               3) "$(pwd)" (default)
+#                               3) the current working directory (default)
 #           -w <maxwaiting> ... maximum waiting seconds to succeed unlocking
 #                               a shared lock
 #                               (-1 means waiting infinitely)
@@ -33,7 +33,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-27
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-29
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -65,7 +65,7 @@ print_usage_and_exit () {
 	                              1) this option "-d" if specified
 	                              2) the environment varriable "PLOCKDIR"
 	                                 if specified
-	                              3) "$(pwd)" (default)
+	                              3) the current working directory (default)
 	          -w <maxwaiting> ... maximum waiting seconds to succeed unlocking
 	                              a shared lock
 	                              (-1 means waiting infinitely)
@@ -80,7 +80,7 @@ print_usage_and_exit () {
 	          stdout ....... enerated path of the lockfile (just lock-id)
 	Example : write the following line into the crontab file someone owned
 	          * * * * * pcllock -l 300 -w 10 -d /PATH/TO/LOCKDIR
-	Version : 2018-08-27 23:55:00 JST
+	Version : 2018-08-29 15:37:20 JST
 	USAGE
   exit 1
 }
