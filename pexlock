@@ -71,7 +71,7 @@ print_usage_and_exit () {
 	          -w <maxwaiting> ... maximum waiting seconds to succeed locking
 	                              (-1 means waiting infinitely)
 	                              The default value is 10.
-	Return  : $?     ==0 ... one or more locking were success
+	Return  : \$?     ==0 ... one or more locking were success
 	                 !=0 ... all failure
 	          stdout ....... generated path of the lockfile
 	Example : lockid=$(pexlock -d /tmp/plock -w 10 foo) || exit 1 # do ex-lock
@@ -84,7 +84,7 @@ print_usage_and_exit () {
 	Notice  : The lockfile is written with rw-rw-rw for sharing.
 	          If you want not to share it with others,
 	          you have to give the lockdir rwxrwx--- or rwx------ permisson.
-	Version : 2018-08-29 15:47:27 JST
+	Version : 2018-08-29 15:49:41 JST
 	USAGE
   exit 1
 }
