@@ -19,7 +19,7 @@
 #        stdout ... encoded CGI variables for HTTP POST(GET)
 #                   LF will NOT be added at the end of string
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-07-18
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-29
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -56,10 +56,10 @@ print_usage_and_exit () {
 	              And <value> can have space characters.
 	            * backslashes in <value> must be escaped as '\\'.
 	              And <value> can have LF characters as '\n'.
-	Return  : $? ....... 0 when all of the arguments are valid
+	Return  : \$? ....... 0 when all of the arguments are valid
 	          stdout ... encoded CGI variables for HTTP POST(GET)
 	                     LF will NOT be added at the end of string
-	Version : 2017-07-18 02:39:39 JST
+	Version : 2018-08-29 15:53:56 JST
 	USAGE
   exit 1
 }
