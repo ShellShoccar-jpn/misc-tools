@@ -57,8 +57,8 @@ export UNIX_STD=2003  # to make HP-UX conform to POSIX
 
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
-  cat <<-'USAGE' 1>&2
-	Usage   : is_furigana [option] file
+  cat <<-USAGE 1>&2
+	Usage   : ${0##*/} [option] file
 	Args    : file
 	              A file to validate. ("-" means STDIN)
 	Opts    : --hira
