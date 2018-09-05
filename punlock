@@ -11,7 +11,7 @@
 #                               1) this option "-d" if specified
 #                               2) the environment varriable "PLOCKDIR"
 #                                  if specified
-#                               3) "$(pwd)" (default)
+#                               3) $PWD (default)
 #           -w <maxwaiting> ... <<for only lockfiles by "pshlock">>
 #                               maximum waiting seconds to succeed locking
 #                               (-1 means waiting infinitely)
@@ -49,15 +49,15 @@ export UNIX_STD=2003  # to make HP-UX conform to POSIX
 
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
-  cat <<-__USAGE 1>&2
-	Usage   : ${0##*/} [options] <lockname> [lockname ...]
+  cat <<-'USAGE' 1>&2
+	Usage   : punlock [options] <lockname> [lockname ...]
 	Options : -d <lockdir> ...... the directory for lockfiles.
 	                              The lockfile directory will be decided
 	                              as the following rule.
 	                              1) this option "-d" if specified
 	                              2) the environment varriable "PLOCKDIR"
 	                                 if specified
-	                              3) "$(pwd)" (default)
+	                              3) $PWD (default)
 	          -w <maxwaiting> ... <<for only lockfiles by "pshlock">>
 	                              maximum waiting seconds to succeed locking
 	                              (-1 means waiting infinitely)
@@ -69,7 +69,7 @@ print_usage_and_exit () {
 	          If you want not to share it with others,
 	          you have to give the lockdir rwxrwx--- or rwx------ permisson.
 	Version : 2018-08-29 16:00:08 JST
-__USAGE
+	USAGE
   exit 1
 }
 warning() {
