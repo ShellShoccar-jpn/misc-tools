@@ -57,8 +57,8 @@ export UNIX_STD=2003  # to make HP-UX conform to POSIX
 
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
-  cat <<-'USAGE' 1>&2
-	Usage   : pcllock [options]
+  cat <<-USAGE 1>&2
+	Usage   : ${0##*/} [options]
 	Options : -d <lockdir> ...... the directory for lockfiles.
 	                              The lockfile directory will be decided
 	                              as the following rule.
