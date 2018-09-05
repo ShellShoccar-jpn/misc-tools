@@ -33,7 +33,7 @@
 #    * blank (0x20) will be not also allowd
 #
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-28
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-29
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -69,9 +69,9 @@ print_usage_and_exit () {
 	              Accept only Hankaku-Katagana
 	          --zenkata
 	              Accept only Zenkaku-Katagana
-	Ret     : $? ... 0 will be returned only when all of the given letters are
+	Ret     : \$? ... 0 will be returned only when all of the given letters are
 	                 furigana
-	Version : 2018-08-28 18:24:51 JST
+	Version : 2018-08-29 15:52:25 JST
 	USAGE
   exit 1
 }

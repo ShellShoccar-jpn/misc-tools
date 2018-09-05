@@ -33,7 +33,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-28
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-29
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -66,12 +66,12 @@ print_usage_and_exit () {
 	                              2) the environment varriable "PLOCKDIR"
 	                                 if specified
 	                              3) if the environment varriable "TMPDIR"
-	                                 specified, "$TMPDIR/plock.<username>"
+	                                 specified, "\$TMPDIR/plock.<username>"
 	                              4) "/tmp/plock.<username>" (default)
 	          -w <maxwaiting> ... maximum waiting seconds to succeed locking
 	                              (-1 means waiting infinitely)
 	                              The default value is 10.
-	Return  : $?     ==0 ... one or more locking were success
+	Return  : \$?     ==0 ... one or more locking were success
 	                 !=0 ... all failure
 	          stdout ....... generated path of the lockfile
 	Example : lockid=$(pexlock -d /tmp/plock -w 10 foo) || exit 1 # do ex-lock
@@ -84,7 +84,7 @@ print_usage_and_exit () {
 	Notice  : The lockfile is written with rw-rw-rw for sharing.
 	          If you want not to share it with others,
 	          you have to give the lockdir rwxrwx--- or rwx------ permisson.
-	Version : 2018-08-28 18:24:51 JST
+	Version : 2018-08-29 15:49:41 JST
 	USAGE
   exit 1
 }
