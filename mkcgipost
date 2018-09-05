@@ -44,8 +44,8 @@ export UNIX_STD=2003  # to make HP-UX conform to POSIX
 
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
-  cat <<-'USAGE' 1>&2
-	Usage   : mkcgipost <file> [file...]
+  cat <<-USAGE 1>&2
+	Usage   : ${0##*/} <file> [file...]
 	Argument: file
 	            A source file for you want to convert into HTTP POST string.
 	            The required format is
