@@ -47,7 +47,7 @@
 #   That means, you can join various filters to fd=2 (stderr). Although
 #   it is very tricky. ;-)
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-29
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-09-13
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -76,7 +76,7 @@ print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [-t timeout] <named_pipe_to_use> [output_file]
 	          * See the document at the source code of this command
-	Version : 2018-08-29 16:06:49 JST
+	Version : 2018-09-13 01:27:41 JST
 	USAGE
   exit 1
 }
@@ -191,9 +191,10 @@ case $check in 'p')
   #
   # --- exit trap (for parent) ---------------------------------------
   exit_trap() {
+    set -- ${1:-} $?  # $? is set as $1 if no argument given
     trap - EXIT HUP INT QUIT PIPE ALRM TERM
     rm -f "${namedpipe_to_del_by_myself:-}"
-    exit ${1:-0}
+    exit $1
   }
   #
   # --- parse the arguments ------------------------------------------
@@ -304,8 +305,9 @@ case $check in 'p')
   #
   # --- set exiting trap ---------------------------------------------
   exit_trap() {
+    set -- ${1:-} $?  # $? is set as $1 if no argument given
     trap - EXIT HUP INT QUIT PIPE ALRM TERM
-    ret=${1:-0}
+    ret=$1
     # --- the compress command pipe has been used or not? ---
     while [ -f "${z_file:-}" ]; do
       check=$(cat "$z_file")
