@@ -23,14 +23,6 @@
 #       (<PID> is the number you got from me as the locking process ID)
 #   (c) wait for timeout you set by <maxlifetime>
 # * IMPORTANTS
-#   - When you want to get the locking process ID, you have to get with
-#     a temporary file. Neither variables nor piped commands.
-#     (correct)
-#       exflock 3 "file_for_flock" > locking_process.pid
-#       locking_process=$(cat locking_process.pid)
-#     (prohibited)
-#       ex.1: locking_process=$(exflock 3 "file_for_flock")
-#       ex.2: exflock 3 "file_for_flock" | cat > locking_process.pid
 #   - This command now supports the following Operating Systems.
 #       FreeBSD, Linux, NetBSD
 #     I want to know how to lock file on the other Operating Systems.
@@ -44,7 +36,7 @@
 #              :
 #          kill $flock_pid
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-09-13
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-09-24
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -77,7 +69,7 @@ print_usage_and_exit () {
 	                          (0 means infinity, and default=$DEFAULT_MAXLIFETIME)
 	          * See the document at the source code of this command
 	            for more infomation
-	Version : 2018-09-13 01:20:06 JST
+	Version : 2018-09-24 21:22:02 JST
 	USAGE
   exit 1
 }
@@ -263,21 +255,21 @@ case $check in 'p')
         lockf -ks -t $waitsec "$file"               \
         "$0" "$pid" "$maxlifetime" "$temp_datafile" ||
         kill -s TERM $sleepjob_pid
-      } &
+      } >/dev/null 2>&1 </dev/null &
       ;;
     Linux)
       {
         flock --timeout=$waitsec "$file"            \
         "$0" "$pid" "$maxlifetime" "$temp_datafile" ||
         kill -s TERM $sleepjob_pid
-      } &
+      } >/dev/null 2>&1 </dev/null &
       ;;
     NetBSD)
       {
         flock -x -w $waitsec "$file"                \
         "$0" "$pid" "$maxlifetime" "$temp_datafile" ||
         kill -s TERM $sleepjob_pid
-      } &
+      } >/dev/null 2>&1 </dev/null &
       ;;
     *)
       echo "Non-supported OS" 1>&3
