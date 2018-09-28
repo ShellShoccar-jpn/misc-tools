@@ -104,7 +104,7 @@ print_usage_and_exit () {
 	              * Quickly overwriting but permission, owner/group, link, ACL
 	                information will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 2018-09-28 18:47:16 JST
+	Version : 2018-09-28 19:24:41 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -535,7 +535,10 @@ while IFS= read -r file0; do                                          #
     *) echo "Failure: failed to greo halfway: $file0";;               #
   esac                                                                #
 done                                                                  |
-awk 'BEGIN{ret=0;} /^Failure:/{ret=1;} {print;} END{exit ret;}'
+awk 'BEGIN      {ret=0;                     }                         #
+     /^Failure:/{ret=1;                     }                         #
+                {print;                     }                         #
+     END        {if(NR==0){ret=1;} exit ret;}'
 
 
 ######################################################################
