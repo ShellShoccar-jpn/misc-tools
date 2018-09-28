@@ -50,7 +50,7 @@
 #      $ greo -p -- '-R' '-r' *
 #
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-09-25
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-09-28
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -104,7 +104,7 @@ print_usage_and_exit () {
 	              * Quickly overwriting but permission, owner/group, link, ACL
 	                information will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 2018-09-25 01:21:20 JST
+	Version : 2018-09-28 18:47:16 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -501,12 +501,18 @@ while IFS= read -r file0; do                                          #
                   while (getline line) {        #                  #  #
                     print dlm,line;             #                  #  #
                   }                     }'      > "$Tempfile"      && #
-       case $optt in 0) :;; *) touch -r "$file" "$Tempfile";; esac && #
-       cat "$Tempfile" > "$file"                                   && #
-       case $optt in 0) :;; *) touch -r "$Tempfile" "$file";; esac    #
+       case $optt in                                               #  #
+         0) :                           ;;                         #  #
+         *) touch -r "$file" "$Tempfile";;                         #  #
+       esac                                                        && #
+       cat "$Tempfile" > "$file" 2>/dev/null                       && #
+       case $optt in                                               #  #
+         0) :                                       ;;             #  #
+         *) touch -r "$Tempfile" "$file" 2>/dev/null;;             #  #
+       esac                                                           #
        ;;                                                             #
     *) case $optt in 0) :;; *) touch -r "$file" "$Tempfile";; esac && #
-       ( rm "$file"                                 &&             #  #
+       ( rm "$file" 2>/dev/null                     &&             #  #
          { (cat; echo '')                           |              #  #
            $CMDSED $opt4sed "s/$pat4sed/$sub4sed/g" |              #  #
            awk 'BEGIN{ORS=""; OFS="";               #              #  #
@@ -515,21 +521,25 @@ while IFS= read -r file0; do                                          #
                       dlm="\n";                     #              #  #
                       while (getline line) {        #              #  #
                         print dlm,line;             #              #  #
-                      }                     }'      ; } > "$file"  #  #
+                      }                     }'                     #  #
+         } > "$file" 2>/dev/null                                   #  #
        ) <"$file"                                                  && #
-       case $optt in 0) :;; *) touch -r "$Tempfile" "$file";; esac    #
+       case $optt in                                               #  #
+         0) :                                       ;;             #  #
+         *) touch -r "$Tempfile" "$file" 2>/dev/null;;             #  #
+       esac                                                           #
        ;;                                                             #
   esac                                                                #
-  if [ $? -eq 0 ]; then                                               #
-    echo "Success: GREOed: $file0"                                    #
-  else                                                                #
-    echo "Failure: failed to greo halfway: $file0"                    #
-  fi                                                                  #
-done
+  case $? in                                                          #
+    0) echo "Success: GREOed: $file0"                ;;               #
+    *) echo "Failure: failed to greo halfway: $file0";;               #
+  esac                                                                #
+done                                                                  |
+awk 'BEGIN{ret=0;} /^Failure:/{ret=1;} {print;} END{exit ret;}'
 
 
 ######################################################################
 # Finish
 ######################################################################
 
-exit_trap 0
+exit_trap $?
