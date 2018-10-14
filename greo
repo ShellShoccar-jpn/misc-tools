@@ -43,6 +43,8 @@
 #    files which has modified within 24 hours in "src" directory recursively.
 #      $ find './src' -type f -mtime -1 |
 #      > xargs greo -p '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' '2017-11-18'
+#    * You can also send the list of filenames via STDIN instead of xargs.
+#      It means the word "xargs" is allowed for abridgement when using greo.
 #
 # 3. I want to replace all places of string "-R" into "-r", but the strings of
 #    which start by "-" will be misunderstood as an option. How should I type
@@ -50,7 +52,7 @@
 #      $ greo -p -- '-R' '-r' *
 #
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-09-28
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-10-15
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -104,7 +106,7 @@ print_usage_and_exit () {
 	              * Quickly overwriting but permission, owner/group, link, ACL
 	                information will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 2018-09-28 19:29:07 JST
+	Version : 2018-10-15 00:50:08 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -309,8 +311,8 @@ while :; do
   optmode=''
 done
 case "$#" in
-  [012]) print_usage_and_exit   ;;
-      *) pat=$1; sub=$2; shift 2;;
+  [01]) print_usage_and_exit   ;;
+     *) pat=$1; sub=$2; shift 2;;
   *) 
 esac
 
@@ -349,8 +351,8 @@ case $optF       in  0) :;; *) opt4grep="${opt4grep}F";; esac
 case $optR       in  0) :;; *) opt4grep="${opt4grep}R";; esac
 case "$opt4grep" in '') :;; *) opt4grep="-${opt4grep}";; esac
 case "$optR$#" in
-  '01') devnull='/dev/null';; # Dummy file to make grep print the filename
-     *) devnull=''         ;;
+  '0[01]') devnull='/dev/null';; # Dummy file to make grep print the filename
+        *) devnull=''         ;;
 esac
 
 # === Decide the strings for grep and sed ============================
@@ -440,20 +442,48 @@ esac
 
 case $optp in 0)
   echo '*** Now working as rehearsal mode. (option "-p" lets me be a take)' 1>&2
-  if find "$@" 2>/dev/null | grep -q ':' 2>/dev/null; then
-    printf '%s: %s' "${0##*/}" 'WARNING!! Some filepathed contain ":".' 1>&2
-    printf '%s\n'              ' These cause destroying other files.'   1>&2
-  fi
-  if grep $opt4grep $optHH "$pat4grep" $devnull "$@" 2>/dev/null; then
-    exit 0
-  else
-    ret=$?
-    case $ret in
-      1) s='No file matched'                                             ;;
-      *) s='grep error (perhaps, some unaccessable files were contained)';;
-    esac
-    error_exit $ret "$s"
-  fi
+
+  # === Make a temporary file if necessary ===========================
+  case $# in 0)
+    trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM
+    Tempfile=$(mktempf0)
+    if [ $? -ne 0 ] || [ -z "$Tempfile" ]; then
+      error_exit 1 'Cannot create a temporary file'
+    fi
+    cat | sort | uniq | sed 's/[ "'"'$(printf '\t\\')"']/\\&/g' > "$Tempfile"
+    [ -s "$Tempfile" ] || error_exit 1 'No file'
+  ;; esac
+
+  # === Confirm ":" is not contained in the directories ==============
+  msg1='WARNING!! Some filepathed contain ":".'
+  msg2=' These cause destroying other files.'
+  case $# in
+    0) cat "$Tempfile"                           |
+       (xargs find "$file") 2>/dev/null          |
+       grep -q ':'                               &&
+       printf '%s: %s\n' "${0##*/}" "$msg1$msg2" 1>&2
+       ;;
+    *) if find "$@" 2>/dev/null | grep -q ':' 2>/dev/null; then
+         printf '%s: %s\n' "${0##*/}" "$msg1$msg2" 1>&2
+       fi
+       ;;
+  esac
+
+  # === Reharsal =====================================================
+  case $# in
+    0) cat "$Tempfile"                                    |
+       (xargs grep $opt4grep $optHH "$pat4grep" $devnull)     2>/dev/null;;
+    *)        grep $opt4grep $optHH "$pat4grep" $devnull "$@" 2>/dev/null;;
+  esac
+  ret=$?
+  case "$#/$ret" in
+   */0) exit 0                                                                ;;
+   0/*) s='No file matched or grep error (perhaps, permission denied occured)';;
+   */1) s='No file matched'                                                   ;;
+   */*) s='grep error (perhaps, permission denied occured)'                   ;;
+  esac
+  error_exit $ret "$s"
+
 ;; esac
 
 
@@ -471,7 +501,16 @@ if ([ "$optq" -eq 0 ] || [ "$optt" -ne 0 ]); then
 fi
 
 # === List target files ============================================= #
-grep $opt4grep $optHH "$pat4grep" $devnull "$@"                       |
+case $# in                                                            #
+  0) cat                                              |               #
+     sort                                             |               #
+     uniq                                             |               #
+     sed 's/[ "'"'$(printf '\t\\')"']/\\&/g'          |               #
+     awk 'BEGIN{while(getline l){print l;i++;}        #               #
+                if(i==0){print "/dev/null";}  }'      |               #
+     xargs grep $opt4grep $optHH "$pat4grep" $devnull     ;;          #
+  *)       grep $opt4grep $optHH "$pat4grep" $devnull "$@";;          #
+esac                                                                  |
 sed 's/:.*$//'                                                        |
 uniq                                                                  |
                                                                       #
