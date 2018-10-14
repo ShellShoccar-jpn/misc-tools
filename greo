@@ -43,7 +43,7 @@
 #    files which has modified within 24 hours in "src" directory recursively.
 #      $ find './src' -type f -mtime -1 |
 #      > xargs greo -p '[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' '2017-11-18'
-#    * You can also send the list of filenames via STDIN instead of xargs.
+#    * You can send the list of filenames to the greo STDIN instead of xargs.
 #      It means the word "xargs" is allowed for abridgement when using greo.
 #
 # 3. I want to replace all places of string "-R" into "-r", but the strings of
@@ -106,7 +106,7 @@ print_usage_and_exit () {
 	              * Quickly overwriting but permission, owner/group, link, ACL
 	                information will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 2018-10-15 00:50:08 JST
+	Version : 2018-10-15 07:18:28 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
