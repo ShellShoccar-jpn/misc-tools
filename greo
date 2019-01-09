@@ -52,7 +52,7 @@
 #      $ greo -p -- '-R' '-r' *
 #
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-10-15
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-01-09
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -106,7 +106,7 @@ print_usage_and_exit () {
 	              * Quickly overwriting but permission, owner/group, link, ACL
 	                information will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 2018-10-15 07:18:28 JST
+	Version : 2019-01-09 21:39:47 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -351,7 +351,7 @@ case $optF       in  0) :;; *) opt4grep="${opt4grep}F";; esac
 case $optR       in  0) :;; *) opt4grep="${opt4grep}R";; esac
 case "$opt4grep" in '') :;; *) opt4grep="-${opt4grep}";; esac
 case "$optR$#" in
-  '0[01]') devnull='/dev/null';; # Dummy file to make grep print the filename
+  '0'[01]) devnull='/dev/null';; # Dummy file to make grep print the filename
         *) devnull=''         ;;
 esac
 
