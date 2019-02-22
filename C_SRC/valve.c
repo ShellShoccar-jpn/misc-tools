@@ -29,9 +29,9 @@
 # Initial Configuration
 ####################################################################*/
 
-//=== Initial Setting ================================================
-//
-//--- headers --------------------------------------------------------
+/*=== Initial Setting ==============================================*/
+
+/*--- headers ------------------------------------------------------*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -42,23 +42,23 @@
 #include <unistd.h>
 #include <time.h>
 #include <fcntl.h>
-//
-// --- macro functions -----------------------------------------------
+
+/* --- macro functions ---------------------------------------------*/
 #define WRN(message) fprintf(stderr,message)
 #define WRV(fmt,...) fprintf(stderr,fmt,__VA_ARGS__)
-//
-//--- macro constants ------------------------------------------------
+
+/*--- macro constants ----------------------------------------------*/
 #define MAX_INTERVAL 2147483647
-//
-//--- prototype functions --------------------------------------------
+
+/*--- prototype functions ------------------------------------------*/
 void wait_intervally(uint64_t nInterval_msec);
-//
-//--- global variables -----------------------------------------------
+
+/*--- global variables ---------------------------------------------*/
 char* pszMypath;
 
-//=== Define the functions for printing usage and error ==============
-//
-//--- exit with usage ------------------------------------------------
+/*=== Define the functions for printing usage and error ============*/
+
+/*--- exit with usage ----------------------------------------------*/
 void print_usage_and_exit(void) {
   int  n;
   int  nPos = 0;
@@ -80,8 +80,8 @@ void print_usage_and_exit(void) {
   WRN("          (POSIX C language)\n"                                        );
   exit(1);
 }
-//
-//--- print warning message ------------------------------------------
+
+/*--- print warning message ----------------------------------------*/
 void warning(const char* szFormat, ...) {
   va_list va      ;
   int     n       ;
@@ -95,8 +95,8 @@ void warning(const char* szFormat, ...) {
   va_end(va);
   return;
 }
-//
-//--- exit with error message ----------------------------------------
+
+/*--- exit with error message --------------------------------------*/
 void error_exit(int nErrno, const char* szFormat, ...) {
   va_list va      ;
   int     n       ;
@@ -116,29 +116,29 @@ void error_exit(int nErrno, const char* szFormat, ...) {
 # Main
 ####################################################################*/
 
-//=== Initialization =================================================
+/*=== Initialization ===============================================*/
 int main(int argc, char *argv[]) {
-//
-//--- Variables ------------------------------------------------------
+
+/*--- Variables ----------------------------------------------------*/
 int  nInterval;
-int  nUnit;        // 0:character 1:line 2-:undefined
-int  nRet;         // return code
-char *pszPath;     // filepath on arguments
-char *pszFilename; // filepath (for message)
-int  nFileno;      // file# of filepath
-int  nFd;          // file descriptor
-FILE *fp;          // file handle
-char szBuf[256];   // all-purpose char
-int  n;            // all-purpose int
-//
-//--- Initialize -----------------------------------------------------
+int  nUnit;        /* 0:character 1:line 2-:undefined */
+int  nRet;         /* return code                     */
+char *pszPath;     /* filepath on arguments           */
+char *pszFilename; /* filepath (for message)          */
+int  nFileno;      /* file# of filepath               */
+int  nFd;          /* file descriptor                 */
+FILE *fp;          /* file handle                     */
+char szBuf[256];   /* all-purpose char                */
+int  n;            /* all-purpose int                 */
+
+/*--- Initialize ---------------------------------------------------*/
 pszMypath = argv[0];
 setlocale(LC_CTYPE, "");
 
-//=== Parse arguments ================================================
+/*=== Parse arguments ==============================================*/
 nUnit=0;
-//
-//--- Parse options which start by "-" -------------------------------
+
+/*--- Parse options which start by "-" -----------------------------*/
 while ((n=getopt(argc, argv, "l")) != -1) {
   switch (n) {
     case 'l':
@@ -150,8 +150,8 @@ while ((n=getopt(argc, argv, "l")) != -1) {
 }
 argc -= optind-1;
 argv += optind  ;
-//
-//--- Parse the interval ---------------------------------------------
+
+/*--- Parse the interval -------------------------------------------*/
 if (argc < 2                            ) {print_usage_and_exit();}
 n=sprintf(szBuf,"%d",MAX_INTERVAL);
 if (strlen(argv[0]) > n                 ) {print_usage_and_exit();}
@@ -161,7 +161,7 @@ if ((strlen(argv[0])==n        )&&
 argc--;
 argv++;
 
-//=== Switch buffer mode =============================================
+/*=== Switch buffer mode ===========================================*/
 switch (nUnit) {
   case 0:
             if (setvbuf(stdout,NULL,_IONBF,0)!=0) {
@@ -178,13 +178,13 @@ switch (nUnit) {
             break;
 }
 
-//=== Each file loop =================================================
+/*=== Each file loop ===============================================*/
 nRet     =  0;
 nFileno  =  0;
 nFd      = -1;
 while ((pszPath = argv[nFileno]) != NULL || nFileno == 0) {
-  //
-  //--- Open the input file ------------------------------------------
+
+  /*--- Open the input file ----------------------------------------*/
   if (pszPath == NULL || strcmp(pszPath, "-") == 0) {
     pszFilename = "stdin"                ;
     nFd         = STDIN_FILENO           ;
@@ -200,12 +200,12 @@ while ((pszPath = argv[nFileno]) != NULL || nFileno == 0) {
   }
   if (nFd == STDIN_FILENO) {
     fp = stdin;
-    if (feof(stdin)) {clearerr(stdin);} // Reset EOF condition when stdin
+    if (feof(stdin)) {clearerr(stdin);} /* Reset EOF condition when stdin */
   } else                   {
     fp = fdopen(nFd, "r");
   }
-  //
-  //--- Reading and writing loop -------------------------------------
+
+  /*--- Reading and writing loop -----------------------------------*/
   switch (nUnit) {
     case 0:
               while ((szBuf[0]=getc(fp)) != EOF) {
@@ -229,7 +229,7 @@ while ((pszPath = argv[nFileno]) != NULL || nFileno == 0) {
   nFileno++;
 }
 
-//=== Finish normally ================================================
+/*=== Finish normally ==============================================*/
 return(nRet);}
 
 
@@ -238,17 +238,17 @@ return(nRet);}
 # Functions
 ####################################################################*/
 
-//=== Read and write only one line ===================================
-// [ret] 0   : Finished reading and writing by reading a '\n'
-//       EOF : Finished reading and writing due to EOF
+/*=== Read and write only one line ===================================
+ * [ret] 0   : Finished reading and writing by reading a '\n'
+ *       EOF : Finished reading and writing due to EOF              */
 int read_1line(FILE *fp) {
 
-  //--- Variables ----------------------------------------------------
-  static int nHold = 0; // set 1 if next character is currently held
-  static int nNextchar; // variable for the next character
+  /*--- Variables --------------------------------------------------*/
+  static int nHold = 0; /* set 1 if next character is currently held */
+  static int nNextchar; /* variable for the next character           */
   int        nChar0, nChar;
 
-  //--- Reading and writing a line -----------------------------------
+  /*--- Reading and writing a line ---------------------------------*/
   while (1) {
     if (nHold) {nChar=nNextchar; nHold=0;} else {nChar=getc(fp);}
     switch (nChar) {
@@ -271,46 +271,46 @@ int read_1line(FILE *fp) {
   }
 }
 
-//=== Wait until the next interval ===================================
+/*=== Wait until the next interval =================================*/
 void wait_intervally(uint64_t nInterval_msec) {
 
-  //--- Variables ----------------------------------------------------
-  static uint64_t n8Prev = 0; // the time when this func called last time
+  /*--- Variables --------------------------------------------------*/
+  static uint64_t n8Prev = 0; /* the time when this func called last time */
   uint64_t        n8Now     ;
   uint64_t        nTo       ;
-  //
-  int             nRet;
-  //
-  struct timespec ts;
-  const struct timespec tsSleep = {0, 100000}; // 0.1msec
 
-  //--- Calculate "nTo", the time until which I have to wait ---------
+  int             nRet;
+
+  struct timespec ts;
+  const struct timespec tsSleep = {0, 100000}; /* 0.1msec */
+
+  /*--- Calculate "nTo", the time until which I have to wait -------*/
   nTo = n8Prev + nInterval_msec;
 
-  //--- If the "nTo" has been already past, set the current time into 
-  //    "n8Prev" and return immediately
+  /*--- If the "nTo" has been already past, set the current time into 
+   *    "n8Prev" and return immediately                             */
   if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
     error_exit(1,"Error happend while clock_gettime()\n");
   }
   n8Now = ((uint64_t)ts.tv_sec)*1000+(ts.tv_nsec/1000000);
   if (n8Now >= nTo) { n8Prev=n8Now; return; }
 
-  //--- Waiting loop -------------------------------------------------
+  /*--- Waiting loop -----------------------------------------------*/
   n8Now = ((uint64_t)ts.tv_sec)*1000+(ts.tv_nsec/1000000);
   while (n8Now < nTo) {
-    //
-    // Sleep for a moment
+
+    /* Sleep for a moment */
     nRet = nanosleep(&tsSleep, NULL);
     if (nRet != 0) {error_exit(1,"Error happend while nanosleeping\n");}
-    //
-    // Get the current time
+
+    /* Get the current time */
     if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
       error_exit(1,"Error happend while clock_gettime()\n");
     }
     n8Now = ((uint64_t)ts.tv_sec)*1000+(ts.tv_nsec/1000000);
   }
 
-  //--- Finish waiting -----------------------------------------------
+  /*--- Finish waiting ---------------------------------------------*/
   n8Prev = nTo;
   return;
 }
