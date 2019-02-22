@@ -1,6 +1,6 @@
 /*####################################################################
 #
-# VALVE - Adjust the Flow Rate of UNIX Pipe Strem
+# VALVE - Adjust the Flow Rate of UNIX Pipe Stream
 #
 # USAGE   : valve [-l] millisecs [file ...]
 # Args    : millisecs ... The number of milliseconds to start sending
@@ -76,7 +76,7 @@ void print_usage_and_exit(void) {
   WRN("                        sending at the milliseconds later since the\n" );
   WRN("                        top character of the current one.\n"           );
   WRN("Retuen  : Return 0 only when finished successfully\n"                  );
-  WRN("Version : 2019-02-23 05:02:58 JST\n"                                   );
+  WRN("Version : 2019-02-23 06:01:12 JST\n"                                   );
   WRN("          (POSIX C language)\n"                                        );
   exit(1);
 }
