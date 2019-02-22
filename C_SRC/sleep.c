@@ -8,7 +8,7 @@
 #                      non-integer number here.
 # Retuen  : Return 0 only when succeeded to sleep
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-07-18
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-02-23
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -27,7 +27,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#define WRN(fmt,args...) fprintf(stderr,fmt,##args)
+#define WRN(message) fprintf(stderr,message)
+#define WRV(fmt,...) fprintf(stderr,fmt,__VA_ARGS__)
 
 char* pszMypath;
 
@@ -38,12 +39,12 @@ void print_usage_and_exit(void) {
   for (i=0; *(pszMypath+i)!='\0'; i++) {
     if (*(pszMypath+i)=='/') {iPos=i+1;}
   }
-  WRN("USAGE   : %s <seconds>\n",pszMypath+iPos                               );
+  WRV("USAGE   : %s <seconds>\n",pszMypath+iPos                               );
   WRN("Args    : second ... The number of second to sleep for. You can\n"     );
   WRN("                     give not only an integer number but also a\n"     );
   WRN("                     non-integer number here.\n"                       );
   WRN("Retuen  : Return 0 only when succeeded to sleep\n"                     );
-  WRN("Version : 2017-07-18 00:23:25 JST\n"                                   );
+  WRN("Version : 2019-02-23 05:07:32 JST\n"                                   );
   WRN("          (POSIX C language)\n"                                        );
   exit(1);
 }
@@ -53,7 +54,7 @@ void error_exit(int iErrno, char* szMessage) {
   for (i=0; *(pszMypath+i)!='\0'; i++) {
     if (*(pszMypath+i)=='/') {iPos=i+1;}
   }
-  WRN("%s: %s\n",pszMypath+iPos, szMessage);
+  WRV("%s: %s\n",pszMypath+iPos, szMessage);
   exit(iErrno);
 }
 
@@ -67,15 +68,14 @@ int main(int argc, char *argv[]) {
   /*=== Initial Setting ============================================*/
   struct timespec tspcSleeping_time;
   double dNum;
-  char   szBuf[2];
   int    iRet;
 
   pszMypath = argv[0];
 
   /*=== Parse options ==============================================*/
-  if (argc != 2                                   ) {print_usage_and_exit();}
-  if (sscanf(argv[1], "%lf%1s", &dNum, szBuf) != 1) {print_usage_and_exit();}
-  if (dNum > INT_MAX                              ) {print_usage_and_exit();}
+  if (argc != 2                            ) {print_usage_and_exit();}
+  if (sscanf(argv[1], "%lf%1s", &dNum) != 1) {print_usage_and_exit();}
+  if (dNum > INT_MAX                       ) {print_usage_and_exit();}
 
   /*=== Sleep ======================================================*/
   if (dNum <= 0                                   ) {exit(0);               }
