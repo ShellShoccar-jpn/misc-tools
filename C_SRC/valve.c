@@ -2,16 +2,22 @@
 #
 # VALVE - Adjust the Flow Rate of UNIX Pipe Stream
 #
-# USAGE   : valve [-l] millisecs [file ...]
-# Args    : millisecs ... The number of milliseconds to start sending
-#                         the next character since sending the current
-#                         one (up to 2147483647, about 597 hours)
+# USAGE   : valve [-cl] perioictime [file ...]
+# Args    : perioictime . Perioic time in millisecond from start
+#                         sending the current unit (means a character
+#                         or a line) to start sending the next unit.
+#                         The range of it is from 0 to 2147483647
+#                         (about 597 hours).
 #           file ........ filepath to be send ("-" means STDIN)
-# Options : -l .......... Changes the adjustment unit from character to
-#                         line. If the option is set, the top character
-#                         of the next line will be started sending at
-#                         the milliseconds later since the top character
-#                         of the current one.
+# Options : -c .......... (This is default.) Changes the periodic unit
+#                         to character. This option defines that the
+#                         periodic time is the time from sending the
+#                         current character to sending the next one.
+#           -l .......... Changes the periodic unit to line. This
+#                         option defines that the periodic time is the
+#                         time from sending the top character of the
+#                         current line to sending the top character of
+#                         the next line.
 # Retuen  : Return 0 only when finished successfully
 #
 # Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-02-23
@@ -51,7 +57,7 @@
 #define MAX_INTERVAL 2147483647
 
 /*--- prototype functions ------------------------------------------*/
-void wait_intervally(uint64_t nInterval_msec);
+void wait_intervally(uint64_t iInterval_msec);
 
 /*--- global variables ---------------------------------------------*/
 char* pszMypath;
@@ -60,23 +66,28 @@ char* pszMypath;
 
 /*--- exit with usage ----------------------------------------------*/
 void print_usage_and_exit(void) {
-  int  n;
-  int  nPos = 0;
-  for (n=0; *(pszMypath+n)!='\0'; n++) {
-    if (*(pszMypath+n)=='/') {nPos=n+1;}
+  int  i;
+  int  iPos = 0;
+  for (i=0; *(pszMypath+i)!='\0'; i++) {
+    if (*(pszMypath+i)=='/') {iPos=i+1;}
   }
-  WRV("USAGE   : %s [-l] millisecs [file ...]\n",pszMypath+nPos               );
-  WRN("Args    : millisecs ... The number of milliseconds to start sending\n" );
-  WRN("                        the next character since sending the current\n");
-  WRN("                        one (up to 2147483647, about 597 hours)\n"     );
+  WRV("USAGE   : %s [-cl] perioictime [file ...]",pszMypath+iPos              );
+  WRN("Args    : perioictime . Perioic time in millisecond from start\n"      );
+  WRN("                        sending the current unit (means a character\n" );
+  WRN("                        or a line) to start sending the next unit.\n"  );
+  WRN("                        The range of it is from 0 to 2147483647\n"     );
+  WRN("                        (about 597 hours).\n"                          );
   WRN("          file ........ filepath to be send (\"-\" means STDIN)\n"     );
-  WRN("Options : -l .......... Changes the adjustment unit from character\n"  );
-  WRN("                        to line. If the option is set, the top\n"      );
-  WRN("                        character of the next line will be started\n"  );
-  WRN("                        sending at the milliseconds later since the\n" );
-  WRN("                        top character of the current one.\n"           );
-  WRN("Retuen  : Return 0 only when finished successfully\n"                  );
-  WRN("Version : 2019-02-23 14:55:11 JST\n"                                   );
+  WRN("Options : -c .......... (This is default.) Changes the periodic unit\n");
+  WRN("                        to character. This option defines that the\n"  );
+  WRN("                        periodic time is the time from sending the\n"  );
+  WRN("                        current character to sending the next one.\n"  );
+  WRN("          -l .......... Changes the periodic unit to line. This\n"     );
+  WRN("                        option defines that the periodic time is the\n");
+  WRN("                        time from sending the top character of the\n"  );
+  WRN("                        current line to sending the top character of\n");
+  WRN("                        the next line.\n"                              );
+  WRN("Version : 2019-02-23 15:43:02 JST\n"                                   );
   WRN("          (POSIX C language)\n"                                        );
   exit(1);
 }
@@ -84,31 +95,31 @@ void print_usage_and_exit(void) {
 /*--- print warning message ----------------------------------------*/
 void warning(const char* szFormat, ...) {
   va_list va      ;
-  int     n       ;
-  int     nPos = 0;
-  for (n=0; *(pszMypath+n)!='\0'; n++) {
-    if (*(pszMypath+n)=='/') {nPos=n+1;}
+  int     i       ;
+  int     iPos = 0;
+  for (i=0; *(pszMypath+i)!='\0'; i++) {
+    if (*(pszMypath+i)=='/') {iPos=i+1;}
   }
   va_start(va, szFormat);
-  WRV("%s: ",pszMypath+nPos);
+  WRV("%s: ",pszMypath+iPos);
   vfprintf(stderr,szFormat,va);
   va_end(va);
   return;
 }
 
 /*--- exit with error message --------------------------------------*/
-void error_exit(int nErrno, const char* szFormat, ...) {
+void error_exit(int iErrno, const char* szFormat, ...) {
   va_list va      ;
-  int     n       ;
-  int     nPos = 0;
-  for (n=0; *(pszMypath+n)!='\0'; n++) {
-    if (*(pszMypath+n)=='/') {nPos=n+1;}
+  int     i       ;
+  int     iPos = 0;
+  for (i=0; *(pszMypath+i)!='\0'; i++) {
+    if (*(pszMypath+i)=='/') {iPos=i+1;}
   }
   va_start(va, szFormat);
-  WRV("%s: ",pszMypath+nPos);
+  WRV("%s: ",pszMypath+iPos);
   vfprintf(stderr,szFormat,va);
   va_end(va);
-  exit(nErrno);
+  exit(iErrno);
 }
 
 
@@ -120,32 +131,30 @@ void error_exit(int nErrno, const char* szFormat, ...) {
 int main(int argc, char *argv[]) {
 
 /*--- Variables ----------------------------------------------------*/
-int  nInterval;
-int  nUnit;        /* 0:character 1:line 2-:undefined */
-int  nRet;         /* return code                     */
+int  iInterval;
+int  iUnit;        /* 0:character 1:line 2-:undefined */
+int  iRet;         /* return code                     */
 char *pszPath;     /* filepath on arguments           */
 char *pszFilename; /* filepath (for message)          */
-int  nFileno;      /* file# of filepath               */
-int  nFd;          /* file descriptor                 */
+int  iFileno;      /* file# of filepath               */
+int  iFd;          /* file descriptor                 */
 FILE *fp;          /* file handle                     */
 char szBuf[256];   /* all-purpose char                */
-int  n;            /* all-purpose int                 */
+int  i;            /* all-purpose int                 */
 
 /*--- Initialize ---------------------------------------------------*/
 pszMypath = argv[0];
 setlocale(LC_CTYPE, "");
 
 /*=== Parse arguments ==============================================*/
-nUnit=0;
+iUnit=0;
 
 /*--- Parse options which start by "-" -----------------------------*/
-while ((n=getopt(argc, argv, "l")) != -1) {
-  switch (n) {
-    case 'l':
-              nUnit = 1;
-              break;
-    default:
-              print_usage_and_exit();
+while ((i=getopt(argc, argv, "cl")) != -1) {
+  switch (i) {
+    case 'c': iUnit = 0; break;
+    case 'l': iUnit = 1; break;
+    default : print_usage_and_exit();
   }
 }
 argc -= optind-1;
@@ -153,16 +162,16 @@ argv += optind  ;
 
 /*--- Parse the interval -------------------------------------------*/
 if (argc < 2                            ) {print_usage_and_exit();}
-n=sprintf(szBuf,"%d",MAX_INTERVAL);
-if (strlen(argv[0]) > n                 ) {print_usage_and_exit();}
-if (sscanf(argv[0],"%d",&nInterval) != 1) {print_usage_and_exit();}
-if ((strlen(argv[0])==n        )&&
-    (nInterval<(MAX_INTERVAL/2))        ) {print_usage_and_exit();}
+i=sprintf(szBuf,"%d",MAX_INTERVAL);
+if (strlen(argv[0]) > i                 ) {print_usage_and_exit();}
+if (sscanf(argv[0],"%d",&iInterval) != 1) {print_usage_and_exit();}
+if ((strlen(argv[0])==i        )&&
+    (iInterval<(MAX_INTERVAL/2))        ) {print_usage_and_exit();}
 argc--;
 argv++;
 
 /*=== Switch buffer mode ===========================================*/
-switch (nUnit) {
+switch (iUnit) {
   case 0:
             if (setvbuf(stdout,NULL,_IONBF,0)!=0) {
               error_exit(1,"Failed to switch to unbuffered mode\n");
@@ -179,45 +188,45 @@ switch (nUnit) {
 }
 
 /*=== Each file loop ===============================================*/
-nRet     =  0;
-nFileno  =  0;
-nFd      = -1;
-while ((pszPath = argv[nFileno]) != NULL || nFileno == 0) {
+iRet     =  0;
+iFileno  =  0;
+iFd      = -1;
+while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
 
   /*--- Open the input file ----------------------------------------*/
   if (pszPath == NULL || strcmp(pszPath, "-") == 0) {
     pszFilename = "stdin"                ;
-    nFd         = STDIN_FILENO           ;
+    iFd         = STDIN_FILENO           ;
   } else                                            {
     pszFilename = pszPath                ;
-    nFd         = open(pszPath, O_RDONLY);
+    iFd         = open(pszPath, O_RDONLY);
   }
-  if (nFd < 0) {
-    nRet = 1;
+  if (iFd < 0) {
+    iRet = 1;
     warning("%s: File open error\n",pszFilename);
-    nFileno++;
+    iFileno++;
     continue;
   }
-  if (nFd == STDIN_FILENO) {
+  if (iFd == STDIN_FILENO) {
     fp = stdin;
     if (feof(stdin)) {clearerr(stdin);} /* Reset EOF condition when stdin */
   } else                   {
-    fp = fdopen(nFd, "r");
+    fp = fdopen(iFd, "r");
   }
 
   /*--- Reading and writing loop -----------------------------------*/
-  switch (nUnit) {
+  switch (iUnit) {
     case 0:
-              while ((n=getc(fp)) != EOF) {
-                wait_intervally(nInterval);
-                if (putchar(n)==EOF) {
+              while ((i=getc(fp)) != EOF) {
+                wait_intervally(iInterval);
+                if (putchar(i)==EOF) {
                   error_exit(1,"Cannot write to STDOUT\n");
                 }
               }
               break;
     case 1:
               while (1) {
-                wait_intervally(nInterval);
+                wait_intervally(iInterval);
                 if (read_1line(fp)==EOF) {break;}
               }
               break;
@@ -226,11 +235,11 @@ while ((pszPath = argv[nFileno]) != NULL || nFileno == 0) {
   }
 
   if (pszPath == NULL) {break;}
-  nFileno++;
+  iFileno++;
 }
 
 /*=== Finish normally ==============================================*/
-return(nRet);}
+return(iRet);}
 
 
 
@@ -244,14 +253,14 @@ return(nRet);}
 int read_1line(FILE *fp) {
 
   /*--- Variables --------------------------------------------------*/
-  static int nHold = 0; /* set 1 if next character is currently held */
-  static int nNextchar; /* variable for the next character           */
-  int        nChar0, nChar;
+  static int iHold = 0; /* set 1 if next character is currently held */
+  static int iNextchar; /* variable for the next character           */
+  int        iChar0, iChar;
 
   /*--- Reading and writing a line ---------------------------------*/
   while (1) {
-    if (nHold) {nChar=nNextchar; nHold=0;} else {nChar=getc(fp);}
-    switch (nChar) {
+    if (iHold) {iChar=iNextchar; iHold=0;} else {iChar=getc(fp);}
+    switch (iChar) {
       case EOF:
                   return(EOF);
                   break;
@@ -259,12 +268,12 @@ int read_1line(FILE *fp) {
                   if (putchar('\n' )==EOF) {
                     error_exit(1,"Cannot write to STDOUT\n");
                   }
-                  nNextchar = getc(fp);
-                  if (nNextchar==EOF) {        return(EOF);}
-                  else                {nHold=1;return(  0);}
+                  iNextchar = getc(fp);
+                  if (iNextchar==EOF) {        return(EOF);}
+                  else                {iHold=1;return(  0);}
                   break;
       default:
-                  if (putchar(nChar)==EOF) {
+                  if (putchar(iChar)==EOF) {
                     error_exit(1,"Cannot write to STDOUT\n");
                   }
     }
@@ -272,45 +281,45 @@ int read_1line(FILE *fp) {
 }
 
 /*=== Wait until the next interval =================================*/
-void wait_intervally(uint64_t nInterval_msec) {
+void wait_intervally(uint64_t iInterval_msec) {
 
   /*--- Variables --------------------------------------------------*/
-  static uint64_t n8Prev = 0; /* the time when this func called last time */
-  uint64_t        n8Now     ;
-  uint64_t        nTo       ;
+  static uint64_t i8Prev = 0; /* the time when this func called last time */
+  uint64_t        i8Now     ;
+  uint64_t        i8To      ;
 
-  int             nRet;
+  int             iRet;
 
   struct timespec ts;
   const struct timespec tsSleep = {0, 100000}; /* 0.1msec */
 
-  /*--- Calculate "nTo", the time until which I have to wait -------*/
-  nTo = n8Prev + nInterval_msec;
+  /*--- Calculate "i8To", the time until which I have to wait ------*/
+  i8To = i8Prev + iInterval_msec;
 
-  /*--- If the "nTo" has been already past, set the current time into 
-   *    "n8Prev" and return immediately                             */
+  /*--- If the "i8To" has been already past, set the current time into
+   *    "i8Prev" and return immediately                             */
   if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
     error_exit(1,"Error happend while clock_gettime()\n");
   }
-  n8Now = ((uint64_t)ts.tv_sec)*1000+(ts.tv_nsec/1000000);
-  if (n8Now >= nTo) { n8Prev=n8Now; return; }
+  i8Now = ((uint64_t)ts.tv_sec)*1000+(ts.tv_nsec/1000000);
+  if (i8Now >= i8To) { i8Prev=i8Now; return; }
 
   /*--- Waiting loop -----------------------------------------------*/
-  n8Now = ((uint64_t)ts.tv_sec)*1000+(ts.tv_nsec/1000000);
-  while (n8Now < nTo) {
+  i8Now = ((uint64_t)ts.tv_sec)*1000+(ts.tv_nsec/1000000);
+  while (i8Now < i8To) {
 
     /* Sleep for a moment */
-    nRet = nanosleep(&tsSleep, NULL);
-    if (nRet != 0) {error_exit(1,"Error happend while nanosleeping\n");}
+    iRet = nanosleep(&tsSleep, NULL);
+    if (iRet != 0) {error_exit(1,"Error happend while nanosleeping\n");}
 
     /* Get the current time */
     if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
       error_exit(1,"Error happend while clock_gettime()\n");
     }
-    n8Now = ((uint64_t)ts.tv_sec)*1000+(ts.tv_nsec/1000000);
+    i8Now = ((uint64_t)ts.tv_sec)*1000+(ts.tv_nsec/1000000);
   }
 
   /*--- Finish waiting ---------------------------------------------*/
-  n8Prev = nTo;
+  i8Prev = i8To;
   return;
 }
