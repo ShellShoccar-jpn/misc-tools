@@ -20,7 +20,7 @@
 #                         the next line.
 # Retuen  : Return 0 only when finished successfully
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-02-23
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-02-24
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -87,7 +87,7 @@ void print_usage_and_exit(void) {
   WRN("                        time from sending the top character of the\n"  );
   WRN("                        current line to sending the top character of\n");
   WRN("                        the next line.\n"                              );
-  WRN("Version : 2019-02-23 15:43:02 JST\n"                                   );
+  WRN("Version : 2019-02-24 00:38:57 JST\n"                                   );
   WRN("          (POSIX C language)\n"                                        );
   exit(1);
 }
@@ -305,7 +305,6 @@ void wait_intervally(uint64_t iInterval_msec) {
   if (i8Now >= i8To) { i8Prev=i8Now; return; }
 
   /*--- Waiting loop -----------------------------------------------*/
-  i8Now = ((uint64_t)ts.tv_sec)*1000+(ts.tv_nsec/1000000);
   while (i8Now < i8To) {
 
     /* Sleep for a moment */
