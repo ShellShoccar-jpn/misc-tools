@@ -76,7 +76,7 @@ void print_usage_and_exit(void) {
   WRN("                        sending at the milliseconds later since the\n" );
   WRN("                        top character of the current one.\n"           );
   WRN("Retuen  : Return 0 only when finished successfully\n"                  );
-  WRN("Version : 2019-02-23 06:01:12 JST\n"                                   );
+  WRN("Version : 2019-02-23 14:55:11 JST\n"                                   );
   WRN("          (POSIX C language)\n"                                        );
   exit(1);
 }
@@ -208,9 +208,9 @@ while ((pszPath = argv[nFileno]) != NULL || nFileno == 0) {
   /*--- Reading and writing loop -----------------------------------*/
   switch (nUnit) {
     case 0:
-              while ((szBuf[0]=getc(fp)) != EOF) {
+              while ((n=getc(fp)) != EOF) {
                 wait_intervally(nInterval);
-                if (putchar(szBuf[0])==EOF) {
+                if (putchar(n)==EOF) {
                   error_exit(1,"Cannot write to STDOUT\n");
                 }
               }
