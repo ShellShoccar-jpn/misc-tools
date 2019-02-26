@@ -95,7 +95,7 @@ void print_usage_and_exit(void) {
   WRN("                        time from sending the top character of the\n"  );
   WRN("                        current line to sending the top character of\n");
   WRN("                        the next line.\n"                              );
-  WRN("Version : 2019-02-26 20:10:50 JST\n"                                   );
+  WRN("Version : 2019-02-26 20:37:36 JST\n"                                   );
   WRN("          (POSIX C language)\n"                                        );
   exit(1);
 }
@@ -258,16 +258,16 @@ return(iRet);}
 int64_t parse_interval(char *pszArg) {
 
   /*--- Variables --------------------------------------------------*/
-  char szBuf[NAME_MAX+1];
-  char szVal[       256];
-  int  iLen, iVlen, iVal;
-  int  iVlen_max        ;
-  int  i                ;
+  char szBuf[_POSIX_NAME_MAX+1];
+  char szVal[              256];
+  int  iLen, iVlen, iVal       ;
+  int  iVlen_max               ;
+  int  i                       ;
 
   /*--- Get the value and unit-word from the argument in advance ---*/
   iVlen_max=sprintf(szBuf,"%d",MAX_INTERVAL);
   iLen     =strlen(pszArg);
-  if (iLen > NAME_MAX) {return -255;}
+  if (iLen > _POSIX_NAME_MAX) {return -255;}
 
   /*--- Try to interpret the argument as "<value>"+"unit" ----------*/
   while (1) {
