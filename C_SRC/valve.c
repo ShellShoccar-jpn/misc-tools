@@ -23,7 +23,7 @@
 #                         the next line.
 # Retuen  : Return 0 only when finished successfully
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-02-26
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-02-27
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -60,7 +60,7 @@
 #define MAX_INTERVAL 2147483647
 
 /*--- prototype functions ------------------------------------------*/
-int64_t parse_interval(char *pszArg);
+int64_t parse_periodictime(char *pszArg);
 void wait_intervally(int64_t i8Interval_nsec);
 int read_1line(FILE *fp);
 
@@ -95,7 +95,7 @@ void print_usage_and_exit(void) {
   WRN("                        time from sending the top character of the\n"  );
   WRN("                        current line to sending the top character of\n");
   WRN("                        the next line.\n"                              );
-  WRN("Version : 2019-02-26 20:37:36 JST\n"                                   );
+  WRN("Version : 2019-02-27 00:17:14 JST\n"                                   );
   WRN("          (POSIX C language)\n"                                        );
   exit(1);
 }
@@ -139,7 +139,7 @@ void error_exit(int iErrno, const char* szFormat, ...) {
 int main(int argc, char *argv[]) {
 
 /*--- Variables ----------------------------------------------------*/
-int64_t  i8Interval;   /* Periodic time in nano second    */
+int64_t  i8Interval;   /* Periodic time in nanosecond     */
 int      iUnit;        /* 0:character 1:line 2-:undefined */
 int      iRet;         /* return code                     */
 char     *pszPath;     /* filepath on arguments           */
@@ -170,7 +170,7 @@ argv += optind  ;
 
 /*--- Parse the interval -------------------------------------------*/
 if (argc < 2                                  ) {print_usage_and_exit();}
-if ((i8Interval=parse_interval(argv[0]))==-255) {print_usage_and_exit();}
+if ((i8Interval=parse_periodictime(argv[0]))<0) {print_usage_and_exit();}
 argc--;
 argv++;
 
@@ -251,70 +251,54 @@ return(iRet);}
 # Functions
 ####################################################################*/
 
-/*=== Parse the interval value =======================================
+/*=== Parse the periodic time ========================================
  * [ret] >= 0  : Interval value (in nanosecound)
- *       ==-1  : (variable)
- *       <=-255: Invalid argument                                    */
-int64_t parse_interval(char *pszArg) {
+ *       <  0  : It is not a value                                  */
+int64_t parse_periodictime(char *pszArg) {
 
   /*--- Variables --------------------------------------------------*/
-  char szBuf[_POSIX_NAME_MAX+1];
-  char szVal[              256];
-  int  iLen, iVlen, iVal       ;
-  int  iVlen_max               ;
-  int  i                       ;
+  char szVal[256]       ;
+  char *pszUnit         ;
+  int  iLen, iVlen, iVal;
+  int  iVlen_max        ;
+  int  i                ;
 
-  /*--- Get the value and unit-word from the argument in advance ---*/
-  iVlen_max=sprintf(szBuf,"%d",MAX_INTERVAL);
-  iLen     =strlen(pszArg);
-  if (iLen > _POSIX_NAME_MAX) {return -255;}
+  /*--- Get the lengths for the argument ---------------------------*/
+  if ((iLen=strlen(pszArg))>=256) {return -1;}
+  iVlen_max=sprintf(szVal,"%d",MAX_INTERVAL);
 
   /*--- Try to interpret the argument as "<value>"+"unit" ----------*/
-  while (1) {
-    for (iVlen=0; iVlen<iLen; iVlen++) {
-      if (pszArg[iVlen]<'0' || pszArg[iVlen]>'9'){break;}
-      szVal[iVlen] = pszArg[iVlen];
-    }
+  for (iVlen=0; iVlen<iLen; iVlen++) {
+    if (pszArg[iVlen]<'0' || pszArg[iVlen]>'9'){break;}
     szVal[iVlen] = pszArg[iVlen];
-    if (iVlen==0 || iVlen>iVlen_max) {break;}
-    if (sscanf(szVal,"%d",&iVal)!=1) {return -255;}
-    if ((strlen(szVal)==iVlen_max)&&(iVal<(MAX_INTERVAL/2))) {break;}
-
-    /* as a second value */
-    if (strcmp(pszArg+iVlen, "s" )==0) {
-      return (int64_t)iVal*1000000000;
-    }
-
-    /* as a millisecond value */
-    if (strlen(pszArg+iVlen)==0 || strcmp(pszArg+iVlen, "ms")==0) {
-      return (int64_t)iVal*1000000;
-    }
-
-    /* as a microsecond value */
-    if (strcmp(pszArg+iVlen, "us")==0) {
-      return (int64_t)iVal*1000;
-    }
-
-    /* as a nanosecond value */
-    if (strcmp(pszArg+iVlen, "ns")==0) {
-      return (int64_t)iVal;
-    }
-
-    /* as a bps value (1charater=8bit) */
-    if (strcmp(pszArg+iVlen, "bps")==0) {
-      return 8000000000LL/(int64_t)iVal;
-    }
-
-    /* as a cps value (1charater=10bit) */
-    if (strcmp(pszArg+iVlen, "cps")==0) {
-      return 10000000000LL/(int64_t)iVal;
-    }
-
-    break;
   }
+  szVal[iVlen] = (int)NULL;
+  if (iVlen==0 || iVlen>iVlen_max                          ) {return -1;}
+  if (sscanf(szVal,"%d",&iVal) != 1                        ) {return -1;}
+  if ((strlen(szVal)==iVlen_max) && (iVal<(MAX_INTERVAL/2))) {return -1;}
+  pszUnit = pszArg + iVlen;
 
+  /* as a second value */
+  if (strcmp(pszUnit, "s"  )==0) {return (int64_t)iVal*1000000000;           }
 
-  return -255;
+  /* as a millisecond value */
+  if (strlen(pszUnit)==0 || strcmp(pszUnit, "ms")==0) {
+                                  return (int64_t)iVal*1000000;              }
+
+  /* as a microsecond value */
+  if (strcmp(pszUnit, "us" )==0) {return (int64_t)iVal*1000;                 }
+
+  /* as a nanosecond value */
+  if (strcmp(pszUnit, "ns" )==0) {return (int64_t)iVal;                      }
+
+  /* as a bps value (1charater=8bit) */
+  if (strcmp(pszUnit, "bps")==0) {return ( 80000000000LL/(int64_t)iVal+5)/10;}
+
+  /* as a cps value (1charater=10bit) */
+  if (strcmp(pszUnit, "cps")==0) {return (100000000000LL/(int64_t)iVal+5)/10;}
+
+  /*--- Otherwise, it is not a value -------------------------------*/
+  return -1;
 }
 
 /*=== Read and write only one line ===================================
