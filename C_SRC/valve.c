@@ -1,16 +1,16 @@
 /*####################################################################
 #
-# VALVE - Adjust the Flow Rate of UNIX Pipe Stream
+# VALVE - Adjust the UNIX Pipe Streaming Speed
 #
 # USAGE   : valve [-cl] perioictime [file ...]
-# Args    : perioictime . Periodic time from start sending the current
+# Args    : periodictime  Periodic time from start sending the current
 #                         block (means a character or a line) to start
 #                         sending the next block.
 #                         The unit of the periodic time is millisecond
 #                         defaultly. You can also designate the unit
 #                         like '100ms'. Available units are 's', 'ms',
 #                         'us', 'ns', and 'bps' or 'cps'.
-#                         The maximum value of the time is 2147483647.
+#                         The maximum value is 2147483647 for all units.
 #           file ........ filepath to be send ("-" means STDIN)
 # Options : -c .......... (This is default.) Changes the periodic unit
 #                         to character. This option defines that the
@@ -57,11 +57,11 @@
 #define WRV(fmt,...) fprintf(stderr,fmt,__VA_ARGS__)
 
 /*--- macro constants ----------------------------------------------*/
-#define MAX_INTERVAL 2147483647
+#define MAX_PERIODICVAL 2147483647
 
 /*--- prototype functions ------------------------------------------*/
 int64_t parse_periodictime(char *pszArg);
-void wait_intervally(int64_t i8Interval_nsec);
+void spend_my_spare_time(int64_t i8Periodic_nsec);
 int read_1line(FILE *fp);
 
 /*--- global variables ---------------------------------------------*/
@@ -76,27 +76,29 @@ void print_usage_and_exit(void) {
   for (i=0; *(pszMypath+i)!='\0'; i++) {
     if (*(pszMypath+i)=='/') {iPos=i+1;}
   }
-  WRV("USAGE   : %s [-cl] periodictime [file ...]\n",pszMypath+iPos           );
-  WRN("Args    : perioictime . Periodic time from start sending the current\n");
-  WRN("                        block (means a character or a line) to start\n");
-  WRN("                        sending the next block.\n"                     );
-  WRN("                        The unit of the periodic time is millisecond\n");
-  WRN("                        defaultly. You can also designate the unit\n"  );
-  WRN("                        like '100ms'. Available units are 's', 'ms',\n");
-  WRN("                        'us', 'ns', and 'bps' or 'cps'.\n"             );
-  WRN("                        The maximum value of the time is 2147483647.\n");
-  WRN("          file ........ filepath to be send (\"-\" means STDIN)\n"     );
-  WRN("Options : -c .......... (This is default.) Changes the periodic unit\n");
-  WRN("                        to character. This option defines that the\n"  );
-  WRN("                        periodic time is the time from sending the\n"  );
-  WRN("                        current character to sending the next one.\n"  );
-  WRN("          -l .......... Changes the periodic unit to line. This\n"     );
-  WRN("                        option defines that the periodic time is the\n");
-  WRN("                        time from sending the top character of the\n"  );
-  WRN("                        current line to sending the top character of\n");
-  WRN("                        the next line.\n"                              );
-  WRN("Version : 2019-02-27 00:17:14 JST\n"                                   );
-  WRN("          (POSIX C language)\n"                                        );
+  WRV(
+    "USAGE   : %s [-cl] periodictime [file ...]\n"
+    "Args    : periodictime  Periodic time from start sending the current\n"
+    "                        block (means a character or a line) to start\n"
+    "                        sending the next block.\n"
+    "                        The unit of the periodic time is millisecond\n"
+    "                        defaultly. You can also designate the unit\n"
+    "                        like '100ms'. Available units are 's', 'ms',\n"
+    "                        'us', 'ns', and 'bps' or 'cps'.\n"
+    "                        The maximum value is 2147483647 for all units.\n"
+    "          file ........ filepath to be send (\"-\" means STDIN)\n"
+    "Options : -c .......... (This is default.) Changes the periodic unit\n"
+    "                        to character. This option defines that the\n"
+    "                        periodic time is the time from sending the\n"
+    "                        current character to sending the next one.\n"
+    "          -l .......... Changes the periodic unit to line. This\n"
+    "                        option defines that the periodic time is the\n"
+    "                        time from sending the top character of the\n"
+    "                        current line to sending the top character of\n"
+    "                        the next line.\n"
+    "Version : 2019-02-27 15:58:29 JST\n"
+    "          (POSIX C language)\n"
+    ,pszMypath+iPos);
   exit(1);
 }
 
@@ -139,7 +141,7 @@ void error_exit(int iErrno, const char* szFormat, ...) {
 int main(int argc, char *argv[]) {
 
 /*--- Variables ----------------------------------------------------*/
-int64_t  i8Interval;   /* Periodic time in nanosecond     */
+int64_t  i8Peritime;   /* Periodic time in nanosecond     */
 int      iUnit;        /* 0:character 1:line 2-:undefined */
 int      iRet;         /* return code                     */
 char     *pszPath;     /* filepath on arguments           */
@@ -170,7 +172,7 @@ argv += optind  ;
 
 /*--- Parse the interval -------------------------------------------*/
 if (argc < 2                                  ) {print_usage_and_exit();}
-if ((i8Interval=parse_periodictime(argv[0]))<0) {print_usage_and_exit();}
+if ((i8Peritime=parse_periodictime(argv[0]))<0) {print_usage_and_exit();}
 argc--;
 argv++;
 
@@ -222,7 +224,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
   switch (iUnit) {
     case 0:
               while ((i=getc(fp)) != EOF) {
-                wait_intervally(i8Interval);
+                spend_my_spare_time(i8Peritime);
                 if (putchar(i)==EOF) {
                   error_exit(1,"Cannot write to STDOUT\n");
                 }
@@ -230,7 +232,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
               break;
     case 1:
               while (1) {
-                wait_intervally(i8Interval);
+                spend_my_spare_time(i8Peritime);
                 if (read_1line(fp)==EOF) {break;}
               }
               break;
@@ -265,7 +267,7 @@ int64_t parse_periodictime(char *pszArg) {
 
   /*--- Get the lengths for the argument ---------------------------*/
   if ((iLen=strlen(pszArg))>=256) {return -1;}
-  iVlen_max=sprintf(szVal,"%d",MAX_INTERVAL);
+  iVlen_max=sprintf(szVal,"%d",MAX_PERIODICVAL);
 
   /*--- Try to interpret the argument as "<value>"+"unit" ----------*/
   for (iVlen=0; iVlen<iLen; iVlen++) {
@@ -273,9 +275,9 @@ int64_t parse_periodictime(char *pszArg) {
     szVal[iVlen] = pszArg[iVlen];
   }
   szVal[iVlen] = (int)NULL;
-  if (iVlen==0 || iVlen>iVlen_max                          ) {return -1;}
-  if (sscanf(szVal,"%d",&iVal) != 1                        ) {return -1;}
-  if ((strlen(szVal)==iVlen_max) && (iVal<(MAX_INTERVAL/2))) {return -1;}
+  if (iVlen==0 || iVlen>iVlen_max                             ) {return -1;}
+  if (sscanf(szVal,"%d",&iVal) != 1                           ) {return -1;}
+  if ((strlen(szVal)==iVlen_max) && (iVal<(MAX_PERIODICVAL/2))) {return -1;}
   pszUnit = pszArg + iVlen;
 
   /* as a second value */
@@ -334,8 +336,8 @@ int read_1line(FILE *fp) {
   }
 }
 
-/*=== Wait until the next interval =================================*/
-void wait_intervally(int64_t i8Interval_nsec) {
+/*=== Sleep until the next interval period =========================*/
+void spend_my_spare_time(int64_t i8Periodic_nsec) {
 
   /*--- Variables --------------------------------------------------*/
   static struct timespec tsPrev = {0,0}; /* the time when this func called last time */
@@ -347,7 +349,7 @@ void wait_intervally(int64_t i8Interval_nsec) {
   uint64_t               ui8           ;
 
   /*--- Calculate "tsTo", the time until which I have to wait ------*/
-  ui8 = (uint64_t)tsPrev.tv_nsec + i8Interval_nsec;
+  ui8 = (uint64_t)tsPrev.tv_nsec + i8Periodic_nsec;
   tsTo.tv_sec  = tsPrev.tv_sec + (time_t)(ui8/1000000000);
   tsTo.tv_nsec = (long)(ui8%1000000000);
 
@@ -369,7 +371,7 @@ void wait_intervally(int64_t i8Interval_nsec) {
     return;
   }
 
-  /*--- Wait until the next interval period ------------------------*/
+  /*--- Sleep until the next interval period -----------------------*/
   iRet = nanosleep(&tsDiff, NULL);
   if (iRet != 0) {error_exit(1,"Error happend while nanosleeping\n");}
 
