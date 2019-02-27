@@ -96,7 +96,7 @@ void print_usage_and_exit(void) {
     "                        time from sending the top character of the\n"
     "                        current line to sending the top character of\n"
     "                        the next line.\n"
-    "Version : 2019-02-27 15:58:29 JST\n"
+    "Version : 2019-02-27 23:16:13 JST\n"
     "          (POSIX C language)\n"
     ,pszMypath+iPos);
   exit(1);
@@ -240,6 +240,10 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
               error_exit(1,"FATAL: Invalid unit type\n");
   }
 
+  /*--- Close the input file ---------------------------------------*/
+  if (fp != stdin) {fclose(fp);}
+
+  /*--- End loop ---------------------------------------------------*/
   if (pszPath == NULL) {break;}
   iFileno++;
 }
