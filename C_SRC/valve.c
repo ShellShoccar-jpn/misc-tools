@@ -2,8 +2,8 @@
 #
 # VALVE - Adjust the UNIX Pipe Streaming Speed
 #
-# USAGE   : valve [-cl] perioictime [file ...]
-#           valve [-cl] infofile [file ...]
+# USAGE   : valve [-cl] periodictime [file ...]
+#           valve [-cl] controlfile [file ...]
 # Args    : periodictime  Periodic time from start sending the current
 #                         block (means a character or a line) to start
 #                         sending the next block.
@@ -17,7 +17,7 @@
 #                          - output : '0%%'   (completely shut the value)
 #                                     '100%%' (completely open the value)
 #                         The maximum value is INT_MAX for all units.
-#           infofile .... Filepath to designate the periodictime instead
+#           controlfile . Filepath to designate the periodic time instead
 #                         of by argument. The word you can designate in
 #                         this file is completely the same as the argu-
 #                         ment.
@@ -38,7 +38,13 @@
 #                         the next line.
 # Retuen  : Return 0 only when finished successfully
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-02-28
+# Note    : [To Linux users]
+#           If you see an error message while compiling like that,
+#             > ... undefined reference to `clock_gettime'
+#           Try "-lrt" option for gcc as follows.
+#             $ gcc -lrt -o valve valve.c
+#
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-01
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -97,7 +103,7 @@ int      giFd_peritime; /* File descriptor of the file which the periodic
 void print_usage_and_exit(void) {
   WRV(
     "USAGE   : %s [-cl] periodictime [file ...]\n"
-    "          %s [-cl] infofile [file ...]\n"
+    "          %s [-cl] controlfile [file ...]\n"
     "Args    : periodictime  Periodic time from start sending the current\n"
     "                        block (means a character or a line) to start\n"
     "                        sending the next block.\n"
@@ -111,7 +117,7 @@ void print_usage_and_exit(void) {
     "                         - output : '0%%'   (completely shut the value)\n"
     "                                    '100%%' (completely open the value)\n"
     "                        The maximum value is INT_MAX for all units.\n"
-    "          infofile .... Filepath to designate the periodictime instead\n"
+    "          controlfile . Filepath to designate the periodic time instead\n"
     "                        of by argument. The word you can designate in\n"
     "                        this file is completely the same as the argu-\n"
     "                        ment.\n"
@@ -130,7 +136,7 @@ void print_usage_and_exit(void) {
     "                        time from sending the top character of the\n"
     "                        current line to sending the top character of\n"
     "                        the next line.\n"
-    "Version : 2019-02-28 18:01:22 JST\n"
+    "Version : 2019-03-01 00:47:00 JST\n"
     "          (POSIX C language)\n"
     ,gpszCmdname,gpszCmdname);
   exit(1);
@@ -426,9 +432,9 @@ top:
     tsDiff.tv_nsec =     0;
     while (1) {
       if (nanosleep(&tsDiff,NULL) != 0) {
-        if (errno != EINTR) {error_exit(1,"Error happend at nanosleep()\n");}
+        if (errno != EINTR) {error_exit(1,"FATAL: Error at nanosleep()\n");}
         if (clock_gettime(CLOCK_MONOTONIC,&tsPrev) != 0) {
-          error_exit(1,"Error happend while clock_gettime()\n");
+          error_exit(1,"FATAL: Error at clock_gettime()\n");
         }
         goto top; /* Goto "top" in case of a signal trap */
       }
@@ -443,7 +449,7 @@ top:
   /*--- If the "tsTo" has been already past, set the current time into
    *    "tsPrev" and return immediately                             */
   if (clock_gettime(CLOCK_MONOTONIC,&tsNow) != 0) {
-    error_exit(1,"Error happend while clock_gettime()\n");
+    error_exit(1,"FATAL: Error at clock_gettime()\n");
   }
   if ((tsTo.tv_nsec - tsNow.tv_nsec) < 0) {
     tsDiff.tv_sec  = tsTo.tv_sec  - tsNow.tv_sec  -          1;
@@ -461,7 +467,7 @@ top:
   /*--- Sleep until the next interval period -----------------------*/
   if (nanosleep(&tsDiff,NULL) != 0) {
     if (errno == EINTR) {goto top;} /* Goto "top" in case of a signal trap */
-    error_exit(1,"Error happend at nanosleep()\n");
+    error_exit(1,"FATAL: Error at nanosleep()\n");
   }
 
   /*--- Finish this function ---------------------------------------*/
