@@ -187,10 +187,12 @@ setlocale(LC_CTYPE, "");
 iUnit=0;
 
 /*--- Parse options which start by "-" -----------------------------*/
-while ((i=getopt(argc, argv, "cl")) != -1) {
+while ((i=getopt(argc, argv, "clhv")) != -1) {
   switch (i) {
     case 'c': iUnit = 0; break;
     case 'l': iUnit = 1; break;
+    case 'h': print_usage_and_exit();
+    case 'v': print_usage_and_exit();
     default : print_usage_and_exit();
   }
 }
@@ -329,24 +331,24 @@ int64_t parse_periodictime(char *pszArg) {
     if (pszArg[iVlen]<'0' || pszArg[iVlen]>'9'){break;}
     szVal[iVlen] = pszArg[iVlen];
   }
-  szVal[iVlen] = (int)NULL;
+  szVal[iVlen] = '\0';
   if (iVlen==0 || iVlen>iVlen_max                     ) {return -2;}
   if (sscanf(szVal,"%d",&iVal) != 1                   ) {return -2;}
   if ((strlen(szVal)==iVlen_max) && (iVal<(INT_MAX/2))) {return -2;}
   pszUnit = pszArg + iVlen;
 
   /* as a second value */
-  if (strcmp(pszUnit, "s"  )==0) {return (int64_t)iVal*1000000000;           }
+  if (strcmp(pszUnit, "s"  )==0) {return (int64_t)iVal*1000000000;}
 
   /* as a millisecond value */
   if (strlen(pszUnit)==0 || strcmp(pszUnit, "ms")==0) {
-                                  return (int64_t)iVal*1000000;              }
+                                  return (int64_t)iVal*1000000;   }
 
   /* as a microsecond value */
-  if (strcmp(pszUnit, "us" )==0) {return (int64_t)iVal*1000;                 }
+  if (strcmp(pszUnit, "us" )==0) {return (int64_t)iVal*1000;      }
 
   /* as a nanosecond value */
-  if (strcmp(pszUnit, "ns" )==0) {return (int64_t)iVal;                      }
+  if (strcmp(pszUnit, "ns" )==0) {return (int64_t)iVal;           }
 
   /* as a bps value (1charater=8bit) */
   if (strcmp(pszUnit, "bps")==0) {
