@@ -3,15 +3,30 @@
 # VALVE - Adjust the UNIX Pipe Streaming Speed
 #
 # USAGE   : valve [-cl] perioictime [file ...]
+#           valve [-cl] infofile [file ...]
 # Args    : periodictime  Periodic time from start sending the current
 #                         block (means a character or a line) to start
 #                         sending the next block.
 #                         The unit of the periodic time is millisecond
 #                         defaultly. You can also designate the unit
 #                         like '100ms'. Available units are 's', 'ms',
-#                         'us', 'ns', and 'bps' or 'cps'.
-#                         The maximum value is 2147483647 for all units.
-#           file ........ filepath to be send ("-" means STDIN)
+#                         'us', 'ns'.
+#                         You can also designate it by the units/words.
+#                          - speed  : 'bps' (regards as 1charater= 8bit)
+#                                     'cps' (regards as 1charater=10bit)
+#                          - output : '0%%'   (completely shut the value)
+#                                     '100%%' (completely open the value)
+#                         The maximum value is INT_MAX for all units.
+#           infofile .... Filepath to designate the periodictime instead
+#                         of by argument. The word you can designate in
+#                         this file is completely the same as the argu-
+#                         ment.
+#                         However, you can redesignate the time by over-
+#                         writing the file. This command will read the
+#                         new periodic time in 0.1 second after that.
+#                         If you want to make this command read it im-
+#                         mediately, send SIGALRM.
+#           file ........ Filepath to be send ("-" means STDIN)
 # Options : -c .......... (This is default.) Changes the periodic unit
 #                         to character. This option defines that the
 #                         periodic time is the time from sending the
@@ -49,8 +64,10 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <sys/time.h>
 #include <time.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <locale.h>
 
 /* --- macro functions ---------------------------------------------*/
@@ -58,36 +75,52 @@
 #define WRV(fmt,...) fprintf(stderr,fmt,__VA_ARGS__)
 
 /*--- macro constants ----------------------------------------------*/
-#define MAX_PERIODICVAL 2147483647
+/* Interval time for looking at the file which Preriodic time is written */
+#define FREAD_ITRVL_SEC  0
+#define FREAD_ITRVL_USEC 100000
 
 /*--- prototype functions ------------------------------------------*/
 int64_t parse_periodictime(char *pszArg);
-void spend_my_spare_time(int64_t i8Periodic_nsec);
+void spend_my_spare_time(void);
 int read_1line(FILE *fp);
+void update_periodic_time(int iSig, siginfo_t *siInfo, void *pct);
 
 /*--- global variables ---------------------------------------------*/
-char* pszMypath;
+char*    gpszCmdname;   /* The name of this command                        */
+int64_t  gi8Peritime;   /* Periodic time in nanosecond (-1 means infinity) */
+int      giFd_peritime; /* File descriptor of the file which the periodic
+                           time is written                                 */
 
 /*=== Define the functions for printing usage and error ============*/
 
 /*--- exit with usage ----------------------------------------------*/
 void print_usage_and_exit(void) {
-  int  i;
-  int  iPos = 0;
-  for (i=0; *(pszMypath+i)!='\0'; i++) {
-    if (*(pszMypath+i)=='/') {iPos=i+1;}
-  }
   WRV(
     "USAGE   : %s [-cl] periodictime [file ...]\n"
+    "          %s [-cl] infofile [file ...]\n"
     "Args    : periodictime  Periodic time from start sending the current\n"
     "                        block (means a character or a line) to start\n"
     "                        sending the next block.\n"
     "                        The unit of the periodic time is millisecond\n"
     "                        defaultly. You can also designate the unit\n"
     "                        like '100ms'. Available units are 's', 'ms',\n"
-    "                        'us', 'ns', and 'bps' or 'cps'.\n"
-    "                        The maximum value is 2147483647 for all units.\n"
-    "          file ........ filepath to be send (\"-\" means STDIN)\n"
+    "                        'us', 'ns'.\n"
+    "                        You can also designate it by the units/words.\n"
+    "                         - speed  : 'bps' (regards as 1charater= 8bit)\n"
+    "                                    'cps' (regards as 1charater=10bit)\n"
+    "                         - output : '0%%'   (completely shut the value)\n"
+    "                                    '100%%' (completely open the value)\n"
+    "                        The maximum value is INT_MAX for all units.\n"
+    "          infofile .... Filepath to designate the periodictime instead\n"
+    "                        of by argument. The word you can designate in\n"
+    "                        this file is completely the same as the argu-\n"
+    "                        ment.\n"
+    "                        However, you can redesignate the time by over-\n"
+    "                        writing the file. This command will read the\n"
+    "                        new periodic time in 0.1 second after that.\n"
+    "                        If you want to make this command read it im-\n"
+    "                        mediately, send SIGALRM.\n"
+    "          file ........ Filepath to be send (\"-\" means STDIN)\n"
     "Options : -c .......... (This is default.) Changes the periodic unit\n"
     "                        to character. This option defines that the\n"
     "                        periodic time is the time from sending the\n"
@@ -97,22 +130,17 @@ void print_usage_and_exit(void) {
     "                        time from sending the top character of the\n"
     "                        current line to sending the top character of\n"
     "                        the next line.\n"
-    "Version : 2019-02-28 10:33:35 JST\n"
+    "Version : 2019-02-28 18:01:22 JST\n"
     "          (POSIX C language)\n"
-    ,pszMypath+iPos);
+    ,gpszCmdname,gpszCmdname);
   exit(1);
 }
 
 /*--- print warning message ----------------------------------------*/
 void warning(const char* szFormat, ...) {
   va_list va      ;
-  int     i       ;
-  int     iPos = 0;
-  for (i=0; *(pszMypath+i)!='\0'; i++) {
-    if (*(pszMypath+i)=='/') {iPos=i+1;}
-  }
   va_start(va, szFormat);
-  WRV("%s: ",pszMypath+iPos);
+  WRV("%s: ",gpszCmdname);
   vfprintf(stderr,szFormat,va);
   va_end(va);
   return;
@@ -121,13 +149,8 @@ void warning(const char* szFormat, ...) {
 /*--- exit with error message --------------------------------------*/
 void error_exit(int iErrno, const char* szFormat, ...) {
   va_list va      ;
-  int     i       ;
-  int     iPos = 0;
-  for (i=0; *(pszMypath+i)!='\0'; i++) {
-    if (*(pszMypath+i)=='/') {iPos=i+1;}
-  }
   va_start(va, szFormat);
-  WRV("%s: ",pszMypath+iPos);
+  WRV("%s: ",gpszCmdname);
   vfprintf(stderr,szFormat,va);
   va_end(va);
   exit(iErrno);
@@ -142,19 +165,22 @@ void error_exit(int iErrno, const char* szFormat, ...) {
 int main(int argc, char *argv[]) {
 
 /*--- Variables ----------------------------------------------------*/
-int64_t  i8Peritime;   /* Periodic time in nanosecond     */
-int      iUnit;        /* 0:character 1:line 2-:undefined */
-int      iRet;         /* return code                     */
-char     *pszPath;     /* filepath on arguments           */
-char     *pszFilename; /* filepath (for message)          */
-int      iFileno;      /* file# of filepath               */
-int      iFd;          /* file descriptor                 */
-FILE     *fp;          /* file handle                     */
-char     szBuf[256];   /* all-purpose char                */
-int      i;            /* all-purpose int                 */
+int      iUnit;           /* 0:character 1:line 2-:undefined       */
+int      iRet;            /* return code                           */
+char    *pszPath;         /* filepath on arguments                 */
+char    *pszFilename;     /* filepath (for message)                */
+int      iFileno;         /* file# of filepath                     */
+int      iFd;             /* file descriptor                       */
+FILE    *fp;              /* file handle                           */
+int      i;               /* all-purpose int                       */
+struct sigaction saAlrm;  /* for signal trap definition (action)   */
+struct itimerval itInt;   /* for signal trap definition (interval) */
 
 /*--- Initialize ---------------------------------------------------*/
-pszMypath = argv[0];
+gpszCmdname = argv[0];
+for (i=0; *(gpszCmdname+i)!='\0'; i++) {
+  if (*(gpszCmdname+i)=='/') {gpszCmdname=gpszCmdname+i+1;}
+}
 setlocale(LC_CTYPE, "");
 
 /*=== Parse arguments ==============================================*/
@@ -171,9 +197,32 @@ while ((i=getopt(argc, argv, "cl")) != -1) {
 argc -= optind-1;
 argv += optind  ;
 
-/*--- Parse the interval -------------------------------------------*/
-if (argc < 2                                  ) {print_usage_and_exit();}
-if ((i8Peritime=parse_periodictime(argv[0]))<0) {print_usage_and_exit();}
+/*--- Parse the periodic time ----------------------------------------*/
+if (argc < 2         ) {print_usage_and_exit();}
+gi8Peritime = parse_periodictime(argv[0]);
+if (gi8Peritime <= -2) {
+  if ((giFd_peritime=open(argv[0],O_RDONLY)) < 0){
+    error_exit(1,"%s: Open error\n",argv[0]);
+  }
+  update_periodic_time(0, 0, 0);
+  if (gi8Peritime <= -2) {error_exit(1,"%s: Invalid periodic time\n",argv[0]);}
+
+  /* Register the signal trap */
+  memset(&saAlrm, 0, sizeof(saAlrm));
+  saAlrm.sa_sigaction = update_periodic_time;
+  saAlrm.sa_flags     = SA_SIGINFO;
+  if (sigaction(SIGALRM,&saAlrm,NULL) != 0) {
+    error_exit(1,"FATAL: Error at sigaction()\n");
+  }
+  memset(&itInt, 0, sizeof(itInt));
+  itInt.it_value.tv_sec     = FREAD_ITRVL_SEC;
+  itInt.it_value.tv_usec    = FREAD_ITRVL_USEC;
+  itInt.it_interval.tv_sec  = FREAD_ITRVL_SEC;
+  itInt.it_interval.tv_usec = FREAD_ITRVL_USEC;
+  if (setitimer(ITIMER_REAL,&itInt,NULL) != 0) {
+    error_exit(1,"FATAL: Error at setitimer()\n");
+  }
+}
 argc--;
 argv++;
 
@@ -225,7 +274,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
   switch (iUnit) {
     case 0:
               while ((i=getc(fp)) != EOF) {
-                spend_my_spare_time(i8Peritime);
+                spend_my_spare_time();
                 if (putchar(i)==EOF) {
                   error_exit(1,"Cannot write to STDOUT\n");
                 }
@@ -233,7 +282,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
               break;
     case 1:
               while (1) {
-                spend_my_spare_time(i8Peritime);
+                spend_my_spare_time();
                 if (read_1line(fp)==EOF) {break;}
               }
               break;
@@ -260,19 +309,20 @@ return(iRet);}
 
 /*=== Parse the periodic time ========================================
  * [ret] >= 0  : Interval value (in nanosecound)
- *       <  0  : It is not a value                                  */
+ *       <=-1  : Means infinity (completely shut the valve)
+ *       <=-2  : It is not a value                                  */
 int64_t parse_periodictime(char *pszArg) {
 
   /*--- Variables --------------------------------------------------*/
-  char szVal[256]       ;
-  char *pszUnit         ;
-  int  iLen, iVlen, iVal;
-  int  iVlen_max        ;
-  int  i                ;
+  char  szVal[256]       ;
+  char *pszUnit          ;
+  int   iLen, iVlen, iVal;
+  int   iVlen_max        ;
+  int   i                ;
 
   /*--- Get the lengths for the argument ---------------------------*/
-  if ((iLen=strlen(pszArg))>=256) {return -1;}
-  iVlen_max=sprintf(szVal,"%d",MAX_PERIODICVAL);
+  if ((iLen=strlen(pszArg))>=256) {return -2;}
+  iVlen_max=sprintf(szVal,"%d",INT_MAX);
 
   /*--- Try to interpret the argument as "<value>"+"unit" ----------*/
   for (iVlen=0; iVlen<iLen; iVlen++) {
@@ -280,9 +330,9 @@ int64_t parse_periodictime(char *pszArg) {
     szVal[iVlen] = pszArg[iVlen];
   }
   szVal[iVlen] = (int)NULL;
-  if (iVlen==0 || iVlen>iVlen_max                             ) {return -1;}
-  if (sscanf(szVal,"%d",&iVal) != 1                           ) {return -1;}
-  if ((strlen(szVal)==iVlen_max) && (iVal<(MAX_PERIODICVAL/2))) {return -1;}
+  if (iVlen==0 || iVlen>iVlen_max                     ) {return -2;}
+  if (sscanf(szVal,"%d",&iVal) != 1                   ) {return -2;}
+  if ((strlen(szVal)==iVlen_max) && (iVal<(INT_MAX/2))) {return -2;}
   pszUnit = pszArg + iVlen;
 
   /* as a second value */
@@ -299,13 +349,26 @@ int64_t parse_periodictime(char *pszArg) {
   if (strcmp(pszUnit, "ns" )==0) {return (int64_t)iVal;                      }
 
   /* as a bps value (1charater=8bit) */
-  if (strcmp(pszUnit, "bps")==0) {return ( 80000000000LL/(int64_t)iVal+5)/10;}
+  if (strcmp(pszUnit, "bps")==0) {
+    return (iVal!=0) ? ( 80000000000LL/(int64_t)iVal+5)/10 : -1;
+  }
 
   /* as a cps value (1charater=10bit) */
-  if (strcmp(pszUnit, "cps")==0) {return (100000000000LL/(int64_t)iVal+5)/10;}
+  if (strcmp(pszUnit, "cps")==0) {
+    return (iVal!=0) ? (100000000000LL/(int64_t)iVal+5)/10 : -1;
+  }
+
+  /* as a % value (only "0%" or "100%") */
+  if (strcmp(pszUnit, "%")==0)   {
+    switch (iVal) {
+      case   0: return -1;
+      case 100: return  0;
+      default : return -2;
+    }
+  }
 
   /*--- Otherwise, it is not a value -------------------------------*/
-  return -1;
+  return -2;
 }
 
 /*=== Read and write only one line ===================================
@@ -341,26 +404,43 @@ int read_1line(FILE *fp) {
   }
 }
 
-/*=== Sleep until the next interval period =========================*/
-void spend_my_spare_time(int64_t i8Periodic_nsec) {
+/*=== Sleep until the next interval period ===========================
+ * [in] gi8Peritime : Periodic time (-1 means infinity)             */
+void spend_my_spare_time(void) {
 
   /*--- Variables --------------------------------------------------*/
-  static struct timespec tsPrev = {0,0}; /* the time when this func called last time */
+  static struct timespec tsPrev = {0,0}; /* the time when this func
+                                            called last time        */
   struct timespec        tsNow         ;
   struct timespec        tsTo          ;
   struct timespec        tsDiff        ;
 
-  int                    iRet          ;
   uint64_t               ui8           ;
 
+top:
+  /*--- If "gi8Peritime" is neg., sleep until a signal comes -----*/
+  if (gi8Peritime<0) {
+    tsDiff.tv_sec  = 86400;
+    tsDiff.tv_nsec =     0;
+    while (1) {
+      if (nanosleep(&tsDiff,NULL) != 0) {
+        if (errno != EINTR) {error_exit(1,"Error happend at nanosleep()\n");}
+        if (clock_gettime(CLOCK_MONOTONIC,&tsPrev) != 0) {
+          error_exit(1,"Error happend while clock_gettime()\n");
+        }
+        goto top; /* Goto "top" in case of a signal trap */
+      }
+    }
+  }
+
   /*--- Calculate "tsTo", the time until which I have to wait ------*/
-  ui8 = (uint64_t)tsPrev.tv_nsec + i8Periodic_nsec;
+  ui8 = (uint64_t)tsPrev.tv_nsec + gi8Peritime;
   tsTo.tv_sec  = tsPrev.tv_sec + (time_t)(ui8/1000000000);
   tsTo.tv_nsec = (long)(ui8%1000000000);
 
   /*--- If the "tsTo" has been already past, set the current time into
    *    "tsPrev" and return immediately                             */
-  if (clock_gettime(CLOCK_REALTIME,&tsNow) != 0) {
+  if (clock_gettime(CLOCK_MONOTONIC,&tsNow) != 0) {
     error_exit(1,"Error happend while clock_gettime()\n");
   }
   if ((tsTo.tv_nsec - tsNow.tv_nsec) < 0) {
@@ -377,12 +457,37 @@ void spend_my_spare_time(int64_t i8Periodic_nsec) {
   }
 
   /*--- Sleep until the next interval period -----------------------*/
-  while ((iRet=clock_nanosleep(CLOCK_REALTIME,TIMER_ABSTIME,&tsTo,NULL)) != 0) {
-    if (iRet != EINTR) {error_exit(1,"Error happend at clock_nanosleep()\n");}
+  if (nanosleep(&tsDiff,NULL) != 0) {
+    if (errno == EINTR) {goto top;} /* Goto "top" in case of a signal trap */
+    error_exit(1,"Error happend at nanosleep()\n");
   }
 
   /*--- Finish this function ---------------------------------------*/
   tsPrev.tv_sec  = tsTo.tv_sec ;
   tsPrev.tv_nsec = tsTo.tv_nsec;
   return;
+}
+
+/*=== SIGNALTRAP : Try to update "gi8Peritime"  ======================
+ * [in] gi8Peritime   : (must be defined as a global variable)
+ *      giFd_peritime : File descriptor for the file which the periodic
+ *                      time is written                             */
+void update_periodic_time(int iSig, siginfo_t *siInfo, void *pct) {
+
+  /*--- Variables --------------------------------------------------*/
+  char    szBuf[32];
+  int     iLen     ;
+  int     i        ;
+  int64_t i8       ;
+
+  /*--- Try to read the time ---------------------------------------*/
+  if (lseek(giFd_peritime,0,SEEK_SET) < 0    ) {return;}
+  if ((iLen=read(giFd_peritime,szBuf,31)) < 1) {return;}
+  for (i=0;i<iLen;i++) {if(szBuf[i]=='\n'){break;}}
+  szBuf[i]='\0';
+  i8 = parse_periodictime(szBuf);
+  if (i8 <= -2)                                {return;}
+
+  /*--- Update the periodic time -----------------------------------*/
+  gi8Peritime = i8;
 }
