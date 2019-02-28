@@ -23,7 +23,7 @@
 #                         the next line.
 # Retuen  : Return 0 only when finished successfully
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-02-27
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-02-28
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -41,16 +41,17 @@
 /*=== Initial Setting ==============================================*/
 
 /*--- headers ------------------------------------------------------*/
+#include <limits.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdarg.h>
-#include <limits.h>
-#include <locale.h>
 #include <unistd.h>
 #include <time.h>
 #include <fcntl.h>
+#include <locale.h>
 
 /* --- macro functions ---------------------------------------------*/
 #define WRN(message) fprintf(stderr,message)
@@ -96,7 +97,7 @@ void print_usage_and_exit(void) {
     "                        time from sending the top character of the\n"
     "                        current line to sending the top character of\n"
     "                        the next line.\n"
-    "Version : 2019-02-27 23:16:13 JST\n"
+    "Version : 2019-02-28 10:33:35 JST\n"
     "          (POSIX C language)\n"
     ,pszMypath+iPos);
   exit(1);
@@ -359,7 +360,7 @@ void spend_my_spare_time(int64_t i8Periodic_nsec) {
 
   /*--- If the "tsTo" has been already past, set the current time into
    *    "tsPrev" and return immediately                             */
-  if (clock_gettime(CLOCK_MONOTONIC, &tsNow) != 0) {
+  if (clock_gettime(CLOCK_REALTIME,&tsNow) != 0) {
     error_exit(1,"Error happend while clock_gettime()\n");
   }
   if ((tsTo.tv_nsec - tsNow.tv_nsec) < 0) {
@@ -376,8 +377,9 @@ void spend_my_spare_time(int64_t i8Periodic_nsec) {
   }
 
   /*--- Sleep until the next interval period -----------------------*/
-  iRet = nanosleep(&tsDiff, NULL);
-  if (iRet != 0) {error_exit(1,"Error happend while nanosleeping\n");}
+  while ((iRet=clock_nanosleep(CLOCK_REALTIME,TIMER_ABSTIME,&tsTo,NULL)) != 0) {
+    if (iRet != EINTR) {error_exit(1,"Error happend at clock_nanosleep()\n");}
+  }
 
   /*--- Finish this function ---------------------------------------*/
   tsPrev.tv_sec  = tsTo.tv_sec ;
