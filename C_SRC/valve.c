@@ -47,7 +47,7 @@
 #             That is to avoid any unknown side effects by supporting
 #             TTY devices on the control file. If you are in some
 #             trouble by that, try to compile with #define NOTTY as
-#              follows.
+#             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
 # Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-03
