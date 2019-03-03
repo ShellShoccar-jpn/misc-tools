@@ -14,8 +14,8 @@
 #                         You can also designate it by the units/words.
 #                          - speed  : 'bps' (regards as 1charater= 8bit)
 #                                     'cps' (regards as 1charater=10bit)
-#                          - output : '0%%'   (completely shut the value)
-#                                     '100%%' (completely open the value)
+#                          - output : '0%'   (completely shut the value)
+#                                     '100%' (completely open the value)
 #                         The maximum value is INT_MAX for all units.
 #           controlfile . Filepath to designate the periodic time instead
 #                         of by argument. The word you can designate in
@@ -157,7 +157,7 @@ void print_usage_and_exit(void) {
 
 /*--- print warning message ----------------------------------------*/
 void warning(const char* szFormat, ...) {
-  va_list va      ;
+  va_list va;
   va_start(va, szFormat);
   WRV("%s: ",gpszCmdname);
   vfprintf(stderr,szFormat,va);
@@ -167,7 +167,7 @@ void warning(const char* szFormat, ...) {
 
 /*--- exit with error message --------------------------------------*/
 void error_exit(int iErrno, const char* szFormat, ...) {
-  va_list va      ;
+  va_list va;
   va_start(va, szFormat);
   WRV("%s: ",gpszCmdname);
   vfprintf(stderr,szFormat,va);
@@ -514,7 +514,7 @@ top:
         if (clock_gettime(CLOCK_MONOTONIC,&tsPrev) != 0) {
           error_exit(1,"FATAL: Error at clock_gettime()\n");
         }
-        goto top; /* Goto "top" in case of a signal trap */
+        goto top; /* Go to "top" in case of a signal trap */
       }
     }
   }
@@ -544,7 +544,7 @@ top:
 
   /*--- Sleep until the next interval period -----------------------*/
   if (nanosleep(&tsDiff,NULL) != 0) {
-    if (errno == EINTR) {goto top;} /* Goto "top" in case of a signal trap */
+    if (errno == EINTR) {goto top;} /* Go to "top" in case of a signal trap */
     error_exit(1,"FATAL: Error at nanosleep()\n");
   }
 
