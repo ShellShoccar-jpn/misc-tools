@@ -2,13 +2,13 @@
 #
 # SLEEP - Sleep Command Which Supported Non-Integer Numbers
 #
-# USAGE   : sleep <seconds>
-# Args    : second ... The number of second to sleep for. You can
-#                      give not only an integer number but also a
-#                      non-integer number here.
+# USAGE   : sleep seconds
+# Args    : seconds ... The number of second to sleep for. You can
+#                       give not only an integer number but also a
+#                       non-integer number here.
 # Retuen  : Return 0 only when succeeded to sleep
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-02-23
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-04
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -26,35 +26,32 @@
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <time.h>
 #define WRN(message) fprintf(stderr,message)
 #define WRV(fmt,...) fprintf(stderr,fmt,__VA_ARGS__)
 
-char* pszMypath;
+char* gpszCmdname;
 
 /*=== Define the functions for printing usage and error ============*/
 void print_usage_and_exit(void) {
-  int  i;
-  int  iPos = 0;
-  for (i=0; *(pszMypath+i)!='\0'; i++) {
-    if (*(pszMypath+i)=='/') {iPos=i+1;}
-  }
-  WRV("USAGE   : %s <seconds>\n",pszMypath+iPos                               );
-  WRN("Args    : second ... The number of second to sleep for. You can\n"     );
-  WRN("                     give not only an integer number but also a\n"     );
-  WRN("                     non-integer number here.\n"                       );
-  WRN("Retuen  : Return 0 only when succeeded to sleep\n"                     );
-  WRN("Version : 2019-02-23 05:07:32 JST\n"                                   );
-  WRN("          (POSIX C language)\n"                                        );
+  WRV(
+    "USAGE   : %s seconds\n"
+    "Args    : seconds ... The number of second to sleep for. You can\n"
+    "                      give not only an integer number but also a\n"
+    "                      non-integer number here.\n"
+    "Retuen  : Return 0 only when succeeded to sleep\n"
+    "Version : 2019-03-04 00:24:33 JST\n"
+    "          (POSIX C language)\n"
+    ,gpszCmdname);
   exit(1);
 }
-void error_exit(int iErrno, char* szMessage) {
-  int  i;
-  int  iPos = 0;
-  for (i=0; *(pszMypath+i)!='\0'; i++) {
-    if (*(pszMypath+i)=='/') {iPos=i+1;}
-  }
-  WRV("%s: %s\n",pszMypath+iPos, szMessage);
+void error_exit(int iErrno, const char* szFormat, ...) {
+  va_list va;
+  va_start(va, szFormat);
+  WRV("%s: ",gpszCmdname);
+  vfprintf(stderr,szFormat,va);
+  va_end(va);
   exit(iErrno);
 }
 
@@ -68,9 +65,12 @@ int main(int argc, char *argv[]) {
   /*=== Initial Setting ============================================*/
   struct timespec tspcSleeping_time;
   double dNum;
-  int    iRet;
+  int    i,iRet;
 
-  pszMypath = argv[0];
+  gpszCmdname = argv[0];
+  for (i=0; *(gpszCmdname+i)!='\0'; i++) {
+    if (*(gpszCmdname+i)=='/') {gpszCmdname=gpszCmdname+i+1;}
+  }
 
   /*=== Parse options ==============================================*/
   if (argc != 2                            ) {print_usage_and_exit();}
