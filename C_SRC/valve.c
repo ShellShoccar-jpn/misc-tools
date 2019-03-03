@@ -44,7 +44,7 @@
 #           Try "-lrt" option for gcc as follows.
 #             $ gcc -lrt -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-01
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-03
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -70,6 +70,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <time.h>
 #include <fcntl.h>
@@ -84,18 +85,22 @@
 /* Interval time for looking at the file which Preriodic time is written */
 #define FREAD_ITRVL_SEC  0
 #define FREAD_ITRVL_USEC 100000
+/* Buffer size for the control file */
+#define CTRL_FILE_BUF 64
 
 /*--- prototype functions ------------------------------------------*/
 int64_t parse_periodictime(char *pszArg);
 void spend_my_spare_time(void);
 int read_1line(FILE *fp);
-void update_periodic_time(int iSig, siginfo_t *siInfo, void *pct);
+void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct);
+void update_periodic_time_type_c(int iSig, siginfo_t *siInfo, void *pct);
 
 /*--- global variables ---------------------------------------------*/
-char*    gpszCmdname;   /* The name of this command                        */
-int64_t  gi8Peritime;   /* Periodic time in nanosecond (-1 means infinity) */
-int      giFd_peritime; /* File descriptor of the file which the periodic
-                           time is written                                 */
+char*    gpszCmdname;     /* The name of this command                        */
+int64_t  gi8Peritime;     /* Periodic time in nanosecond (-1 means infinity) */
+int      giFd_ctrlfile;   /* File descriptor of the control file             */
+struct sigaction gsaIgnr; /* for ignoring signals during signal handlers     */
+struct sigaction gsaAlrm; /* for signal trap definition (action)   */
 
 /*=== Define the functions for printing usage and error ============*/
 
@@ -136,7 +141,7 @@ void print_usage_and_exit(void) {
     "                        time from sending the top character of the\n"
     "                        current line to sending the top character of\n"
     "                        the next line.\n"
-    "Version : 2019-03-01 00:47:00 JST\n"
+    "Version : 2019-03-03 10:36:13 JST\n"
     "          (POSIX C language)\n"
     ,gpszCmdname,gpszCmdname);
   exit(1);
@@ -179,8 +184,8 @@ int      iFileno;         /* file# of filepath                     */
 int      iFd;             /* file descriptor                       */
 FILE    *fp;              /* file handle                           */
 int      i;               /* all-purpose int                       */
-struct sigaction saAlrm;  /* for signal trap definition (action)   */
 struct itimerval itInt;   /* for signal trap definition (interval) */
+struct stat stCtrlfile;   /* stat for the control file             */
 
 /*--- Initialize ---------------------------------------------------*/
 gpszCmdname = argv[0];
@@ -209,26 +214,74 @@ argv += optind  ;
 if (argc < 2         ) {print_usage_and_exit();}
 gi8Peritime = parse_periodictime(argv[0]);
 if (gi8Peritime <= -2) {
-  if ((giFd_peritime=open(argv[0],O_RDONLY)) < 0){
-    error_exit(1,"%s: Open error\n",argv[0]);
+  /* Make sure that the ontrol file has an acceptable type */
+  if ((i=stat(argv[0],&stCtrlfile)) < 0) {
+    switch (errno) {
+      case EACCES : error_exit(1,"%s: Unreadable\n"    ,argv[0]);
+      case ENOENT : error_exit(1,"%s: File not found\n",argv[0]);
+      default     : error_exit(1,"%s: Invalid file\n"  ,argv[0]);
+    }
   }
-  update_periodic_time(0, 0, 0);
-  if (gi8Peritime <= -2) {error_exit(1,"%s: Invalid periodic time\n",argv[0]);}
+  switch (stCtrlfile.st_mode & S_IFMT) {
+    case S_IFREG : break;
+    case S_IFCHR : break;
+    case S_IFIFO : break;
+    default      : error_exit(1,"%s: Improper file type\n",argv[0]);
+  }
 
-  /* Register the signal trap */
-  memset(&saAlrm, 0, sizeof(saAlrm));
-  saAlrm.sa_sigaction = update_periodic_time;
-  saAlrm.sa_flags     = SA_SIGINFO;
-  if (sigaction(SIGALRM,&saAlrm,NULL) != 0) {
-    error_exit(1,"FATAL: Error at sigaction()\n");
-  }
-  memset(&itInt, 0, sizeof(itInt));
-  itInt.it_value.tv_sec     = FREAD_ITRVL_SEC;
-  itInt.it_value.tv_usec    = FREAD_ITRVL_USEC;
-  itInt.it_interval.tv_sec  = FREAD_ITRVL_SEC;
-  itInt.it_interval.tv_usec = FREAD_ITRVL_USEC;
-  if (setitimer(ITIMER_REAL,&itInt,NULL) != 0) {
-    error_exit(1,"FATAL: Error at setitimer()\n");
+  /* set the first parameter, which is "0%" */
+  gi8Peritime = -1;
+
+  /* (a) for a regular file */
+  if ((stCtrlfile.st_mode & S_IFREG) == S_IFREG) {
+    /* Open the file */
+    if ((giFd_ctrlfile=open(argv[0],O_RDONLY)) < 0){
+      error_exit(1,"%s: Open error\n",argv[0]);
+    }
+
+    /* Register the signal trap */
+    memset(&gsaIgnr, 0, sizeof(gsaIgnr));
+    gsaIgnr.sa_handler   = SIG_IGN;
+    gsaIgnr.sa_flags     = SA_NODEFER;
+    memset(&gsaAlrm, 0, sizeof(gsaAlrm));
+    gsaAlrm.sa_sigaction = update_periodic_time_type_r;
+    gsaAlrm.sa_flags     = SA_SIGINFO;
+    if (sigaction(SIGALRM,&gsaAlrm,NULL) != 0) {
+      error_exit(1,"FATAL: Error at sigaction()\n");
+    }
+    memset(&itInt, 0, sizeof(itInt));
+    itInt.it_value.tv_sec     = FREAD_ITRVL_SEC;
+    itInt.it_value.tv_usec    = FREAD_ITRVL_USEC;
+    itInt.it_interval.tv_sec  = FREAD_ITRVL_SEC;
+    itInt.it_interval.tv_usec = FREAD_ITRVL_USEC;
+    if (setitimer(ITIMER_REAL,&itInt,NULL) != 0) {
+      error_exit(1,"FATAL: Error at setitimer()\n");
+    }
+  } else {
+  /* (b) for a character special file or a named pipe */
+    /* Open the file */
+    if ((giFd_ctrlfile=open(argv[0],O_RDONLY | O_NONBLOCK )) < 0){
+      error_exit(1,"%s: Open error\n",argv[0]);
+    }
+
+    /* Register the signal trap */
+    memset(&gsaIgnr, 0, sizeof(gsaIgnr));
+    gsaIgnr.sa_handler   = SIG_IGN;
+    gsaIgnr.sa_flags     = SA_NODEFER;
+    memset(&gsaAlrm, 0, sizeof(gsaAlrm));
+    gsaAlrm.sa_sigaction = update_periodic_time_type_c;
+    gsaAlrm.sa_flags     = SA_SIGINFO;
+    if (sigaction(SIGALRM,&gsaAlrm,NULL) != 0) {
+      error_exit(1,"FATAL: Error at sigaction()\n");
+    }
+    memset(&itInt, 0, sizeof(itInt));
+    itInt.it_value.tv_sec     = FREAD_ITRVL_SEC;
+    itInt.it_value.tv_usec    = FREAD_ITRVL_USEC;
+    itInt.it_interval.tv_sec  = FREAD_ITRVL_SEC;
+    itInt.it_interval.tv_usec = FREAD_ITRVL_USEC;
+    if (setitimer(ITIMER_REAL,&itInt,NULL) != 0) {
+      error_exit(1,"FATAL: Error at setitimer()\n");
+    }
   }
 }
 argc--;
@@ -263,13 +316,14 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
     iFd         = STDIN_FILENO           ;
   } else                                            {
     pszFilename = pszPath                ;
-    iFd         = open(pszPath, O_RDONLY);
-  }
-  if (iFd < 0) {
-    iRet = 1;
-    warning("%s: File open error\n",pszFilename);
-    iFileno++;
-    continue;
+    while ((iFd=open(pszPath, O_RDONLY)) < 0) {
+      if (errno == EINTR) {continue;}
+      iRet = 1;
+      warning("%s: File open error\n",pszFilename);
+      iFileno++;
+      break;
+    }
+    if (iFd < 0) {continue;}
   }
   if (iFd == STDIN_FILENO) {
     fp = stdin;
@@ -283,8 +337,9 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
     case 0:
               while ((i=getc(fp)) != EOF) {
                 spend_my_spare_time();
-                if (putchar(i)==EOF) {
-                  error_exit(1,"Cannot write to STDOUT\n");
+                while (putchar(i)==EOF) {
+                  if (errno == EINTR) {continue;}
+                  error_exit(1,"Cannot write to STDOUT #C1\n");
                 }
               }
               break;
@@ -322,14 +377,14 @@ return(iRet);}
 int64_t parse_periodictime(char *pszArg) {
 
   /*--- Variables --------------------------------------------------*/
-  char  szVal[256]       ;
-  char *pszUnit          ;
-  int   iLen, iVlen, iVal;
-  int   iVlen_max        ;
-  int   i                ;
+  char  szVal[CTRL_FILE_BUF]; /* string buffer for the value part in pszArg */
+  char *pszUnit             ;
+  int   iLen, iVlen, iVal   ;
+  int   iVlen_max           ;
+  int   i                   ;
 
   /*--- Get the lengths for the argument ---------------------------*/
-  if ((iLen=strlen(pszArg))>=256) {return -2;}
+  if ((iLen=strlen(pszArg))>=CTRL_FILE_BUF            ) {return -2;}
   iVlen_max=sprintf(szVal,"%d",INT_MAX);
 
   /*--- Try to interpret the argument as "<value>"+"unit" ----------*/
@@ -397,16 +452,18 @@ int read_1line(FILE *fp) {
                   return(EOF);
                   break;
       case '\n':
-                  if (putchar('\n' )==EOF) {
-                    error_exit(1,"Cannot write to STDOUT\n");
+                  while (putchar('\n' )==EOF) {
+                    if (errno == EINTR) {continue;}
+                    error_exit(1,"Cannot write to STDOUT @read_1line() #L1\n");
                   }
                   iNextchar = getc(fp);
                   if (iNextchar==EOF) {        return(EOF);}
                   else                {iHold=1;return(  0);}
                   break;
       default:
-                  if (putchar(iChar)==EOF) {
-                    error_exit(1,"Cannot write to STDOUT\n");
+                  while (putchar(iChar)==EOF) {
+                    if (errno == EINTR) {continue;}
+                    error_exit(1,"Cannot write to STDOUT @read_1line() #L2\n");
                   }
     }
   }
@@ -419,13 +476,22 @@ void spend_my_spare_time(void) {
   /*--- Variables --------------------------------------------------*/
   static struct timespec tsPrev = {0,0}; /* the time when this func
                                             called last time        */
-  struct timespec        tsNow         ;
-  struct timespec        tsTo          ;
-  struct timespec        tsDiff        ;
+  struct timespec        tsNow               ;
+  struct timespec        tsTo                ;
+  struct timespec        tsDiff              ;
 
-  uint64_t               ui8           ;
+  static int64_t         i8LastPertitime = -1;
+
+  uint64_t               ui8                 ;
 
 top:
+  /*--- Reset tsPrev if gi8Peritime was changed ------------------*/
+  if (gi8Peritime != i8LastPertitime) {
+    tsPrev.tv_sec   = 0;
+    tsPrev.tv_nsec  = 0;
+    i8LastPertitime = gi8Peritime;
+  }
+
   /*--- If "gi8Peritime" is neg., sleep until a signal comes -----*/
   if (gi8Peritime<0) {
     tsDiff.tv_sec  = 86400;
@@ -476,26 +542,110 @@ top:
   return;
 }
 
-/*=== SIGNALTRAP : Try to update "gi8Peritime"  ======================
+/*=== SIGNALTRAP : Try to update "gi8Peritime" for a regular file ====
  * [in] gi8Peritime   : (must be defined as a global variable)
- *      giFd_peritime : File descriptor for the file which the periodic
+ *      giFd_ctrlfile : File descriptor for the file which the periodic
  *                      time is written                             */
-void update_periodic_time(int iSig, siginfo_t *siInfo, void *pct) {
+void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct) {
 
   /*--- Variables --------------------------------------------------*/
-  char    szBuf[32];
-  int     iLen     ;
-  int     i        ;
-  int64_t i8       ;
+  char    szBuf[CTRL_FILE_BUF];
+  int     iLen                ;
+  int     i                   ;
+  int64_t i8                  ;
 
-  /*--- Try to read the time ---------------------------------------*/
-  if (lseek(giFd_peritime,0,SEEK_SET) < 0    ) {return;}
-  if ((iLen=read(giFd_peritime,szBuf,31)) < 1) {return;}
-  for (i=0;i<iLen;i++) {if(szBuf[i]=='\n'){break;}}
-  szBuf[i]='\0';
-  i8 = parse_periodictime(szBuf);
-  if (i8 <= -2)                                {return;}
+  /*--- Ignore multi calling ---------------------------------------*/
+  if (iSig > 0) {
+    if (sigaction(SIGALRM,&gsaIgnr,NULL) != 0) {
+      error_exit(1,"FATAL: Error at sigaction() in the trap #R1\n");
+    }
+  }
 
-  /*--- Update the periodic time -----------------------------------*/
-  gi8Peritime = i8;
+  while (1) {
+
+    /*--- Try to read the time -------------------------------------*/
+    if (lseek(giFd_ctrlfile,0,SEEK_SET) < 0                 ) {break;}
+    if ((iLen=read(giFd_ctrlfile,szBuf,CTRL_FILE_BUF-1)) < 1) {break;}
+    for (i=0;i<iLen;i++) {if(szBuf[i]=='\n'){break;}}
+    szBuf[i]='\0';
+    i8 = parse_periodictime(szBuf);
+    if (i8 <= -2                                            ) {break;}
+
+    /*--- Update the periodic time ---------------------------------*/
+    gi8Peritime = i8;
+
+  break;}
+
+  /*--- Restore the signal action ----------------------------------*/
+  if (iSig > 0) {
+    if (sigaction(SIGALRM,&gsaAlrm,NULL) != 0) {
+      error_exit(1,"FATAL: Error at sigaction() in the trap #R2\n");
+    }
+  }
+}
+
+/*=== SIGNALTRAP : Try to update "gi8Peritime" for a char-sp/FIFO file
+ * [in] gi8Peritime   : (must be defined as a global variable)
+ *      giFd_ctrlfile : File descriptor for the file which the periodic
+ *                      time is written                                   */
+void update_periodic_time_type_c(int iSig, siginfo_t *siInfo, void *pct) {
+
+  /*--- Variables --------------------------------------------------*/
+  static char szCmdbuf[CTRL_FILE_BUF] = {0};
+  static char iCmdbuflen              =  0 ;
+  char        szBuf[CTRL_FILE_BUF];
+  int         iLen     ;
+  int         i        ;
+  int         iEntkeyed;  /* 1 means enter key has pressed */
+  int         iOverflow;
+  int         iDoBufClr;
+  int64_t     i8       ;
+
+  /*--- Ignore multi calling ---------------------------------------*/
+  if (iSig > 0) {
+    if (sigaction(SIGALRM,&gsaIgnr,NULL) != 0) {
+      error_exit(1,"FATAL: Error at sigaction() in the trap #C1\n");
+    }
+  }
+
+  while (1) {
+
+    /*--- Read out the source string of the periodic time ----------*/
+    iDoBufClr=0;
+    iOverflow=0;
+    while ((iLen=read(giFd_ctrlfile,szBuf,CTRL_FILE_BUF-1))==CTRL_FILE_BUF-1) {
+      /*Read away the buffer and quit if the string in the buffer is too large*/
+      iOverflow=1;
+    }
+    if (iOverflow) {iDoBufClr=1; break;}
+    if (iLen < 0 ) {iDoBufClr=1; break;} /* some error */
+    iEntkeyed = 0;
+    for (i=0;i<iLen;i++) {if(szBuf[i]=='\n'){iEntkeyed=1;break;}}
+    szBuf[i]='\0';
+    strncat(szCmdbuf, szBuf, CTRL_FILE_BUF-iCmdbuflen-1);
+    iCmdbuflen = strlen(szCmdbuf);
+    if (iCmdbuflen >= CTRL_FILE_BUF-1) {
+      /*Throw away the buffer and quit if the command string is too large*/
+      iDoBufClr=1;;
+      break;
+    }
+    if (iEntkeyed == 0) {break;}
+
+    /*--- Try to read the time ---------------------------------------*/
+    i8 = parse_periodictime(szCmdbuf);
+    if (i8 <= -2) {iDoBufClr=1; break;} /*Invalid periodic time*/
+
+    /*--- Update the periodic time -----------------------------------*/
+    gi8Peritime = i8  ;
+    iDoBufClr=1;
+
+  break;}
+  if (iDoBufClr) {szCmdbuf[0]='\0'; iCmdbuflen=0;}
+
+  /*--- Restore the signal action ----------------------------------*/
+  if (iSig > 0) {
+    if (sigaction(SIGALRM,&gsaAlrm,NULL) != 0) {
+      error_exit(1,"FATAL: Error at sigaction() in the trap #C2\n");
+    }
+  }
 }
