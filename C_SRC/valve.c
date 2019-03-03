@@ -43,7 +43,7 @@
 #               > ... undefined reference to `clock_gettime'
 #             Try "-lrt" option for gcc as follows.
 #               $ gcc -lrt -o valve valve.c
-#           [What's "#ifdef NOTTY" for?]
+#           [What's "#ifndef NOTTY" for?]
 #             That is to avoid any unknown side effects by supporting
 #             TTY devices on the control file. If you are in some
 #             trouble by that, try to compile with #define NOTTY as
@@ -149,7 +149,7 @@ void print_usage_and_exit(void) {
     "                        time from sending the top character of the\n"
     "                        current line to sending the top character of\n"
     "                        the next line.\n"
-    "Version : 2019-03-03 21:42:00 JST\n"
+    "Version : 2019-03-03 22:47:36 JST\n"
     "          (POSIX C language)\n"
     ,gpszCmdname,gpszCmdname);
   exit(1);
