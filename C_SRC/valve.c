@@ -39,10 +39,16 @@
 # Retuen  : Return 0 only when finished successfully
 #
 # Note    : [To Linux users]
-#           If you see an error message while compiling like that,
-#             > ... undefined reference to `clock_gettime'
-#           Try "-lrt" option for gcc as follows.
-#             $ gcc -lrt -o valve valve.c
+#             If you see an error message while compiling like that,
+#               > ... undefined reference to `clock_gettime'
+#             Try "-lrt" option for gcc as follows.
+#               $ gcc -lrt -o valve valve.c
+#           [What's "#ifdef NOTTY" for?]
+#             That is to avoid any unknown side effects by supporting
+#             TTY devices on the control file. If you are in some
+#             trouble by that, try to compile with #define NOTTY as
+#              follows.
+#               $ gcc -DNOTTY -o valve valve.c
 #
 # Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-03
 #
@@ -93,7 +99,9 @@ int64_t parse_periodictime(char *pszArg);
 void spend_my_spare_time(void);
 int read_1line(FILE *fp);
 void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct);
+#ifndef NOTTY
 void update_periodic_time_type_c(int iSig, siginfo_t *siInfo, void *pct);
+#endif
 
 /*--- global variables ---------------------------------------------*/
 char*    gpszCmdname;     /* The name of this command                        */
@@ -141,7 +149,7 @@ void print_usage_and_exit(void) {
     "                        time from sending the top character of the\n"
     "                        current line to sending the top character of\n"
     "                        the next line.\n"
-    "Version : 2019-03-03 10:36:13 JST\n"
+    "Version : 2019-03-03 21:42:00 JST\n"
     "          (POSIX C language)\n"
     ,gpszCmdname,gpszCmdname);
   exit(1);
@@ -224,8 +232,10 @@ if (gi8Peritime <= -2) {
   }
   switch (stCtrlfile.st_mode & S_IFMT) {
     case S_IFREG : break;
+#ifndef NOTTY
     case S_IFCHR : break;
     case S_IFIFO : break;
+#endif
     default      : error_exit(1,"%s: Improper file type\n",argv[0]);
   }
 
@@ -257,6 +267,7 @@ if (gi8Peritime <= -2) {
     if (setitimer(ITIMER_REAL,&itInt,NULL) != 0) {
       error_exit(1,"FATAL: Error at setitimer()\n");
     }
+#ifndef NOTTY
   } else {
   /* (b) for a character special file or a named pipe */
     /* Open the file */
@@ -282,6 +293,7 @@ if (gi8Peritime <= -2) {
     if (setitimer(ITIMER_REAL,&itInt,NULL) != 0) {
       error_exit(1,"FATAL: Error at setitimer()\n");
     }
+#endif
   }
 }
 argc--;
@@ -584,6 +596,7 @@ void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct) {
   }
 }
 
+#ifndef NOTTY
 /*=== SIGNALTRAP : Try to update "gi8Peritime" for a char-sp/FIFO file
  * [in] gi8Peritime   : (must be defined as a global variable)
  *      giFd_ctrlfile : File descriptor for the file which the periodic
@@ -649,3 +662,4 @@ void update_periodic_time_type_c(int iSig, siginfo_t *siInfo, void *pct) {
     }
   }
 }
+#endif
