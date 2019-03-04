@@ -50,7 +50,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-03
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-04
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -149,7 +149,7 @@ void print_usage_and_exit(void) {
     "                        time from sending the top character of the\n"
     "                        current line to sending the top character of\n"
     "                        the next line.\n"
-    "Version : 2019-03-03 22:47:36 JST\n"
+    "Version : 2019-03-04 21:16:20 JST\n"
     "          (POSIX C language)\n"
     ,gpszCmdname,gpszCmdname);
   exit(1);
@@ -351,7 +351,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                 spend_my_spare_time();
                 while (putchar(i)==EOF) {
                   if (errno == EINTR) {continue;}
-                  error_exit(1,"Cannot write to STDOUT #C1\n");
+                  error_exit(1,"Can't write to STDOUT at main() #C1\n");
                 }
               }
               break;
@@ -466,7 +466,7 @@ int read_1line(FILE *fp) {
       case '\n':
                   while (putchar('\n' )==EOF) {
                     if (errno == EINTR) {continue;}
-                    error_exit(1,"Cannot write to STDOUT @read_1line() #L1\n");
+                    error_exit(1,"Can't write to STDOUT at read_1line() #1\n");
                   }
                   iNextchar = getc(fp);
                   if (iNextchar==EOF) {        return(EOF);}
@@ -475,7 +475,7 @@ int read_1line(FILE *fp) {
       default:
                   while (putchar(iChar)==EOF) {
                     if (errno == EINTR) {continue;}
-                    error_exit(1,"Cannot write to STDOUT @read_1line() #L2\n");
+                    error_exit(1,"Can't write to STDOUT at read_1line() #2\n");
                   }
     }
   }
