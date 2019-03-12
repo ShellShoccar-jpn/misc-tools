@@ -2,8 +2,8 @@
 #
 # VALVE - Adjust the UNIX Pipe Streaming Speed
 #
-# USAGE   : valve [-cl] periodictime [file ...]
-#           valve [-cl] controlfile [file ...]
+# USAGE   : valve [-cl] [-p n] periodictime [file ...]
+#           valve [-cl] [-p n] controlfile [file ...]
 # Args    : periodictime  Periodic time from start sending the current
 #                         block (means a character or a line) to start
 #                         sending the next block.
@@ -36,6 +36,14 @@
 #                         time from sending the top character of the
 #                         current line to sending the top character of
 #                         the next line.
+#           -p n ........ Process priority setting [0-3] (if possible)
+#                          0: Normal process
+#                          1: Weakest realtime process (default)
+#                          2: Strongest realtime process for generic users
+#                             (for only Linux, equivalent 1 for otheres)
+#                          3: Strongest realtime process of this host
+#                         Larger numbers maybe require a privileged user,
+#                         but if failed, it will try the smaller numbers.
 # Retuen  : Return 0 only when finished successfully
 #
 # Note    : [To Linux users]
@@ -50,7 +58,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-04
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-12
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -82,10 +90,10 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <locale.h>
-
-/* --- macro functions ---------------------------------------------*/
-#define WRN(message) fprintf(stderr,message)
-#define WRV(fmt,...) fprintf(stderr,fmt,__VA_ARGS__)
+#ifdef _POSIX_PRIORITY_SCHEDULING
+#include <sched.h>
+#include <sys/resource.h>
+#endif
 
 /*--- macro constants ----------------------------------------------*/
 /* Interval time for looking at the file which Preriodic time is written */
@@ -96,6 +104,7 @@
 
 /*--- prototype functions ------------------------------------------*/
 int64_t parse_periodictime(char *pszArg);
+int change_to_rtprocess(int iPrio);
 void spend_my_spare_time(void);
 int read_1line(FILE *fp);
 void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct);
@@ -114,9 +123,14 @@ struct sigaction gsaAlrm; /* for signal trap definition (action)   */
 
 /*--- exit with usage ----------------------------------------------*/
 void print_usage_and_exit(void) {
-  WRV(
+  fprintf(stderr,
+#ifdef _POSIX_PRIORITY_SCHEDULING
+    "USAGE   : %s [-cl] [-p n] periodictime [file ...]\n"
+    "          %s [-cl] [-p n] controlfile [file ...]\n"
+#else
     "USAGE   : %s [-cl] periodictime [file ...]\n"
     "          %s [-cl] controlfile [file ...]\n"
+#endif
     "Args    : periodictime  Periodic time from start sending the current\n"
     "                        block (means a character or a line) to start\n"
     "                        sending the next block.\n"
@@ -149,7 +163,17 @@ void print_usage_and_exit(void) {
     "                        time from sending the top character of the\n"
     "                        current line to sending the top character of\n"
     "                        the next line.\n"
-    "Version : 2019-03-04 21:16:20 JST\n"
+#ifdef _POSIX_PRIORITY_SCHEDULING
+    "          -p n ........ Process priority setting [0-3] (if possible)\n"
+    "                         0: Normal process\n"
+    "                         1: Weakest realtime process (default)\n"
+    "                         2: Strongest realtime process for generic users\n"
+    "                            (for only Linux, equivalent 1 for otheres)\n"
+    "                         3: Strongest realtime process of this host\n"
+    "                        Larger numbers maybe require a privileged user,\n"
+    "                        but if failed, it will try the smaller numbers.\n"
+#endif
+    "Version : 2019-03-12 21:42:01 JST\n"
     "          (POSIX C language)\n"
     ,gpszCmdname,gpszCmdname);
   exit(1);
@@ -159,7 +183,7 @@ void print_usage_and_exit(void) {
 void warning(const char* szFormat, ...) {
   va_list va;
   va_start(va, szFormat);
-  WRV("%s: ",gpszCmdname);
+  fprintf(stderr,"%s: ",gpszCmdname);
   vfprintf(stderr,szFormat,va);
   va_end(va);
   return;
@@ -169,7 +193,7 @@ void warning(const char* szFormat, ...) {
 void error_exit(int iErrno, const char* szFormat, ...) {
   va_list va;
   va_start(va, szFormat);
-  WRV("%s: ",gpszCmdname);
+  fprintf(stderr,"%s: ",gpszCmdname);
   vfprintf(stderr,szFormat,va);
   va_end(va);
   exit(iErrno);
@@ -185,6 +209,7 @@ int main(int argc, char *argv[]) {
 
 /*--- Variables ----------------------------------------------------*/
 int      iUnit;           /* 0:character 1:line 2-:undefined       */
+int      iPrio;           /* -p option number (default 1)          */
 int      iRet;            /* return code                           */
 char    *pszPath;         /* filepath on arguments                 */
 char    *pszFilename;     /* filepath (for message)                */
@@ -204,12 +229,17 @@ setlocale(LC_CTYPE, "");
 
 /*=== Parse arguments ==============================================*/
 iUnit=0;
+iPrio=1;
 
 /*--- Parse options which start by "-" -----------------------------*/
-while ((i=getopt(argc, argv, "clhv")) != -1) {
+while ((i=getopt(argc, argv, "clp:hv")) != -1) {
   switch (i) {
     case 'c': iUnit = 0; break;
     case 'l': iUnit = 1; break;
+#ifdef _POSIX_PRIORITY_SCHEDULING
+    case 'p': if (sscanf(optarg,"%d",&iPrio) != 1) {print_usage_and_exit();}
+              break;
+#endif
     case 'h': print_usage_and_exit();
     case 'v': print_usage_and_exit();
     default : print_usage_and_exit();
@@ -315,6 +345,9 @@ switch (iUnit) {
             error_exit(1,"FATAL: Invalid unit type\n");
             break;
 }
+
+/*=== Try to make me a realtime process ============================*/
+if (change_to_rtprocess(iPrio)==-1) {print_usage_and_exit();}
 
 /*=== Each file loop ===============================================*/
 iRet     =  0;
@@ -444,6 +477,53 @@ int64_t parse_periodictime(char *pszArg) {
 
   /*--- Otherwise, it is not a value -------------------------------*/
   return -2;
+}
+
+/*=== Try to make me a realtime process ==============================
+ * [in]  iPrio : 0:will not change (just return normally)
+ *               1:minimum priority
+ *               2:maximun priority for non-privileged users (only Linux)
+ *               3:maximun priority of this host
+ * [ret] = 0 : success, or errno
+ *       =-1 : error (by this function)
+ *       > 0 : error (by system call, and the value means "errno")       */
+int change_to_rtprocess(int iPrio) {
+
+#ifdef _POSIX_PRIORITY_SCHEDULING
+  /*--- Variables --------------------------------------------------*/
+  struct sched_param spPrio;
+  struct rlimit      rlInfo;
+
+  /*--- Initialize -------------------------------------------------*/
+  memset(&spPrio, 0, sizeof(spPrio));
+
+  /*--- Decide the priority number ---------------------------------*/
+  switch (iPrio) {
+    case 3 : if ((spPrio.sched_priority=sched_get_priority_max(SCHED_RR))==-1) {
+               return errno;
+             }
+             if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {return 0;}
+    case 2 : 
+#ifdef RLIMIT_RTPRIO
+             if ((getrlimit(RLIMIT_RTPRIO,&rlInfo))==-1) {
+               return errno;
+             }
+             if (rlInfo.rlim_cur > 0) {
+               spPrio.sched_priority=rlInfo.rlim_cur;
+               if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {return 0;}
+             }
+#endif
+    case 1 : if ((spPrio.sched_priority=sched_get_priority_min(SCHED_RR))==-1) {
+               return errno;
+             }
+             if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {return 0;}
+             return errno;
+    case 0 : return  0;
+    default: return -1;
+  }
+#endif
+  /*--- Return successfully ----------------------------------------*/
+  return 0;
 }
 
 /*=== Read and write only one line ===================================
