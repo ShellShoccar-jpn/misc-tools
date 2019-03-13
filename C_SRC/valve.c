@@ -58,7 +58,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-12
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-13
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -173,7 +173,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-03-12 21:42:01 JST\n"
+    "Version : 2019-03-13 18:13:53 JST\n"
     "          (POSIX C language)\n"
     ,gpszCmdname,gpszCmdname);
   exit(1);
@@ -499,7 +499,7 @@ int change_to_rtprocess(int iPrio) {
 
   /*--- Decide the priority number ---------------------------------*/
   switch (iPrio) {
-    case 3 : if ((spPrio.sched_priority=sched_get_priority_max(SCHED_RR))==-1) {
+    case 3 : if ((spPrio.sched_priority=sched_get_priority_min(SCHED_RR))==-1) {
                return errno;
              }
              if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {return 0;}
@@ -513,7 +513,7 @@ int change_to_rtprocess(int iPrio) {
                if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {return 0;}
              }
 #endif
-    case 1 : if ((spPrio.sched_priority=sched_get_priority_min(SCHED_RR))==-1) {
+    case 1 : if ((spPrio.sched_priority=sched_get_priority_max(SCHED_RR))==-1) {
                return errno;
              }
              if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {return 0;}
