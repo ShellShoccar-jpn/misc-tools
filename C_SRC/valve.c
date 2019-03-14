@@ -2,33 +2,33 @@
 #
 # VALVE - Adjust the UNIX Pipe Streaming Speed
 #
-# USAGE   : valve [-cl] [-p n] periodictime [file ...]
-#           valve [-cl] [-p n] controlfile [file ...]
+# USAGE   : valve [-clrs] [-p n] periodictime [file ...]
+#           valve [-clrs] [-p n] controlfile [file ...]
 # Args    : periodictime  Periodic time from start sending the current
 #                         block (means a character or a line) to start
 #                         sending the next block.
 #                         The unit of the periodic time is millisecond
-#                         defaultly. You can also designate the unit
+#                         defaultly. You can also specify the unit
 #                         like '100ms'. Available units are 's', 'ms',
 #                         'us', 'ns'.
-#                         You can also designate it by the units/words.
+#                         You can also specify it by the units/words.
 #                          - speed  : 'bps' (regards as 1charater= 8bit)
 #                                     'cps' (regards as 1charater=10bit)
 #                          - output : '0%'   (completely shut the value)
 #                                     '100%' (completely open the value)
 #                         The maximum value is INT_MAX for all units.
-#           controlfile . Filepath to designate the periodic time instead
-#                         of by argument. The word you can designate in
+#           controlfile . Filepath to specify the periodic time instead
+#                         of by argument. The word you can specify in
 #                         this file is completely the same as the argu-
 #                         ment.
-#                         However, you can redesignate the time by over-
+#                         However, you can re-specify the time by over-
 #                         writing the file. This command will read the
 #                         new periodic time in 0.1 second after that.
 #                         If you want to make this command read it im-
 #                         mediately, send SIGALRM.
 #           file ........ Filepath to be send ("-" means STDIN)
-# Options : -c .......... (This is default.) Changes the periodic unit
-#                         to character. This option defines that the
+# Options : -c .......... (Default) Changes the periodic unit to
+#                         character. This option defines that the
 #                         periodic time is the time from sending the
 #                         current character to sending the next one.
 #           -l .......... Changes the periodic unit to line. This
@@ -36,6 +36,18 @@
 #                         time from sending the top character of the
 #                         current line to sending the top character of
 #                         the next line.
+#           [The following options are professional]
+#           -r .......... (Default) Recovery mode
+#                         On low spec computers, nanosleep() often over-
+#                         sleeps too much and that causes lower throughput
+#                         than specified. This mode makes this command
+#                         recover the lost time by cutting down on sleep
+#                         time.
+#           -s .......... Strict mode
+#                         Data transmission interval tends to varies widly
+#                         when recovered lost time. This mode does not
+#                         allow to do it. However, it tends to cause in-
+#                         sufficient throughput on low spec computers.
 #           -p n ........ Process priority setting [0-3] (if possible)
 #                          0: Normal process
 #                          1: Weakest realtime process (default)
@@ -58,7 +70,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-13
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-14
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -105,7 +117,7 @@
 /*--- prototype functions ------------------------------------------*/
 int64_t parse_periodictime(char *pszArg);
 int change_to_rtprocess(int iPrio);
-void spend_my_spare_time(void);
+void spend_my_spare_time(int iUsage);
 int read_1line(FILE *fp);
 void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct);
 #ifndef NOTTY
@@ -117,7 +129,10 @@ char*    gpszCmdname;     /* The name of this command                        */
 int64_t  gi8Peritime;     /* Periodic time in nanosecond (-1 means infinity) */
 int      giFd_ctrlfile;   /* File descriptor of the control file             */
 struct sigaction gsaIgnr; /* for ignoring signals during signal handlers     */
-struct sigaction gsaAlrm; /* for signal trap definition (action)   */
+struct sigaction gsaAlrm; /* for signal trap definition (action)             */
+struct stat gstInpfile;   /* stat for the input file                         */
+int      giRecovery;      /* 0:normal 1:Recovery mode                        */
+int      giVerbose;       /* speaks more verbosely by the greater number     */
 
 /*=== Define the functions for printing usage and error ============*/
 
@@ -125,37 +140,37 @@ struct sigaction gsaAlrm; /* for signal trap definition (action)   */
 void print_usage_and_exit(void) {
   fprintf(stderr,
 #ifdef _POSIX_PRIORITY_SCHEDULING
-    "USAGE   : %s [-cl] [-p n] periodictime [file ...]\n"
-    "          %s [-cl] [-p n] controlfile [file ...]\n"
+    "USAGE   : %s [-clrs] [-p n] periodictime [file ...]\n"
+    "          %s [-clrs] [-p n] controlfile [file ...]\n"
 #else
-    "USAGE   : %s [-cl] periodictime [file ...]\n"
-    "          %s [-cl] controlfile [file ...]\n"
+    "USAGE   : %s [-clrs] periodictime [file ...]\n"
+    "          %s [-clrs] controlfile [file ...]\n"
 #endif
     "Args    : periodictime  Periodic time from start sending the current\n"
     "                        block (means a character or a line) to start\n"
     "                        sending the next block.\n"
     "                        The unit of the periodic time is millisecond\n"
-    "                        defaultly. You can also designate the unit\n"
+    "                        defaultly. You can also specify the unit\n"
     "                        like '100ms'. Available units are 's', 'ms',\n"
     "                        'us', 'ns'.\n"
-    "                        You can also designate it by the units/words.\n"
+    "                        You can also specify it by the units/words.\n"
     "                         - speed  : 'bps' (regards as 1charater= 8bit)\n"
     "                                    'cps' (regards as 1charater=10bit)\n"
     "                         - output : '0%%'   (completely shut the value)\n"
     "                                    '100%%' (completely open the value)\n"
     "                        The maximum value is INT_MAX for all units.\n"
-    "          controlfile . Filepath to designate the periodic time instead\n"
-    "                        of by argument. The word you can designate in\n"
+    "          controlfile . Filepath to specify the periodic time instead\n"
+    "                        of by argument. The word you can specify in\n"
     "                        this file is completely the same as the argu-\n"
     "                        ment.\n"
-    "                        However, you can redesignate the time by over-\n"
+    "                        However, you can re-specify the time by over-\n"
     "                        writing the file. This command will read the\n"
     "                        new periodic time in 0.1 second after that.\n"
     "                        If you want to make this command read it im-\n"
     "                        mediately, send SIGALRM.\n"
     "          file ........ Filepath to be send (\"-\" means STDIN)\n"
-    "Options : -c .......... (This is default.) Changes the periodic unit\n"
-    "                        to character. This option defines that the\n"
+    "Options : -c .......... (Default) Changes the periodic unit to\n"
+    "                        character. This option defines that the\n"
     "                        periodic time is the time from sending the\n"
     "                        current character to sending the next one.\n"
     "          -l .......... Changes the periodic unit to line. This\n"
@@ -163,6 +178,18 @@ void print_usage_and_exit(void) {
     "                        time from sending the top character of the\n"
     "                        current line to sending the top character of\n"
     "                        the next line.\n"
+    "          [The following options are professional]\n"
+    "          -r .......... (Default) Recovery mode \n"
+    "                        On low spec computers, nanosleep() often over-\n"
+    "                        sleeps too much and that causes lower throughput\n"
+    "                        than specified. This mode makes this command\n"
+    "                        recover the lost time by cutting down on sleep\n"
+    "                        time.\n"
+    "          -s .......... Strict mode\n"
+    "                        Data transmission interval tends to varies widly\n"
+    "                        when recovered lost time. This mode does not\n"
+    "                        allow to do it. However, it tends to cause in-\n"
+    "                        sufficient throughput on low spec computers.\n"
 #ifdef _POSIX_PRIORITY_SCHEDULING
     "          -p n ........ Process priority setting [0-3] (if possible)\n"
     "                         0: Normal process\n"
@@ -173,7 +200,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-03-13 18:13:53 JST\n"
+    "Version : 2019-03-14 18:54:34 JST\n"
     "          (POSIX C language)\n"
     ,gpszCmdname,gpszCmdname);
   exit(1);
@@ -228,25 +255,31 @@ for (i=0; *(gpszCmdname+i)!='\0'; i++) {
 setlocale(LC_CTYPE, "");
 
 /*=== Parse arguments ==============================================*/
-iUnit=0;
-iPrio=1;
 
+/*--- Set default parameters of the arguments ----------------------*/
+iUnit     =0;
+iPrio     =1;
+giVerbose =0;
+giRecovery=1;
 /*--- Parse options which start by "-" -----------------------------*/
-while ((i=getopt(argc, argv, "clp:hv")) != -1) {
+while ((i=getopt(argc, argv, "clp:rsvh")) != -1) {
   switch (i) {
-    case 'c': iUnit = 0; break;
-    case 'l': iUnit = 1; break;
+    case 'c': iUnit = 0;      break;
+    case 'l': iUnit = 1;      break;
 #ifdef _POSIX_PRIORITY_SCHEDULING
     case 'p': if (sscanf(optarg,"%d",&iPrio) != 1) {print_usage_and_exit();}
               break;
 #endif
+    case 'r': giRecovery = 1; break;
+    case 's': giRecovery = 0; break;
+    case 'v': giVerbose++;    break;
     case 'h': print_usage_and_exit();
-    case 'v': print_usage_and_exit();
     default : print_usage_and_exit();
   }
 }
 argc -= optind-1;
 argv += optind  ;
+if (giVerbose>0) {warning("verbose mode (level %d)\n",giVerbose);}
 
 /*--- Parse the periodic time ----------------------------------------*/
 if (argc < 2         ) {print_usage_and_exit();}
@@ -353,9 +386,10 @@ if (change_to_rtprocess(iPrio)==-1) {print_usage_and_exit();}
 iRet     =  0;
 iFileno  =  0;
 iFd      = -1;
+spend_my_spare_time(-1);
 while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
 
-  /*--- Open the input file ----------------------------------------*/
+  /*--- Open one of the input files --------------------------------*/
   if (pszPath == NULL || strcmp(pszPath, "-") == 0) {
     pszFilename = "stdin"                ;
     iFd         = STDIN_FILENO           ;
@@ -370,6 +404,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
     }
     if (iFd < 0) {continue;}
   }
+  fstat(iFd, &gstInpfile);
   if (iFd == STDIN_FILENO) {
     fp = stdin;
     if (feof(stdin)) {clearerr(stdin);} /* Reset EOF condition when stdin */
@@ -381,7 +416,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
   switch (iUnit) {
     case 0:
               while ((i=getc(fp)) != EOF) {
-                spend_my_spare_time();
+                spend_my_spare_time(0);
                 while (putchar(i)==EOF) {
                   if (errno == EINTR) {continue;}
                   error_exit(1,"Can't write to STDOUT at main() #C1\n");
@@ -390,7 +425,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
               break;
     case 1:
               while (1) {
-                spend_my_spare_time();
+                spend_my_spare_time(0);
                 if (read_1line(fp)==EOF) {break;}
               }
               break;
@@ -503,6 +538,7 @@ int change_to_rtprocess(int iPrio) {
                return errno;
              }
              if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {return 0;}
+             if (giVerbose>0) {warning("\"-p3\" failed (errno:%d)\n",errno);}
     case 2 : 
 #ifdef RLIMIT_RTPRIO
              if ((getrlimit(RLIMIT_RTPRIO,&rlInfo))==-1) {
@@ -511,12 +547,16 @@ int change_to_rtprocess(int iPrio) {
              if (rlInfo.rlim_cur > 0) {
                spPrio.sched_priority=rlInfo.rlim_cur;
                if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {return 0;}
+               if (giVerbose>0) {warning("\"-p2\" failed (errno:%d)\n",errno);}
+             } else if (giVerbose>0) {
+               warning("RLIMIT_RTPRIO isn't set\n");
              }
 #endif
     case 1 : if ((spPrio.sched_priority=sched_get_priority_max(SCHED_RR))==-1) {
                return errno;
              }
              if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {return 0;}
+             if (giVerbose>0) {warning("\"-p1\" failed (errno:%d)\n",errno);}
              return errno;
     case 0 : return  0;
     default: return -1;
@@ -562,12 +602,17 @@ int read_1line(FILE *fp) {
 }
 
 /*=== Sleep until the next interval period ===========================
- * [in] gi8Peritime : Periodic time (-1 means infinity)             */
-void spend_my_spare_time(void) {
+ * [in] iUsage      :  0 is normal usage
+ *                    -1 is initialization
+ *                          (resets the "tsPrev" to the current time)
+ *      gi8Peritime : Periodic time (-1 means infinity)
+ *      gstInpfile  : stat for the input file which is opened now   */
+void spend_my_spare_time(int iUsage) {
 
   /*--- Variables --------------------------------------------------*/
   static struct timespec tsPrev = {0,0}; /* the time when this func
                                             called last time        */
+  static struct timespec tsRecovmax = {0,0}  ;
   struct timespec        tsNow               ;
   struct timespec        tsTo                ;
   struct timespec        tsDiff              ;
@@ -575,6 +620,13 @@ void spend_my_spare_time(void) {
   static int64_t         i8LastPertitime = -1;
 
   uint64_t               ui8                 ;
+
+  /*--- Initialize tsPrev (for only the first calling) -----------*/
+  if (iUsage < 0) {
+    if (clock_gettime(CLOCK_MONOTONIC,&tsPrev) != 0) {
+      error_exit(1,"FATAL: Error at clock_gettime() #0\n");
+    }
+  }
 
 top:
   /*--- Reset tsPrev if gi8Peritime was changed ------------------*/
@@ -592,7 +644,7 @@ top:
       if (nanosleep(&tsDiff,NULL) != 0) {
         if (errno != EINTR) {error_exit(1,"FATAL: Error at nanosleep()\n");}
         if (clock_gettime(CLOCK_MONOTONIC,&tsPrev) != 0) {
-          error_exit(1,"FATAL: Error at clock_gettime()\n");
+          error_exit(1,"FATAL: Error at clock_gettime() #1\n");
         }
         goto top; /* Go to "top" in case of a signal trap */
       }
@@ -604,10 +656,9 @@ top:
   tsTo.tv_sec  = tsPrev.tv_sec + (time_t)(ui8/1000000000);
   tsTo.tv_nsec = (long)(ui8%1000000000);
 
-  /*--- If the "tsTo" has been already past, set the current time into
-   *    "tsPrev" and return immediately                             */
+  /*--- If the "tsTo" has been already past, return immediately without */
   if (clock_gettime(CLOCK_MONOTONIC,&tsNow) != 0) {
-    error_exit(1,"FATAL: Error at clock_gettime()\n");
+    error_exit(1,"FATAL: Error at clock_gettime() #2\n");
   }
   if ((tsTo.tv_nsec - tsNow.tv_nsec) < 0) {
     tsDiff.tv_sec  = tsTo.tv_sec  - tsNow.tv_sec  -          1;
@@ -617,8 +668,27 @@ top:
     tsDiff.tv_nsec = tsTo.tv_nsec - tsNow.tv_nsec;
   }
   if (tsDiff.tv_sec < 0) {
-    tsPrev.tv_sec  = tsNow.tv_sec ;
-    tsPrev.tv_nsec = tsNow.tv_nsec;
+    if (giVerbose>2) {warning("overslept\n");}
+    if (
+         (
+           (tsDiff.tv_sec >=tsRecovmax.tv_sec )
+            &&
+           (tsDiff.tv_nsec> tsRecovmax.tv_nsec)
+         )
+          ||
+         ((gstInpfile.st_mode & S_IFMT) == S_IFREG)
+       )
+    {
+      /* Set the next periodic time if the delay is short or
+       * the current file is a regular one                   */
+      tsPrev.tv_sec  = tsTo.tv_sec ;
+      tsPrev.tv_nsec = tsTo.tv_nsec;
+    } else {
+      /* Otherwise, reset tsPrev by the current time */
+      if (giVerbose>1) {warning("reset tsPrev\n");}
+      tsPrev.tv_sec  = tsNow.tv_sec ;
+      tsPrev.tv_nsec = tsNow.tv_nsec;
+    }
     return;
   }
 
@@ -626,6 +696,45 @@ top:
   if (nanosleep(&tsDiff,NULL) != 0) {
     if (errno == EINTR) {goto top;} /* Go to "top" in case of a signal trap */
     error_exit(1,"FATAL: Error at nanosleep()\n");
+  }
+
+  /*--- Update the amount of threshold time for recovery -----------*/
+  if (giRecovery) {
+    /* investigate the current time again */
+    if (clock_gettime(CLOCK_MONOTONIC,&tsNow) != 0) {
+      error_exit(1,"FATAL: Error at clock_gettime() #3\n");
+    }
+    /* calculate the oversleeping time */
+    if ((tsTo.tv_nsec - tsNow.tv_nsec) < 0) {
+      tsDiff.tv_sec  = tsTo.tv_sec  - tsNow.tv_sec  -          1;
+      tsDiff.tv_nsec = tsTo.tv_nsec - tsNow.tv_nsec + 1000000000;
+    } else {
+      tsDiff.tv_sec  = tsTo.tv_sec  - tsNow.tv_sec ;
+      tsDiff.tv_nsec = tsTo.tv_nsec - tsNow.tv_nsec;
+    }
+    /* double it
+    tsDiff.tv_sec *= 2;
+    ui8 = (uint64_t)tsDiff.tv_nsec * 2;
+    if (ui8<1000000000) {tsDiff.tv_nsec=(long)ui8;                             }
+    else                {tsDiff.tv_nsec=(long)(ui8%1000000000);tsDiff.tv_sec++;} */
+    /* update tsRecovmax */
+    if (
+         (tsDiff.tv_sec< tsRecovmax.tv_sec)
+          ||
+         (
+           (tsDiff.tv_sec ==tsRecovmax.tv_sec )
+            &&
+           (tsDiff.tv_nsec <tsRecovmax.tv_nsec)
+         )
+       )
+    {
+      tsRecovmax.tv_sec  = tsDiff.tv_sec ;
+      tsRecovmax.tv_nsec = tsDiff.tv_nsec;
+      if (giVerbose>0) {
+        warning("tsRecovmax updated (%ld,%ld)\n",
+                tsRecovmax.tv_sec,tsRecovmax.tv_nsec);
+      }
+    }
   }
 
   /*--- Finish this function ---------------------------------------*/
