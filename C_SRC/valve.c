@@ -31,11 +31,13 @@
 #                         character. This option defines that the
 #                         periodic time is the time from sending the
 #                         current character to sending the next one.
+#                         -l option will be disabled by this option.
 #           -l .......... Changes the periodic unit to line. This
 #                         option defines that the periodic time is the
 #                         time from sending the top character of the
 #                         current line to sending the top character of
 #                         the next line.
+#                         -c option will be disabled by this option.
 #           [The following options are professional]
 #           -r .......... (Default) Recovery mode
 #                         On low spec computers, nanosleep() often over-
@@ -43,11 +45,14 @@
 #                         than specified. This mode makes this command
 #                         recover the lost time by cutting down on sleep
 #                         time.
+#                         -s option will be disabled by this option.
 #           -s .......... Strict mode
-#                         Data transmission interval tends to varies widly
-#                         when recovered lost time. This mode does not
-#                         allow to do it. However, it tends to cause in-
-#                         sufficient throughput on low spec computers.
+#                         Recovering the lost time causes the maximum
+#                         instantaneous speed to be exeeded. It maybe
+#                         affect badly for devices which have little
+#                         buffer. So, this mode makes this command keep
+#                         the maximum instantaneous speed limit strictly.
+#                         -r option will be disabled by this option.
 #           -p n ........ Process priority setting [0-3] (if possible)
 #                          0: Normal process
 #                          1: Weakest realtime process (default)
@@ -173,11 +178,13 @@ void print_usage_and_exit(void) {
     "                        character. This option defines that the\n"
     "                        periodic time is the time from sending the\n"
     "                        current character to sending the next one.\n"
+    "                        -l option will be disabled by this option.\n"
     "          -l .......... Changes the periodic unit to line. This\n"
     "                        option defines that the periodic time is the\n"
     "                        time from sending the top character of the\n"
     "                        current line to sending the top character of\n"
     "                        the next line.\n"
+    "                        -c option will be disabled by this option.\n"
     "          [The following options are professional]\n"
     "          -r .......... (Default) Recovery mode \n"
     "                        On low spec computers, nanosleep() often over-\n"
@@ -185,11 +192,14 @@ void print_usage_and_exit(void) {
     "                        than specified. This mode makes this command\n"
     "                        recover the lost time by cutting down on sleep\n"
     "                        time.\n"
+    "                        -s option will be disabled by this option.\n"
     "          -s .......... Strict mode\n"
-    "                        Data transmission interval tends to varies widly\n"
-    "                        when recovered lost time. This mode does not\n"
-    "                        allow to do it. However, it tends to cause in-\n"
-    "                        sufficient throughput on low spec computers.\n"
+    "                        Recovering the lost time causes the maximum\n"
+    "                        instantaneous speed to be exeeded. It maybe\n"
+    "                        affect badly for devices which have little\n"
+    "                        buffer. So, this mode makes this command keep\n"
+    "                        the maximum instantaneous speed limit strictly.\n"
+    "                        -r option will be disabled by this option.\n"
 #ifdef _POSIX_PRIORITY_SCHEDULING
     "          -p n ........ Process priority setting [0-3] (if possible)\n"
     "                         0: Normal process\n"
@@ -200,7 +210,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-03-14 18:54:34 JST\n"
+    "Version : 2019-03-14 21:32:32 JST\n"
     "          (POSIX C language)\n"
     ,gpszCmdname,gpszCmdname);
   exit(1);
