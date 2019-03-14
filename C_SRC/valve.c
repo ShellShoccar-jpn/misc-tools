@@ -51,7 +51,8 @@
 #                         instantaneous speed to be exeeded. It maybe
 #                         affect badly for devices which have little
 #                         buffer. So, this mode makes this command keep
-#                         the maximum instantaneous speed limit strictly.
+#                         strictly the maximum instantaneous speed limit
+#                         decided by periodictime.
 #                         -r option will be disabled by this option.
 #           -p n ........ Process priority setting [0-3] (if possible)
 #                          0: Normal process
@@ -198,7 +199,8 @@ void print_usage_and_exit(void) {
     "                        instantaneous speed to be exeeded. It maybe\n"
     "                        affect badly for devices which have little\n"
     "                        buffer. So, this mode makes this command keep\n"
-    "                        the maximum instantaneous speed limit strictly.\n"
+    "                        strictly the maximum instantaneous speed limit\n"
+    "                        decided by periodictime.\n"
     "                        -r option will be disabled by this option.\n"
 #ifdef _POSIX_PRIORITY_SCHEDULING
     "          -p n ........ Process priority setting [0-3] (if possible)\n"
@@ -210,7 +212,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-03-14 21:32:32 JST\n"
+    "Version : 2019-03-14 22:40:26 JST\n"
     "          (POSIX C language)\n"
     ,gpszCmdname,gpszCmdname);
   exit(1);
