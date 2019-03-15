@@ -119,9 +119,9 @@
 #define FREAD_ITRVL_USEC 100000
 /* Buffer size for the control file */
 #define CTRL_FILE_BUF 64
-/* If you enable the following definition, recovery mode will be
- * probably more effective                                       */
-#define DOUBLE_RECOVMAX 1
+/* If you set the following definition to 2 or more, recovery mode will be
+ * probably more effective. If unnecessary, set 0 to disable this.         */
+#define RECOVMAX_MULTIPLIER 2
 
 /*--- prototype functions ------------------------------------------*/
 int64_t parse_periodictime(char *pszArg);
@@ -295,6 +295,9 @@ while ((i=getopt(argc, argv, "clp:rsvh")) != -1) {
 argc -= optind-1;
 argv += optind  ;
 if (giVerbose>0) {warning("verbose mode (level %d)\n",giVerbose);}
+#ifdef RECOVMAX_MULTIPLIER
+if (giVerbose>0) {warning("RECOVMAX_MULTIPLIER is %d\n",RECOVMAX_MULTIPLIER);}
+#endif
 
 /*--- Parse the periodic time ----------------------------------------*/
 if (argc < 2         ) {print_usage_and_exit();}
@@ -641,7 +644,8 @@ void spend_my_spare_time(int iUsage) {
   /*--- Variables --------------------------------------------------*/
   static struct timespec tsPrev = {0,0}; /* the time when this func
                                             called last time        */
-  static struct timespec tsRecovmax = {0,0}  ;
+  static struct timespec tsRecovmax0 = {0,0} ;
+  static struct timespec tsRecovmax  = {0,0} ;
   struct timespec        tsNow               ;
   struct timespec        tsTo                ;
   struct timespec        tsDiff              ;
@@ -714,7 +718,7 @@ top:
       tsPrev.tv_nsec = tsTo.tv_nsec;
     } else {
       /* Otherwise, reset tsPrev by the current time */
-      if (giVerbose>1) {warning("give up recovery\n");}
+      if (giVerbose>1) {warning("give up recovery this time\n");}
       tsPrev.tv_sec  = tsNow.tv_sec ;
       tsPrev.tv_nsec = tsNow.tv_nsec;
     }
@@ -741,26 +745,29 @@ top:
       tsDiff.tv_sec  = tsTo.tv_sec  - tsNow.tv_sec ;
       tsDiff.tv_nsec = tsTo.tv_nsec - tsNow.tv_nsec;
     }
-#ifdef DOUBLE_RECOVMAX
-    /* double it */
-    tsDiff.tv_sec *= 2;
-    ui8 = (uint64_t)tsDiff.tv_nsec * 2;
-    if (ui8<1000000000) {tsDiff.tv_nsec=(long)ui8;                             }
-    else                {tsDiff.tv_nsec=(long)(ui8%1000000000);tsDiff.tv_sec++;}
-#endif
     /* update tsRecovmax */
     if (
-         (tsDiff.tv_sec< tsRecovmax.tv_sec)
+         (tsDiff.tv_sec< tsRecovmax0.tv_sec)
           ||
          (
-           (tsDiff.tv_sec ==tsRecovmax.tv_sec )
+           (tsDiff.tv_sec ==tsRecovmax0.tv_sec )
             &&
-           (tsDiff.tv_nsec <tsRecovmax.tv_nsec)
+           (tsDiff.tv_nsec <tsRecovmax0.tv_nsec)
          )
        )
     {
-      tsRecovmax.tv_sec  = tsDiff.tv_sec ;
-      tsRecovmax.tv_nsec = tsDiff.tv_nsec;
+      tsRecovmax0.tv_sec  = tsDiff.tv_sec ;
+      tsRecovmax0.tv_nsec = tsDiff.tv_nsec;
+#ifdef RECOVMAX_MULTIPLIER
+      /* multiply */
+      ui8 = (uint64_t)tsRecovmax0.tv_nsec * RECOVMAX_MULTIPLIER;
+      tsRecovmax.tv_nsec = (long)(ui8%1000000000);
+      tsRecovmax.tv_sec  = tsRecovmax0.tv_sec * RECOVMAX_MULTIPLIER
+                         + (time_t)(ui8/1000000000)                ;
+#else
+      tsRecovmax.tv_sec  = tsRecovmax.tv_sec ;
+      tsRecovmax.tv_nsec = tsRecovmax.tv_nsec;
+#endif
       if (giVerbose>0) {
         warning("tsRecovmax updated (%ld,%ld)\n",
                 tsRecovmax.tv_sec,tsRecovmax.tv_nsec);
