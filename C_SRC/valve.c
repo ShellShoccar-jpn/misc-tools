@@ -76,7 +76,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-14
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-15
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -119,6 +119,9 @@
 #define FREAD_ITRVL_USEC 100000
 /* Buffer size for the control file */
 #define CTRL_FILE_BUF 64
+/* If you enable the following definition, recovery mode will be
+ * probably more effective                                       */
+#define DOUBLE_RECOVMAX 1
 
 /*--- prototype functions ------------------------------------------*/
 int64_t parse_periodictime(char *pszArg);
@@ -212,7 +215,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-03-14 22:40:26 JST\n"
+    "Version : 2019-03-15 16:59:55 JST\n"
     "          (POSIX C language)\n"
     ,gpszCmdname,gpszCmdname);
   exit(1);
@@ -546,11 +549,15 @@ int change_to_rtprocess(int iPrio) {
 
   /*--- Decide the priority number ---------------------------------*/
   switch (iPrio) {
-    case 3 : if ((spPrio.sched_priority=sched_get_priority_min(SCHED_RR))==-1) {
+    case 3 : if ((spPrio.sched_priority=sched_get_priority_max(SCHED_RR))==-1) {
                return errno;
              }
-             if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {return 0;}
-             if (giVerbose>0) {warning("\"-p3\" failed (errno:%d)\n",errno);}
+             if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {
+               if (giVerbose>0) {warning("\"-p3\" succeeded\n"        ,errno);}
+               return 0;
+             } else                                           {
+               if (giVerbose>0) {warning("\"-p3\" failed (errno:%d)\n",errno);}
+             }
     case 2 : 
 #ifdef RLIMIT_RTPRIO
              if ((getrlimit(RLIMIT_RTPRIO,&rlInfo))==-1) {
@@ -558,19 +565,29 @@ int change_to_rtprocess(int iPrio) {
              }
              if (rlInfo.rlim_cur > 0) {
                spPrio.sched_priority=rlInfo.rlim_cur;
-               if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {return 0;}
+               if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {
+                 if (giVerbose>0){warning("\"-p2\" succeeded\n"        ,errno);}
+                 return 0;
+               } else                                           {
+                 if (giVerbose>0){warning("\"-p2\" failed (errno:%d)\n",errno);}
+               }
                if (giVerbose>0) {warning("\"-p2\" failed (errno:%d)\n",errno);}
              } else if (giVerbose>0) {
                warning("RLIMIT_RTPRIO isn't set\n");
              }
 #endif
-    case 1 : if ((spPrio.sched_priority=sched_get_priority_max(SCHED_RR))==-1) {
+    case 1 : if ((spPrio.sched_priority=sched_get_priority_min(SCHED_RR))==-1) {
                return errno;
              }
-             if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {return 0;}
-             if (giVerbose>0) {warning("\"-p1\" failed (errno:%d)\n",errno);}
+             if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {
+               if (giVerbose>0) {warning("\"-p1\" succeeded\n"        ,errno);}
+               return 0;
+             } else                                           {
+               if (giVerbose>0) {warning("\"-p1\" failed (errno:%d)\n",errno);}
+             }
              return errno;
-    case 0 : return  0;
+    case 0 : if (giVerbose>0) {warning("\"-p0\" succeeded\n",errno);}
+             return  0;
     default: return -1;
   }
 #endif
@@ -697,7 +714,7 @@ top:
       tsPrev.tv_nsec = tsTo.tv_nsec;
     } else {
       /* Otherwise, reset tsPrev by the current time */
-      if (giVerbose>1) {warning("reset tsPrev\n");}
+      if (giVerbose>1) {warning("give up recovery\n");}
       tsPrev.tv_sec  = tsNow.tv_sec ;
       tsPrev.tv_nsec = tsNow.tv_nsec;
     }
@@ -724,11 +741,13 @@ top:
       tsDiff.tv_sec  = tsTo.tv_sec  - tsNow.tv_sec ;
       tsDiff.tv_nsec = tsTo.tv_nsec - tsNow.tv_nsec;
     }
-    /* double it
+#ifdef DOUBLE_RECOVMAX
+    /* double it */
     tsDiff.tv_sec *= 2;
     ui8 = (uint64_t)tsDiff.tv_nsec * 2;
     if (ui8<1000000000) {tsDiff.tv_nsec=(long)ui8;                             }
-    else                {tsDiff.tv_nsec=(long)(ui8%1000000000);tsDiff.tv_sec++;} */
+    else                {tsDiff.tv_nsec=(long)(ui8%1000000000);tsDiff.tv_sec++;}
+#endif
     /* update tsRecovmax */
     if (
          (tsDiff.tv_sec< tsRecovmax.tv_sec)
