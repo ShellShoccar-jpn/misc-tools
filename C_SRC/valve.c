@@ -76,7 +76,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-15
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-16
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -215,7 +215,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-03-15 16:59:55 JST\n"
+    "Version : 2019-03-16 02:12:46 JST\n"
     "          (POSIX C language)\n"
     ,gpszCmdname,gpszCmdname);
   exit(1);
@@ -765,8 +765,8 @@ top:
       tsRecovmax.tv_sec  = tsRecovmax0.tv_sec * RECOVMAX_MULTIPLIER
                          + (time_t)(ui8/1000000000)                ;
 #else
-      tsRecovmax.tv_sec  = tsRecovmax.tv_sec ;
-      tsRecovmax.tv_nsec = tsRecovmax.tv_nsec;
+      tsRecovmax.tv_sec  = tsRecovmax0.tv_sec ;
+      tsRecovmax.tv_nsec = tsRecovmax0.tv_nsec;
 #endif
       if (giVerbose>0) {
         warning("tsRecovmax updated (%ld,%ld)\n",
