@@ -215,7 +215,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-03-16 02:12:46 JST\n"
+    "Version : 2019-03-16 02:51:21 JST\n"
     "          (POSIX C language)\n"
     ,gpszCmdname,gpszCmdname);
   exit(1);
@@ -295,7 +295,7 @@ while ((i=getopt(argc, argv, "clp:rsvh")) != -1) {
 argc -= optind-1;
 argv += optind  ;
 if (giVerbose>0) {warning("verbose mode (level %d)\n",giVerbose);}
-#ifdef RECOVMAX_MULTIPLIER
+#if RECOVMAX_MULTIPLIER > 0
 if (giVerbose>0) {warning("RECOVMAX_MULTIPLIER is %d\n",RECOVMAX_MULTIPLIER);}
 #endif
 
@@ -758,7 +758,7 @@ top:
     {
       tsRecovmax0.tv_sec  = tsDiff.tv_sec ;
       tsRecovmax0.tv_nsec = tsDiff.tv_nsec;
-#ifdef RECOVMAX_MULTIPLIER
+#if RECOVMAX_MULTIPLIER >= 2
       /* multiply */
       ui8 = (uint64_t)tsRecovmax0.tv_nsec * RECOVMAX_MULTIPLIER;
       tsRecovmax.tv_nsec = (long)(ui8%1000000000);
