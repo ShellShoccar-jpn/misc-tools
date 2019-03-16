@@ -644,7 +644,6 @@ void spend_my_spare_time(int iUsage) {
   /*--- Variables --------------------------------------------------*/
   static struct timespec tsPrev = {0,0}; /* the time when this func
                                             called last time        */
-  static struct timespec tsRecovmax0 = {0,0} ;
   static struct timespec tsRecovmax  = {0,0} ;
   struct timespec        tsNow               ;
   struct timespec        tsTo                ;
@@ -747,26 +746,23 @@ top:
     }
     /* update tsRecovmax */
     if (
-         (tsDiff.tv_sec< tsRecovmax0.tv_sec)
+         (tsDiff.tv_sec< tsRecovmax.tv_sec)
           ||
          (
-           (tsDiff.tv_sec ==tsRecovmax0.tv_sec )
+           (tsDiff.tv_sec ==tsRecovmax.tv_sec )
             &&
-           (tsDiff.tv_nsec <tsRecovmax0.tv_nsec)
+           (tsDiff.tv_nsec <tsRecovmax.tv_nsec)
          )
        )
     {
-      tsRecovmax0.tv_sec  = tsDiff.tv_sec ;
-      tsRecovmax0.tv_nsec = tsDiff.tv_nsec;
+      tsRecovmax.tv_sec  = tsDiff.tv_sec ;
+      tsRecovmax.tv_nsec = tsDiff.tv_nsec;
 #if RECOVMAX_MULTIPLIER >= 2
       /* multiply */
-      ui8 = (uint64_t)tsRecovmax0.tv_nsec * RECOVMAX_MULTIPLIER;
+      ui8 = (uint64_t)tsRecovmax.tv_nsec * RECOVMAX_MULTIPLIER;
       tsRecovmax.tv_nsec = (long)(ui8%1000000000);
-      tsRecovmax.tv_sec  = tsRecovmax0.tv_sec * RECOVMAX_MULTIPLIER
-                         + (time_t)(ui8/1000000000)                ;
-#else
-      tsRecovmax.tv_sec  = tsRecovmax0.tv_sec ;
-      tsRecovmax.tv_nsec = tsRecovmax0.tv_nsec;
+      tsRecovmax.tv_sec  = tsRecovmax.tv_sec * RECOVMAX_MULTIPLIER
+                         + (time_t)(ui8/1000000000)               ;
 #endif
       if (giVerbose>0) {
         warning("tsRecovmax updated (%ld,%ld)\n",
