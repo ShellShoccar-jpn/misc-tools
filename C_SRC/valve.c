@@ -76,7 +76,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-16
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-17
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -168,6 +168,9 @@ void print_usage_and_exit(void) {
     "                         - output : '0%%'   (completely shut the value)\n"
     "                                    '100%%' (completely open the value)\n"
     "                        The maximum value is INT_MAX for all units.\n"
+#ifdef NOTTY
+    "                        (Regular file only for it on the version)\n"
+#endif
     "          controlfile . Filepath to specify the periodic time instead\n"
     "                        of by argument. The word you can specify in\n"
     "                        this file is completely the same as the argu-\n"
@@ -215,8 +218,11 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-03-16 02:51:21 JST\n"
+    "Version : 2019-03-17 15:14:19 JST\n"
     "          (POSIX C language)\n"
+    "\n"
+    "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
+    "This is a public domain software. (CC0)\n"
     ,gpszCmdname,gpszCmdname);
   exit(1);
 }
