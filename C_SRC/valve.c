@@ -126,7 +126,7 @@
 /*--- prototype functions ------------------------------------------*/
 int64_t parse_periodictime(char *pszArg);
 int change_to_rtprocess(int iPrio);
-void spend_my_spare_time(int iUsage);
+void spend_my_spare_time(void);
 int read_1line(FILE *fp);
 void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct);
 #ifndef NOTTY
@@ -218,7 +218,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-03-17 15:14:19 JST\n"
+    "Version : 2019-03-17 16:26:52 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -410,7 +410,6 @@ if (change_to_rtprocess(iPrio)==-1) {print_usage_and_exit();}
 iRet     =  0;
 iFileno  =  0;
 iFd      = -1;
-spend_my_spare_time(-1);
 while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
 
   /*--- Open one of the input files --------------------------------*/
@@ -440,7 +439,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
   switch (iUnit) {
     case 0:
               while ((i=getc(fp)) != EOF) {
-                spend_my_spare_time(0);
+                spend_my_spare_time();
                 while (putchar(i)==EOF) {
                   if (errno == EINTR) {continue;}
                   error_exit(1,"Can't write to STDOUT at main() #C1\n");
@@ -449,7 +448,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
               break;
     case 1:
               while (1) {
-                spend_my_spare_time(0);
+                spend_my_spare_time();
                 if (read_1line(fp)==EOF) {break;}
               }
               break;
@@ -640,12 +639,9 @@ int read_1line(FILE *fp) {
 }
 
 /*=== Sleep until the next interval period ===========================
- * [in] iUsage      :  0 is normal usage
- *                    -1 is initialization
- *                          (resets the "tsPrev" to the current time)
- *      gi8Peritime : Periodic time (-1 means infinity)
+ * [in] gi8Peritime : Periodic time (-1 means infinity)
  *      gstInpfile  : stat for the input file which is opened now   */
-void spend_my_spare_time(int iUsage) {
+void spend_my_spare_time(void) {
 
   /*--- Variables --------------------------------------------------*/
   static struct timespec tsPrev = {0,0}; /* the time when this func
@@ -658,13 +654,6 @@ void spend_my_spare_time(int iUsage) {
   static int64_t         i8LastPertitime = -1;
 
   uint64_t               ui8                 ;
-
-  /*--- Initialize tsPrev (for only the first calling) -----------*/
-  if (iUsage < 0) {
-    if (clock_gettime(CLOCK_MONOTONIC,&tsPrev) != 0) {
-      error_exit(1,"FATAL: Error at clock_gettime() #0\n");
-    }
-  }
 
 top:
   /*--- Reset tsPrev if gi8Peritime was changed ------------------*/
@@ -694,7 +683,7 @@ top:
   tsTo.tv_sec  = tsPrev.tv_sec + (time_t)(ui8/1000000000);
   tsTo.tv_nsec = (long)(ui8%1000000000);
 
-  /*--- If the "tsTo" has been already past, return immediately without */
+  /*--- If the "tsTo" has been already past, return immediately without sleep */
   if (clock_gettime(CLOCK_MONOTONIC,&tsNow) != 0) {
     error_exit(1,"FATAL: Error at clock_gettime() #2\n");
   }
