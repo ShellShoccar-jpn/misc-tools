@@ -25,7 +25,7 @@
 #                         writing the file. This command will read the
 #                         new periodic time in 0.1 second after that.
 #                         If you want to make this command read it im-
-#                         mediately, send SIGALRM.
+#                         mediately, send SIGHUP.
 #           file ........ Filepath to be send ("-" means STDIN)
 # Options : -c .......... (Default) Changes the periodic unit to
 #                         character. This option defines that the
@@ -64,11 +64,13 @@
 #                         but if failed, it will try the smaller numbers.
 # Retuen  : Return 0 only when finished successfully
 #
-# Note    : [To Linux users]
+# Note    : [To elder OS users]
 #             If you see an error message while compiling like that,
 #               > ... undefined reference to `clock_gettime'
-#             Try "-lrt" option for gcc as follows.
-#               $ gcc -lrt -o valve valve.c
+#               > ... undefined reference to `timer_create'
+#               > ... undefined reference to `timer_settime'
+#             Try "-lrt" option for cc as follows.
+#               $ cc -o valve valve.c -lrt
 #           [What's "#ifndef NOTTY" for?]
 #             That is to avoid any unknown side effects by supporting
 #             TTY devices on the control file. If you are in some
@@ -76,7 +78,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-18
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-19
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -116,7 +118,7 @@
 /*--- macro constants ----------------------------------------------*/
 /* Interval time for looking at the file which Preriodic time is written */
 #define FREAD_ITRVL_SEC  0
-#define FREAD_ITRVL_USEC 100000
+#define FREAD_ITRVL_NSEC 100000000
 /* Buffer size for the control file */
 #define CTRL_FILE_BUF 64
 /* If you set the following definition to 2 or more, recovery mode will be
@@ -178,7 +180,7 @@ void print_usage_and_exit(void) {
     "                        writing the file. This command will read the\n"
     "                        new periodic time in 0.1 second after that.\n"
     "                        If you want to make this command read it im-\n"
-    "                        mediately, send SIGALRM.\n"
+    "                        mediately, send SIGHUP.\n"
     "          file ........ Filepath to be send (\"-\" means STDIN)\n"
     "Options : -c .......... (Default) Changes the periodic unit to\n"
     "                        character. This option defines that the\n"
@@ -217,7 +219,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-03-18 21:36:26 JST\n"
+    "Version : 2019-03-19 01:11:25 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -265,7 +267,9 @@ int      iFileno;         /* file# of filepath                     */
 int      iFd;             /* file descriptor                       */
 FILE    *fp;              /* file handle                           */
 int      i;               /* all-purpose int                       */
-struct itimerval itInt;   /* for signal trap definition (interval) */
+struct itimerspec itInt;  /* for signal trap definition (interval) */
+struct sigevent   seInf;  /* for interval event definition         */
+timer_t           trId;   /* signal timer ID                       */
 struct stat stCtrlfile;   /* stat for the control file             */
 
 /*--- Initialize ---------------------------------------------------*/
@@ -311,11 +315,7 @@ gi8Peritime = parse_periodictime(argv[0]);
 if (gi8Peritime <= -2) {
   /* Make sure that the ontrol file has an acceptable type */
   if ((i=stat(argv[0],&stCtrlfile)) < 0) {
-    switch (errno) {
-      case EACCES : error_exit(1,"%s: Unreadable\n"    ,argv[0]);
-      case ENOENT : error_exit(1,"%s: File not found\n",argv[0]);
-      default     : error_exit(1,"%s: Invalid file\n"  ,argv[0]);
-    }
+    error_exit(errno,"%s: %s\n",argv[0],strerror(errno));  
   }
   switch (stCtrlfile.st_mode & S_IFMT) {
     case S_IFREG : break;
@@ -323,7 +323,7 @@ if (gi8Peritime <= -2) {
     case S_IFCHR : break;
     case S_IFIFO : break;
 #endif
-    default      : error_exit(1,"%s: Improper file type\n",argv[0]);
+    default      : error_exit(255,"%s: Unsupported file type\n",argv[0]);
   }
 
   /* set the first parameter, which is "0%" */
@@ -333,7 +333,7 @@ if (gi8Peritime <= -2) {
   if ((stCtrlfile.st_mode & S_IFREG) == S_IFREG) {
     /* Open the file */
     if ((giFd_ctrlfile=open(argv[0],O_RDONLY)) < 0){
-      error_exit(1,"%s: Open error\n",argv[0]);
+      error_exit(errno,"%s: %s\n",argv[0],strerror(errno));
     }
 
     /* Register the signal trap */
@@ -343,23 +343,15 @@ if (gi8Peritime <= -2) {
     memset(&gsaAlrm, 0, sizeof(gsaAlrm));
     gsaAlrm.sa_sigaction = update_periodic_time_type_r;
     gsaAlrm.sa_flags     = SA_SIGINFO;
-    if (sigaction(SIGALRM,&gsaAlrm,NULL) != 0) {
-      error_exit(1,"FATAL: Error at sigaction()\n");
-    }
-    memset(&itInt, 0, sizeof(itInt));
-    itInt.it_value.tv_sec     = FREAD_ITRVL_SEC;
-    itInt.it_value.tv_usec    = FREAD_ITRVL_USEC;
-    itInt.it_interval.tv_sec  = FREAD_ITRVL_SEC;
-    itInt.it_interval.tv_usec = FREAD_ITRVL_USEC;
-    if (setitimer(ITIMER_REAL,&itInt,NULL) != 0) {
-      error_exit(1,"FATAL: Error at setitimer()\n");
+    if (sigaction(SIGHUP,&gsaAlrm,NULL) != 0) {
+      error_exit(errno,"sigaction() in main() #a: %s\n",strerror(errno));
     }
 #ifndef NOTTY
   } else {
   /* (b) for a character special file or a named pipe */
     /* Open the file */
     if ((giFd_ctrlfile=open(argv[0],O_RDONLY | O_NONBLOCK )) < 0){
-      error_exit(1,"%s: Open error\n",argv[0]);
+      error_exit(errno,"%s: %s\n",argv[0],strerror(errno));
     }
 
     /* Register the signal trap */
@@ -369,18 +361,27 @@ if (gi8Peritime <= -2) {
     memset(&gsaAlrm, 0, sizeof(gsaAlrm));
     gsaAlrm.sa_sigaction = update_periodic_time_type_c;
     gsaAlrm.sa_flags     = SA_SIGINFO;
-    if (sigaction(SIGALRM,&gsaAlrm,NULL) != 0) {
-      error_exit(1,"FATAL: Error at sigaction()\n");
-    }
-    memset(&itInt, 0, sizeof(itInt));
-    itInt.it_value.tv_sec     = FREAD_ITRVL_SEC;
-    itInt.it_value.tv_usec    = FREAD_ITRVL_USEC;
-    itInt.it_interval.tv_sec  = FREAD_ITRVL_SEC;
-    itInt.it_interval.tv_usec = FREAD_ITRVL_USEC;
-    if (setitimer(ITIMER_REAL,&itInt,NULL) != 0) {
-      error_exit(1,"FATAL: Error at setitimer()\n");
+    if (sigaction(SIGHUP,&gsaAlrm,NULL) != 0) {
+      error_exit(errno,"sigaction() in main() #b: %s\n",strerror(errno));
     }
 #endif
+  }
+
+  /* Start sending signal pulses to the signal trap */
+  memset(&seInf, 0, sizeof(seInf));
+  seInf.sigev_value.sival_int  = 0;
+  seInf.sigev_notify           = SIGEV_SIGNAL;
+  seInf.sigev_signo            = SIGHUP;
+  if (timer_create(CLOCK_MONOTONIC, &seInf, &trId)) {
+    error_exit(errno,"timer_create(): %s\n" ,strerror(errno));
+  }
+  memset(&itInt, 0, sizeof(itInt));
+  itInt.it_value.tv_sec     = FREAD_ITRVL_SEC;
+  itInt.it_value.tv_nsec    = FREAD_ITRVL_NSEC;
+  itInt.it_interval.tv_sec  = FREAD_ITRVL_SEC;
+  itInt.it_interval.tv_nsec = FREAD_ITRVL_NSEC;
+  if (timer_settime(trId,0,&itInt,NULL)) {
+    error_exit(errno,"timer_settime(): %s\n",strerror(errno));
   }
 }
 argc--;
@@ -390,16 +391,16 @@ argv++;
 switch (iUnit) {
   case 0:
             if (setvbuf(stdout,NULL,_IONBF,0)!=0) {
-              error_exit(1,"Failed to switch to unbuffered mode\n");
+              error_exit(255,"Failed to switch to unbuffered mode\n");
             }
             break;
   case 1:
             if (setvbuf(stdout,NULL,_IOLBF,0)!=0) {
-              error_exit(1,"Failed to switch to line-buffered mode\n");
+              error_exit(255,"Failed to switch to line-buffered mode\n");
             }
             break;
   default:
-            error_exit(1,"FATAL: Invalid unit type\n");
+            error_exit(255,"main() #1: Invalid unit type\n");
             break;
 }
 
@@ -422,7 +423,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
     while ((iFd=open(pszPath, O_RDONLY)) < 0) {
       if (errno == EINTR) {continue;}
       iRet = 1;
-      warning("%s: File open error (errno:%d)\n",pszFilename,errno);
+      warning("%s: %s\n",pszFilename,strerror(errno));
       iFileno++;
       break;
     }
@@ -442,7 +443,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                 spend_my_spare_time();
                 while (putchar(i)==EOF) {
                   if (errno == EINTR) {continue;}
-                  error_exit(1,"Can't write to STDOUT at main() #C1\n");
+                  error_exit(errno,"main() #C1: %s\n",strerror(errno));
                 }
               }
               break;
@@ -453,7 +454,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
               }
               break;
     default:
-              error_exit(1,"FATAL: Invalid unit type\n");
+              error_exit(255,"main() #L1: Invalid unit type\n");
   }
 
   /*--- Close the input file ---------------------------------------*/
@@ -484,7 +485,6 @@ int64_t parse_periodictime(char *pszArg) {
   char *pszUnit             ;
   int   iLen, iVlen, iVal   ;
   int   iVlen_max           ;
-  int   i                   ;
 
   /*--- Get the lengths for the argument ---------------------------*/
   if ((iLen=strlen(pszArg))>=CTRL_FILE_BUF            ) {return -2;}
@@ -550,7 +550,9 @@ int change_to_rtprocess(int iPrio) {
 #ifdef _POSIX_PRIORITY_SCHEDULING
   /*--- Variables --------------------------------------------------*/
   struct sched_param spPrio;
+#ifdef RLIMIT_RTPRIO
   struct rlimit      rlInfo;
+#endif
 
   /*--- Initialize -------------------------------------------------*/
   memset(&spPrio, 0, sizeof(spPrio));
@@ -561,10 +563,10 @@ int change_to_rtprocess(int iPrio) {
                return errno;
              }
              if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {
-               if (giVerbose>0) {warning("\"-p3\" succeeded\n"        ,errno);}
+               if (giVerbose>0) {warning("\"-p3\": succeeded\n"         );}
                return 0;
              } else                                           {
-               if (giVerbose>0) {warning("\"-p3\" failed (errno:%d)\n",errno);}
+               if (giVerbose>0) {warning("\"-p3\": %s\n",strerror(errno));}
              }
     case 2 : 
 #ifdef RLIMIT_RTPRIO
@@ -574,12 +576,12 @@ int change_to_rtprocess(int iPrio) {
              if (rlInfo.rlim_cur > 0) {
                spPrio.sched_priority=rlInfo.rlim_cur;
                if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {
-                 if (giVerbose>0){warning("\"-p2\" succeeded\n"        ,errno);}
+                 if (giVerbose>0){warning("\"-p2\" succeeded\n"          );}
                  return 0;
                } else                                           {
-                 if (giVerbose>0){warning("\"-p2\" failed (errno:%d)\n",errno);}
+                 if (giVerbose>0){warning("\"-p2\": %s\n",strerror(errno));}
                }
-               if (giVerbose>0) {warning("\"-p2\" failed (errno:%d)\n",errno);}
+               if (giVerbose>0) {warning("\"-p2\": %s\n",strerror(errno));}
              } else if (giVerbose>0) {
                warning("RLIMIT_RTPRIO isn't set\n");
              }
@@ -588,13 +590,13 @@ int change_to_rtprocess(int iPrio) {
                return errno;
              }
              if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {
-               if (giVerbose>0) {warning("\"-p1\" succeeded\n"        ,errno);}
+               if (giVerbose>0) {warning("\"-p1\": succeeded\n"         );}
                return 0;
              } else                                           {
-               if (giVerbose>0) {warning("\"-p1\" failed (errno:%d)\n",errno);}
+               if (giVerbose>0) {warning("\"-p1\": %s\n",strerror(errno));}
              }
              return errno;
-    case 0 : if (giVerbose>0) {warning("\"-p0\" succeeded\n",errno);}
+    case 0 : if (giVerbose>0) {warning("\"-p0\": succeeded\n");}
              return  0;
     default: return -1;
   }
@@ -613,7 +615,7 @@ int read_1line(FILE *fp) {
   /*--- Variables --------------------------------------------------*/
   static int iHold = 0; /* set 1 if next character is currently held */
   static int iNextchar; /* variable for the next character           */
-  int        iChar0, iChar;
+  int        iChar;
 
   /*--- Reading and writing a line ---------------------------------*/
   while (1) {
@@ -624,7 +626,7 @@ int read_1line(FILE *fp) {
       case '\n':
                   while (putchar('\n' )==EOF) {
                     if (errno == EINTR) {continue;}
-                    error_exit(1,"Can't write to STDOUT at read_1line() #1\n");
+                    error_exit(errno,"putchar() #R1L-1: %s\n",strerror(errno));
                   }
                   iNextchar = getc(fp);
                   if (iNextchar!=EOF) {iHold=1;return 0;}
@@ -632,7 +634,7 @@ int read_1line(FILE *fp) {
       default:
                   while (putchar(iChar)==EOF) {
                     if (errno == EINTR) {continue;}
-                    error_exit(1,"Can't write to STDOUT at read_1line() #2\n");
+                    error_exit(errno,"putchar() #R1L-2: %s\n",strerror(errno));
                   }
     }
   }
@@ -668,9 +670,11 @@ top:
     tsDiff.tv_nsec =     0;
     while (1) {
       if (nanosleep(&tsDiff,NULL) != 0) {
-        if (errno != EINTR) {error_exit(1,"FATAL: Error at nanosleep()\n");}
+        if (errno != EINTR) {
+          error_exit(errno,"nanosleep() #1: %s\n",strerror(errno));
+        }
         if (clock_gettime(CLOCK_MONOTONIC,&tsPrev) != 0) {
-          error_exit(1,"FATAL: Error at clock_gettime() #1\n");
+          error_exit(errno,"clock_gettime()#1: %s\n",strerror(errno));
         }
         goto top; /* Go to "top" in case of a signal trap */
       }
@@ -684,7 +688,7 @@ top:
 
   /*--- If the "tsTo" has been already past, return immediately without sleep */
   if (clock_gettime(CLOCK_MONOTONIC,&tsNow) != 0) {
-    error_exit(1,"FATAL: Error at clock_gettime() #2\n");
+    error_exit(errno,"clock_gettime()#2: %s\n",strerror(errno));
   }
   if ((tsTo.tv_nsec - tsNow.tv_nsec) < 0) {
     tsDiff.tv_sec  = tsTo.tv_sec  - tsNow.tv_sec  -          1;
@@ -717,14 +721,14 @@ top:
   /*--- Sleep until the next interval period -----------------------*/
   if (nanosleep(&tsDiff,NULL) != 0) {
     if (errno == EINTR) {goto top;} /* Go to "top" in case of a signal trap */
-    error_exit(1,"FATAL: Error at nanosleep()\n");
+    error_exit(errno,"nanosleep() #2: %s\n",strerror(errno));
   }
 
   /*--- Update the amount of threshold time for recovery -----------*/
   if (giRecovery) {
     /* investigate the current time again */
     if (clock_gettime(CLOCK_MONOTONIC,&tsNow) != 0) {
-      error_exit(1,"FATAL: Error at clock_gettime() #3\n");
+      error_exit(errno,"clock_gettime() #3: %s\n",strerror(errno));
     }
     /* calculate the oversleeping time */
     if ((tsTo.tv_nsec - tsNow.tv_nsec) < 0) {
@@ -781,8 +785,8 @@ void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct) {
 
   /*--- Ignore multi calling ---------------------------------------*/
   if (iSig > 0) {
-    if (sigaction(SIGALRM,&gsaIgnr,NULL) != 0) {
-      error_exit(1,"FATAL: Error at sigaction() in the trap #R1\n");
+    if (sigaction(SIGHUP,&gsaIgnr,NULL) != 0) {
+      error_exit(errno,"sigaction() in the trap #R1: %s\n",strerror(errno));
     }
   }
 
@@ -803,8 +807,8 @@ void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct) {
 
   /*--- Restore the signal action ----------------------------------*/
   if (iSig > 0) {
-    if (sigaction(SIGALRM,&gsaAlrm,NULL) != 0) {
-      error_exit(1,"FATAL: Error at sigaction() in the trap #R2\n");
+    if (sigaction(SIGHUP,&gsaAlrm,NULL) != 0) {
+      error_exit(errno,"sigaction() in the trap #R2: %s\n",strerror(errno));
     }
   }
 }
@@ -829,8 +833,8 @@ void update_periodic_time_type_c(int iSig, siginfo_t *siInfo, void *pct) {
 
   /*--- Ignore multi calling ---------------------------------------*/
   if (iSig > 0) {
-    if (sigaction(SIGALRM,&gsaIgnr,NULL) != 0) {
-      error_exit(1,"FATAL: Error at sigaction() in the trap #C1\n");
+    if (sigaction(SIGHUP,&gsaIgnr,NULL) != 0) {
+      error_exit(errno,"sigaction() in the trap #C1: %s\n",strerror(errno));
     }
   }
 
@@ -870,8 +874,8 @@ void update_periodic_time_type_c(int iSig, siginfo_t *siInfo, void *pct) {
 
   /*--- Restore the signal action ----------------------------------*/
   if (iSig > 0) {
-    if (sigaction(SIGALRM,&gsaAlrm,NULL) != 0) {
-      error_exit(1,"FATAL: Error at sigaction() in the trap #C2\n");
+    if (sigaction(SIGHUP,&gsaAlrm,NULL) != 0) {
+      error_exit(errno,"sigaction() in the trap #C2: %s\n",strerror(errno));
     }
   }
 }
