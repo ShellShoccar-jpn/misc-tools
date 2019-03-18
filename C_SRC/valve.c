@@ -76,7 +76,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-17
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-18
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -218,11 +218,11 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-03-17 16:26:52 JST\n"
+    "Version : 2019-03-18 11:01:49 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
-    "This is a public domain software. (CC0)\n"
+    "This is public domain software. (CC0)\n"
     ,gpszCmdname,gpszCmdname);
   exit(1);
 }
