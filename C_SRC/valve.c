@@ -139,7 +139,6 @@ int64_t  gi8Peritime;     /* Periodic time in nanosecond (-1 means infinity) */
 int      giFd_ctrlfile;   /* File descriptor of the control file             */
 struct sigaction gsaIgnr; /* for ignoring signals during signal handlers     */
 struct sigaction gsaAlrm; /* for signal trap definition (action)             */
-struct stat gstInpfile;   /* stat for the input file                         */
 int      giRecovery;      /* 0:normal 1:Recovery mode                        */
 int      giVerbose;       /* speaks more verbosely by the greater number     */
 
@@ -218,7 +217,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-03-18 11:01:49 JST\n"
+    "Version : 2019-03-18 21:36:26 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -259,6 +258,7 @@ int main(int argc, char *argv[]) {
 int      iUnit;           /* 0:character 1:line 2-:undefined       */
 int      iPrio;           /* -p option number (default 1)          */
 int      iRet;            /* return code                           */
+int      iRet_r1l;        /* return value by read_1line()          */
 char    *pszPath;         /* filepath on arguments                 */
 char    *pszFilename;     /* filepath (for message)                */
 int      iFileno;         /* file# of filepath                     */
@@ -410,6 +410,7 @@ if (change_to_rtprocess(iPrio)==-1) {print_usage_and_exit();}
 iRet     =  0;
 iFileno  =  0;
 iFd      = -1;
+iRet_r1l =  0;
 while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
 
   /*--- Open one of the input files --------------------------------*/
@@ -421,13 +422,12 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
     while ((iFd=open(pszPath, O_RDONLY)) < 0) {
       if (errno == EINTR) {continue;}
       iRet = 1;
-      warning("%s: File open error\n",pszFilename);
+      warning("%s: File open error (errno:%d)\n",pszFilename,errno);
       iFileno++;
       break;
     }
     if (iFd < 0) {continue;}
   }
-  fstat(iFd, &gstInpfile);
   if (iFd == STDIN_FILENO) {
     fp = stdin;
     if (feof(stdin)) {clearerr(stdin);} /* Reset EOF condition when stdin */
@@ -448,8 +448,8 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
               break;
     case 1:
               while (1) {
-                spend_my_spare_time();
-                if (read_1line(fp)==EOF) {break;}
+                if ( iRet_r1l                 != EOF) {spend_my_spare_time();}
+                if ((iRet_r1l=read_1line(fp)) !=   0) {break;                }
               }
               break;
     default:
@@ -604,8 +604,10 @@ int change_to_rtprocess(int iPrio) {
 }
 
 /*=== Read and write only one line ===================================
- * [ret] 0   : Finished reading and writing by reading a '\n'
- *       EOF : Finished reading and writing due to EOF              */
+ * [ret] 0   : Finished reading/writing due to '\n'
+ *       1   : Finished reading/writing due to '\n', which is the last
+ *             char of the file
+ *       EOF : Finished reading/writing due to EOF              */
 int read_1line(FILE *fp) {
 
   /*--- Variables --------------------------------------------------*/
@@ -619,16 +621,14 @@ int read_1line(FILE *fp) {
     switch (iChar) {
       case EOF:
                   return(EOF);
-                  break;
       case '\n':
                   while (putchar('\n' )==EOF) {
                     if (errno == EINTR) {continue;}
                     error_exit(1,"Can't write to STDOUT at read_1line() #1\n");
                   }
                   iNextchar = getc(fp);
-                  if (iNextchar==EOF) {        return(EOF);}
-                  else                {iHold=1;return(  0);}
-                  break;
+                  if (iNextchar!=EOF) {iHold=1;return 0;}
+                  else                {        return 1;}
       default:
                   while (putchar(iChar)==EOF) {
                     if (errno == EINTR) {continue;}
@@ -639,8 +639,7 @@ int read_1line(FILE *fp) {
 }
 
 /*=== Sleep until the next interval period ===========================
- * [in] gi8Peritime : Periodic time (-1 means infinity)
- *      gstInpfile  : stat for the input file which is opened now   */
+ * [in] gi8Peritime : Periodic time (-1 means infinity)             */
 void spend_my_spare_time(void) {
 
   /*--- Variables --------------------------------------------------*/
@@ -697,13 +696,9 @@ top:
   if (tsDiff.tv_sec < 0) {
     if (giVerbose>2) {warning("overslept\n");}
     if (
-         (
-           (tsDiff.tv_sec >=tsRecovmax.tv_sec )
-            &&
-           (tsDiff.tv_nsec> tsRecovmax.tv_nsec)
-         )
-          ||
-         ((gstInpfile.st_mode & S_IFMT) == S_IFREG)
+         (tsDiff.tv_sec >=tsRecovmax.tv_sec )
+          &&
+         (tsDiff.tv_nsec> tsRecovmax.tv_nsec)
        )
     {
       /* Set the next periodic time if the delay is short or
