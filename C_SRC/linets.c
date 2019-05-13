@@ -41,7 +41,7 @@
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-07
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-14
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -71,6 +71,9 @@
 /*--- macro constants ----------------------------------------------*/
 /* Buffer size for a timestamp string */
 #define LINE_BUF         80
+#ifndef CLOCK_MONOTONIC
+  #define CLOCK_MONOTONIC CLOCK_REALTIME /* for HP-UX */
+#endif
 
 /*--- prototype functions ------------------------------------------*/
 int read_1line(FILE *fp);
@@ -124,7 +127,7 @@ void print_usage_and_exit(void) {
     "          -u ........ Set the date in UTC when -c option is set\n"
     "                      (same as that of date command)\n"
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2019-05-07 02:11:29 JST\n"
+    "Version : 2019-05-14 03:48:41 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -183,10 +186,11 @@ if (setenv("POSIXLY_CORRECT","1",1) < 0) {
 /*=== Parse arguments ==============================================*/
 
 /*--- Set default parameters of the arguments ----------------------*/
-giFmtType  ='c';
-giTimeResol= 0 ;
-giDeltaMode= 0 ;
-giVerbose  = 0 ;
+giFmtType  ='c'            ;
+giTimeResol= 0             ;
+giDeltaMode= 0             ;
+giVerbose  = 0             ;
+gclkId     = CLOCK_REALTIME;
 
 /*--- Parse options which start by "-" -----------------------------*/
 while ((i=getopt(argc, argv, "0369cezduvh")) != -1) {

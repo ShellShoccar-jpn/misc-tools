@@ -119,6 +119,9 @@
 /* If you set the following definition to 2 or more, recovery mode will be
  * probably more effective. If unnecessary, set 0 to disable this.         */
 #define RECOVMAX_MULTIPLIER 2
+#ifndef CLOCK_MONOTONIC
+  #define CLOCK_MONOTONIC CLOCK_REALTIME /* for HP-UX */
+#endif
 
 /*--- prototype functions ------------------------------------------*/
 int64_t parse_periodictime(char *pszArg);

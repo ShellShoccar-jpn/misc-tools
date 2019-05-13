@@ -9,7 +9,7 @@
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-13
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-14
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -70,7 +70,7 @@ void print_usage_and_exit(void) {
     "Retuen  : The return value will be decided by the wrapped command\n"
     "          when PTY wrapping has succeed. However, return a non-zero\n"
     "          number by this wrapper when failed.\n"
-    "Version : 2019-05-13 20:44:36 JST\n"
+    "Version : 2019-05-14 03:23:16 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -193,9 +193,13 @@ if (pidMS == 0) {
       if (ioctl(giFd1s,I_PUSH,"ldterm"  ) < 0) {
         error_exit(255,"ioctl(I_PUSH,\"ldterm\") error\n"  );
       }
-      if (ioctl(giFd1s,I_PUSH,"ttcompat") < 0) {
-        error_exit(255,"ioctl(I_PUSH,\"ttcompat\") error\n");
-      }
+      #if !defined(_HPUX_SOURCE)
+        /* According to ldterm(7) on HP-UX man, "ttcompat" is unnecessary
+           for HP-UX system and it isn't actually provided to the system  */
+        if (ioctl(giFd1s,I_PUSH,"ttcompat") < 0) {
+          error_exit(255,"ioctl(I_PUSH,\"ttcompat\") error\n");
+        }
+      #endif
     }
   #endif
   #if defined(BSD)

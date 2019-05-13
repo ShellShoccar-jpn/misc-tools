@@ -9,7 +9,7 @@
 #                 directory
 # RET    : $?=0 (when all of the options are valid)
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-13
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-14
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -38,7 +38,7 @@ print_usage_and_exit () {
 	Usage   : ${0##*/} [-u]
 	Options : -u ... Put the compiled executable files onto the upper
 	                 directory
-	Version : 2019-05-13 23:09:30 JST
+	Version : 2019-05-14 03:45:05 JST
 	USAGE
   exit 1
 }
@@ -48,7 +48,7 @@ error_exit() {
 }
 
 # === Define the other parameters ====================================
-COMPILERS='cc gcc clang xlc c99 tcc'
+COMPILERS='clang gcc xlc cc c99 tcc'
 ACK=$(printf '\006')
 NAK=$(printf '\025')
 
