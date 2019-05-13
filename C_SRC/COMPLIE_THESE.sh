@@ -86,7 +86,7 @@ esac
 # === Choose the compiler command ====================================
 CC=''
 for cc in $COMPILERS; do
-  type cc >/dev/null 2>&1 && { CC=$cc; break; }
+  type $cc >/dev/null 2>&1 && { CC=$cc; break; }
 done
 case "$CC" in
   '') error_exit 1 'No compiler found'          ;;
