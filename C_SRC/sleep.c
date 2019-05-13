@@ -8,7 +8,9 @@
 #                       non-integer number here.
 # Retuen  : Return 0 only when succeeded to sleep
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-24
+# How to compile : cc -o __CMDNAME__ __SRCNAME__
+#
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-13
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -39,7 +41,7 @@ void print_usage_and_exit(void) {
     "                      give not only an integer number but also a\n"
     "                      non-integer number here.\n"
     "Retuen  : Return 0 only when succeeded to sleep\n"
-    "Version : 2019-03-24 11:38:31 JST\n"
+    "Version : 2019-05-13 19:24:23 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -74,9 +76,9 @@ int main(int argc, char *argv[]) {
   }
 
   /*=== Parse options ==============================================*/
-  if (argc != 2                            ) {print_usage_and_exit();}
-  if (sscanf(argv[1], "%lf%1s", &dNum) != 1) {print_usage_and_exit();}
-  if (dNum > INT_MAX                       ) {print_usage_and_exit();}
+  if (argc != 2                         ) {print_usage_and_exit();}
+  if (sscanf(argv[1], "%lf", &dNum) != 1) {print_usage_and_exit();}
+  if (dNum > INT_MAX                    ) {print_usage_and_exit();}
 
   /*=== Sleep ======================================================*/
   if (dNum <= 0                                   ) {exit(0);               }
@@ -87,5 +89,5 @@ int main(int argc, char *argv[]) {
   if (iRet != 0) {error_exit(iRet,"Error happend while nanosleeping\n");}
 
   /*=== Finish =====================================================*/
-  exit(0);
+  return 0;
 }

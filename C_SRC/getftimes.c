@@ -14,7 +14,9 @@
 # Retuen  : Return 0 only when timestamps of all files were able to be
 #           gotten.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-24
+# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
+#
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-13
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -29,6 +31,7 @@
 ####################################################################*/
 
 /*=== Initial Setting ==============================================*/
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,7 +55,7 @@ void print_usage_and_exit(void) {
     "          * The latter format is set by -l option.\n"
     "Retuen  : Return 0 only when timestamps of all files were able to be\n"
     "          gotten. \n"
-    "Version : 2019-03-24 11:39:42 JST\n"
+    "Version : 2019-05-13 19:22:23 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -74,7 +77,7 @@ void error_exit(int iErrno, const char* szFormat, ...) {
 # Main
 ####################################################################*/
 
-main(int argc, char *argv[]){
+int main(int argc, char *argv[]){
 
   /*=== Initial Setting ============================================*/
   struct stat stFileinfo;
@@ -87,6 +90,9 @@ main(int argc, char *argv[]){
   gpszCmdname = argv[0];
   for (i=0; *(gpszCmdname+i)!='\0'; i++) {
     if (*(gpszCmdname+i)=='/') {gpszCmdname=gpszCmdname+i+1;}
+  }
+  if (setenv("POSIXLY_CORRECT","1",1) < 0) {
+    error_exit(errno,"setenv() at initialization: \n", strerror(errno));
   }
 
   /*=== Parse options ==============================================*/
@@ -142,5 +148,5 @@ main(int argc, char *argv[]){
   }
 
   /*=== Finish =====================================================*/
-  exit((iNerror==0)?0:1);
+  return (iNerror==0) ? 0 : 1;
 }

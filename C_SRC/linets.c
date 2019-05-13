@@ -41,7 +41,7 @@
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-04-12
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-07
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -124,7 +124,7 @@ void print_usage_and_exit(void) {
     "          -u ........ Set the date in UTC when -c option is set\n"
     "                      (same as that of date command)\n"
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2019-04-12 15:15:56 JST\n"
+    "Version : 2019-05-07 02:11:29 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -175,6 +175,9 @@ int      i;               /* all-purpose int                       */
 gpszCmdname = argv[0];
 for (i=0; *(gpszCmdname+i)!='\0'; i++) {
   if (*(gpszCmdname+i)=='/') {gpszCmdname=gpszCmdname+i+1;}
+}
+if (setenv("POSIXLY_CORRECT","1",1) < 0) {
+  error_exit(errno,"setenv() at initialization: \n", strerror(errno));
 }
 
 /*=== Parse arguments ==============================================*/

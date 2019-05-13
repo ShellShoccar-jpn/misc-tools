@@ -2,8 +2,8 @@
 #
 # VALVE - Adjust the UNIX Pipe Streaming Speed
 #
-# USAGE   : valve [-clrs] [-p n] periodictime [file ...]
-#           valve [-clrs] [-p n] controlfile [file ...]
+# USAGE   : valve [-c|-l] [-r|-s] [-p n] periodictime [file ...]
+#           valve [-c|-l] [-r|-s] [-p n] controlfile [file ...]
 # Args    : periodictime  Periodic time from start sending the current
 #                         block (means a character or a line) to start
 #                         sending the next block.
@@ -64,21 +64,16 @@
 #                         but if failed, it will try the smaller numbers.
 # Retuen  : Return 0 only when finished successfully
 #
-# Note    : [To elder OS users]
-#             If you see an error message while compiling like that,
-#               > ... undefined reference to `clock_gettime'
-#               > ... undefined reference to `timer_create'
-#               > ... undefined reference to `timer_settime'
-#             Try "-lrt" option for cc as follows.
-#               $ cc -o valve valve.c -lrt
-#           [What's "#ifndef NOTTY" for?]
+# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt
+#
+# Note    : [What's "#ifndef NOTTY" for?]
 #             That is to avoid any unknown side effects by supporting
 #             TTY devices on the control file. If you are in some
 #             trouble by that, try to compile with #define NOTTY as
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-03-19
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-07
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -150,11 +145,11 @@ int      giVerbose;       /* speaks more verbosely by the greater number     */
 void print_usage_and_exit(void) {
   fprintf(stderr,
 #ifdef _POSIX_PRIORITY_SCHEDULING
-    "USAGE   : %s [-clrs] [-p n] periodictime [file ...]\n"
-    "          %s [-clrs] [-p n] controlfile [file ...]\n"
+    "USAGE   : %s [-c|-l] [-r|-s] [-p n] periodictime [file ...]\n"
+    "          %s [-c|-l] [-r|-s] [-p n] controlfile [file ...]\n"
 #else
-    "USAGE   : %s [-clrs] periodictime [file ...]\n"
-    "          %s [-clrs] controlfile [file ...]\n"
+    "USAGE   : %s [-c|-l] [-r|-s] periodictime [file ...]\n"
+    "          %s [-c|-l] [-r|-s] controlfile [file ...]\n"
 #endif
     "Args    : periodictime  Periodic time from start sending the current\n"
     "                        block (means a character or a line) to start\n"
@@ -219,7 +214,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-03-19 01:11:25 JST\n"
+    "Version : 2019-05-07 02:11:29 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -276,6 +271,9 @@ struct stat stCtrlfile;   /* stat for the control file             */
 gpszCmdname = argv[0];
 for (i=0; *(gpszCmdname+i)!='\0'; i++) {
   if (*(gpszCmdname+i)=='/') {gpszCmdname=gpszCmdname+i+1;}
+}
+if (setenv("POSIXLY_CORRECT","1",1) < 0) {
+  error_exit(errno,"setenv() at initialization: \n", strerror(errno));
 }
 setlocale(LC_CTYPE, "");
 
