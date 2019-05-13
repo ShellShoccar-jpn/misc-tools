@@ -2,9 +2,9 @@
  
 ######################################################################
 #
-# COMPILE_THESE.SH - Compile All C-progs in the Directory I am in
+# MAKE.SH - Compile All C-progs in the Directory I am in
 #
-# USAGE  : COMPLIE_THESE.sh [-u]
+# USAGE  : MAKE.sh [-u]
 # Options: -u ... Put the compiled executable files onto the upper
 #                 directory
 # RET    : $?=0 (when all of the options are valid)
@@ -38,7 +38,7 @@ print_usage_and_exit () {
 	Usage   : ${0##*/} [-u]
 	Options : -u ... Put the compiled executable files onto the upper
 	                 directory
-	Version : 2019-05-13 19:32:02 JST
+	Version : 2019-05-13 23:09:30 JST
 	USAGE
   exit 1
 }
