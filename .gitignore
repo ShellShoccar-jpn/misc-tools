@@ -1,0 +1,5 @@
+_*
+*.tmp
+C_SRC/*
+!C_SRC/*.sh
+!C_SRC/*.c
