@@ -52,6 +52,9 @@
 #if !defined(BSD) && !defined(__APPLE__) && !defined(__linux__)
   #include <stropts.h> /* for the systems using STREAMS subsystem */
 #endif
+#if !defined(TABDLY) && defined(OXTABS)
+  #define TABDLY OXTABS /* for classiic BSD */
+#endif
 /*--- prototype functions ------------------------------------------*/
 #ifdef RAWMODE_FOR_MASTER
   void restore_master_termios(void);
@@ -70,7 +73,7 @@ void print_usage_and_exit(void) {
     "Retuen  : The return value will be decided by the wrapped command\n"
     "          when PTY wrapping has succeed. However, return a non-zero\n"
     "          number by this wrapper when failed.\n"
-    "Version : 2019-05-14 15:50:39 JST\n"
+    "Version : 2019-05-14 17:59:05 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -145,7 +148,7 @@ if (giVerbose>0) {warning("verbose mode (level %d)\n",giVerbose);}
 /*=== Just exec() immediately if connected a tty ===================*/
 if (isatty(STDOUT_FILENO) == 1) {
   execvp(argv[0],&argv[0]);
-  error_exit(errno,"execvp() on master: \n", strerror(errno));
+  error_exit(errno,"%s: %s\n", argv[0], strerror(errno));
 }
 
 /*=== Save parameters "termios"/"winsize" of STDIN =================*/
@@ -193,7 +196,7 @@ if (pidMS == 0) {
       if (ioctl(giFd1s,I_PUSH,"ldterm"  ) < 0) {
         error_exit(255,"ioctl(I_PUSH,\"ldterm\") error\n"  );
       }
-      #if !defined(_HPUX_SOURCE)
+      #if !defined(__hpux) && !defined(_HPUX_SOURCE)
         /* According to ldterm(7) on HP-UX man, "ttcompat" is unnecessary
            for HP-UX system and it isn't actually provided to the system  */
         if (ioctl(giFd1s,I_PUSH,"ttcompat") < 0) {
@@ -237,7 +240,7 @@ if (pidMS == 0) {
   }
   /* Finally, exec the program which will be wrapped */
   execvp(argv[0],&argv[0]);
-  error_exit(errno,"execvp() on slave: \n", strerror(errno));
+  error_exit(errno,"%s: %s\n", argv[0], strerror(errno));
 }
 
 /*=== Turn into raw mode for master STDIN ==========================*/

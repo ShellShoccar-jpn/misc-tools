@@ -40,6 +40,8 @@
 # Retuen  : Return 0 only when finished successfully
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt
+#                  (if it doesn't work)
+# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
 # Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-14
 #
@@ -127,7 +129,7 @@ void print_usage_and_exit(void) {
     "          -u ........ Set the date in UTC when -c option is set\n"
     "                      (same as that of date command)\n"
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2019-05-14 03:48:41 JST\n"
+    "Version : 2019-05-14 21:18:00 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"

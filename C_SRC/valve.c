@@ -25,7 +25,8 @@
 #                         writing the file. This command will read the
 #                         new periodic time in 0.1 second after that.
 #                         If you want to make this command read it im-
-#                         mediately, send SIGHUP.
+#                         mediately, send SIGHUP. (On macOS and OpenBSD,
+#                         SIGALRM is used for it)
 #           file ........ Filepath to be send ("-" means STDIN)
 # Options : -c .......... (Default) Changes the periodic unit to
 #                         character. This option defines that the
@@ -65,6 +66,8 @@
 # Retuen  : Return 0 only when finished successfully
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt
+#                  (if it doesn't work)
+# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
 # Note    : [What's "#ifndef NOTTY" for?]
 #             That is to avoid any unknown side effects by supporting
@@ -73,7 +76,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-07
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-14
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -105,14 +108,15 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <locale.h>
-#ifdef _POSIX_PRIORITY_SCHEDULING
-#include <sched.h>
-#include <sys/resource.h>
+#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__)
+  #include <sched.h>
+  #include <sys/resource.h>
 #endif
 
 /*--- macro constants ----------------------------------------------*/
 /* Interval time for looking at the file which Preriodic time is written */
 #define FREAD_ITRVL_SEC  0
+#define FREAD_ITRVL_USEC 100000
 #define FREAD_ITRVL_NSEC 100000000
 /* Buffer size for the control file */
 #define CTRL_FILE_BUF 64
@@ -122,6 +126,11 @@
 #ifndef CLOCK_MONOTONIC
   #define CLOCK_MONOTONIC CLOCK_REALTIME /* for HP-UX */
 #endif
+#if !defined(__APPLE__) && !defined(__OpenBSD__)
+  #define SIG_FOR_ME SIGHUP
+#else
+  #define SIG_FOR_ME SIGALRM
+#endif
 
 /*--- prototype functions ------------------------------------------*/
 int64_t parse_periodictime(char *pszArg);
@@ -130,7 +139,7 @@ void spend_my_spare_time(void);
 int read_1line(FILE *fp);
 void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct);
 #ifndef NOTTY
-void update_periodic_time_type_c(int iSig, siginfo_t *siInfo, void *pct);
+  void update_periodic_time_type_c(int iSig, siginfo_t *siInfo, void *pct);
 #endif
 
 /*--- global variables ---------------------------------------------*/
@@ -147,7 +156,7 @@ int      giVerbose;       /* speaks more verbosely by the greater number     */
 /*--- exit with usage ----------------------------------------------*/
 void print_usage_and_exit(void) {
   fprintf(stderr,
-#ifdef _POSIX_PRIORITY_SCHEDULING
+#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__)
     "USAGE   : %s [-c|-l] [-r|-s] [-p n] periodictime [file ...]\n"
     "          %s [-c|-l] [-r|-s] [-p n] controlfile [file ...]\n"
 #else
@@ -178,7 +187,8 @@ void print_usage_and_exit(void) {
     "                        writing the file. This command will read the\n"
     "                        new periodic time in 0.1 second after that.\n"
     "                        If you want to make this command read it im-\n"
-    "                        mediately, send SIGHUP.\n"
+    "                        mediately, send SIGHUP. (On macOS and OpenBSD,\n"
+    "                        SIGALRM is used for it)\n"
     "          file ........ Filepath to be send (\"-\" means STDIN)\n"
     "Options : -c .......... (Default) Changes the periodic unit to\n"
     "                        character. This option defines that the\n"
@@ -207,7 +217,7 @@ void print_usage_and_exit(void) {
     "                        strictly the maximum instantaneous speed limit\n"
     "                        decided by periodictime.\n"
     "                        -r option will be disabled by this option.\n"
-#ifdef _POSIX_PRIORITY_SCHEDULING
+#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__)
     "          -p n ........ Process priority setting [0-3] (if possible)\n"
     "                         0: Normal process\n"
     "                         1: Weakest realtime process (default)\n"
@@ -217,7 +227,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-05-07 02:11:29 JST\n"
+    "Version : 2019-05-14 21:12:19 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -265,9 +275,13 @@ int      iFileno;         /* file# of filepath                     */
 int      iFd;             /* file descriptor                       */
 FILE    *fp;              /* file handle                           */
 int      i;               /* all-purpose int                       */
-struct itimerspec itInt;  /* for signal trap definition (interval) */
-struct sigevent   seInf;  /* for interval event definition         */
-timer_t           trId;   /* signal timer ID                       */
+#if !defined(__APPLE__) && !defined(__OpenBSD__)
+  struct itimerspec itInt;  /* for signal trap definition (interval) */
+  struct sigevent   seInf;  /* for interval event definition         */
+  timer_t           trId;   /* signal timer ID                       */
+#else
+  struct itimerval  itInt;  /* for signal trap definition (interval) */
+#endif
 struct stat stCtrlfile;   /* stat for the control file             */
 
 /*--- Initialize ---------------------------------------------------*/
@@ -292,7 +306,7 @@ while ((i=getopt(argc, argv, "clp:rsvh")) != -1) {
   switch (i) {
     case 'c': iUnit = 0;      break;
     case 'l': iUnit = 1;      break;
-#ifdef _POSIX_PRIORITY_SCHEDULING
+#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__)
     case 'p': if (sscanf(optarg,"%d",&iPrio) != 1) {print_usage_and_exit();}
               break;
 #endif
@@ -307,7 +321,7 @@ argc -= optind-1;
 argv += optind  ;
 if (giVerbose>0) {warning("verbose mode (level %d)\n",giVerbose);}
 #if RECOVMAX_MULTIPLIER > 0
-if (giVerbose>0) {warning("RECOVMAX_MULTIPLIER is %d\n",RECOVMAX_MULTIPLIER);}
+  if (giVerbose>0) {warning("RECOVMAX_MULTIPLIER is %d\n",RECOVMAX_MULTIPLIER);}
 #endif
 
 /*--- Parse the periodic time ----------------------------------------*/
@@ -344,7 +358,7 @@ if (gi8Peritime <= -2) {
     memset(&gsaAlrm, 0, sizeof(gsaAlrm));
     gsaAlrm.sa_sigaction = update_periodic_time_type_r;
     gsaAlrm.sa_flags     = SA_SIGINFO;
-    if (sigaction(SIGHUP,&gsaAlrm,NULL) != 0) {
+    if (sigaction(SIG_FOR_ME,&gsaAlrm,NULL) != 0) {
       error_exit(errno,"sigaction() in main() #a: %s\n",strerror(errno));
     }
 #ifndef NOTTY
@@ -362,28 +376,39 @@ if (gi8Peritime <= -2) {
     memset(&gsaAlrm, 0, sizeof(gsaAlrm));
     gsaAlrm.sa_sigaction = update_periodic_time_type_c;
     gsaAlrm.sa_flags     = SA_SIGINFO;
-    if (sigaction(SIGHUP,&gsaAlrm,NULL) != 0) {
+    if (sigaction(SIG_FOR_ME,&gsaAlrm,NULL) != 0) {
       error_exit(errno,"sigaction() in main() #b: %s\n",strerror(errno));
     }
 #endif
   }
 
   /* Start sending signal pulses to the signal trap */
-  memset(&seInf, 0, sizeof(seInf));
-  seInf.sigev_value.sival_int  = 0;
-  seInf.sigev_notify           = SIGEV_SIGNAL;
-  seInf.sigev_signo            = SIGHUP;
-  if (timer_create(CLOCK_MONOTONIC, &seInf, &trId)) {
-    error_exit(errno,"timer_create(): %s\n" ,strerror(errno));
-  }
-  memset(&itInt, 0, sizeof(itInt));
-  itInt.it_value.tv_sec     = FREAD_ITRVL_SEC;
-  itInt.it_value.tv_nsec    = FREAD_ITRVL_NSEC;
-  itInt.it_interval.tv_sec  = FREAD_ITRVL_SEC;
-  itInt.it_interval.tv_nsec = FREAD_ITRVL_NSEC;
-  if (timer_settime(trId,0,&itInt,NULL)) {
-    error_exit(errno,"timer_settime(): %s\n",strerror(errno));
-  }
+  #if !defined(__APPLE__) && !defined(__OpenBSD__)
+    memset(&seInf, 0, sizeof(seInf));
+    seInf.sigev_value.sival_int  = 0;
+    seInf.sigev_notify           = SIGEV_SIGNAL;
+    seInf.sigev_signo            = SIG_FOR_ME;
+    if (timer_create(CLOCK_MONOTONIC, &seInf, &trId)) {
+      error_exit(errno,"timer_create(): %s\n" ,strerror(errno));
+    }
+    memset(&itInt, 0, sizeof(itInt));
+    itInt.it_value.tv_sec     = FREAD_ITRVL_SEC;
+    itInt.it_value.tv_nsec    = FREAD_ITRVL_NSEC;
+    itInt.it_interval.tv_sec  = FREAD_ITRVL_SEC;
+    itInt.it_interval.tv_nsec = FREAD_ITRVL_NSEC;
+    if (timer_settime(trId,0,&itInt,NULL)) {
+      error_exit(errno,"timer_settime(): %s\n",strerror(errno));
+    }
+  #else
+    memset(&itInt, 0, sizeof(itInt));
+    itInt.it_interval.tv_sec  = FREAD_ITRVL_SEC;
+    itInt.it_interval.tv_usec = FREAD_ITRVL_USEC;
+    itInt.it_value.tv_sec     = FREAD_ITRVL_SEC;
+    itInt.it_value.tv_usec    = FREAD_ITRVL_USEC;
+    if (setitimer(ITIMER_REAL,&itInt,NULL)) {
+      error_exit(errno,"setitimer(): %s\n"    ,strerror(errno));
+    }
+  #endif
 }
 argc--;
 argv++;
@@ -548,12 +573,12 @@ int64_t parse_periodictime(char *pszArg) {
  *       > 0 : error (by system call, and the value means "errno")       */
 int change_to_rtprocess(int iPrio) {
 
-#ifdef _POSIX_PRIORITY_SCHEDULING
+#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__)
   /*--- Variables --------------------------------------------------*/
   struct sched_param spPrio;
-#ifdef RLIMIT_RTPRIO
-  struct rlimit      rlInfo;
-#endif
+  #ifdef RLIMIT_RTPRIO
+    struct rlimit      rlInfo;
+  #endif
 
   /*--- Initialize -------------------------------------------------*/
   memset(&spPrio, 0, sizeof(spPrio));
@@ -570,7 +595,7 @@ int change_to_rtprocess(int iPrio) {
                if (giVerbose>0) {warning("\"-p3\": %s\n",strerror(errno));}
              }
     case 2 : 
-#ifdef RLIMIT_RTPRIO
+      #ifdef RLIMIT_RTPRIO
              if ((getrlimit(RLIMIT_RTPRIO,&rlInfo))==-1) {
                return errno;
              }
@@ -586,7 +611,7 @@ int change_to_rtprocess(int iPrio) {
              } else if (giVerbose>0) {
                warning("RLIMIT_RTPRIO isn't set\n");
              }
-#endif
+      #endif
     case 1 : if ((spPrio.sched_priority=sched_get_priority_min(SCHED_RR))==-1) {
                return errno;
              }
@@ -786,7 +811,7 @@ void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct) {
 
   /*--- Ignore multi calling ---------------------------------------*/
   if (iSig > 0) {
-    if (sigaction(SIGHUP,&gsaIgnr,NULL) != 0) {
+    if (sigaction(SIG_FOR_ME,&gsaIgnr,NULL) != 0) {
       error_exit(errno,"sigaction() in the trap #R1: %s\n",strerror(errno));
     }
   }
@@ -808,7 +833,7 @@ void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct) {
 
   /*--- Restore the signal action ----------------------------------*/
   if (iSig > 0) {
-    if (sigaction(SIGHUP,&gsaAlrm,NULL) != 0) {
+    if (sigaction(SIG_FOR_ME,&gsaAlrm,NULL) != 0) {
       error_exit(errno,"sigaction() in the trap #R2: %s\n",strerror(errno));
     }
   }
@@ -834,7 +859,7 @@ void update_periodic_time_type_c(int iSig, siginfo_t *siInfo, void *pct) {
 
   /*--- Ignore multi calling ---------------------------------------*/
   if (iSig > 0) {
-    if (sigaction(SIGHUP,&gsaIgnr,NULL) != 0) {
+    if (sigaction(SIG_FOR_ME,&gsaIgnr,NULL) != 0) {
       error_exit(errno,"sigaction() in the trap #C1: %s\n",strerror(errno));
     }
   }
@@ -875,7 +900,7 @@ void update_periodic_time_type_c(int iSig, siginfo_t *siInfo, void *pct) {
 
   /*--- Restore the signal action ----------------------------------*/
   if (iSig > 0) {
-    if (sigaction(SIGHUP,&gsaAlrm,NULL) != 0) {
+    if (sigaction(SIG_FOR_ME,&gsaAlrm,NULL) != 0) {
       error_exit(errno,"sigaction() in the trap #C2: %s\n",strerror(errno));
     }
   }

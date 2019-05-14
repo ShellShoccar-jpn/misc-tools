@@ -38,7 +38,7 @@ print_usage_and_exit () {
 	Usage   : ${0##*/} [-u]
 	Options : -u ... Put the compiled executable files onto the upper
 	                 directory
-	Version : 2019-05-14 03:45:05 JST
+	Version : 2019-05-14 21:32:59 JST
 	USAGE
   exit 1
 }
@@ -99,10 +99,10 @@ find . -name '[0-9A-Za-z]*.c' |
 while IFS= read -r File_src; do
   # --- set filenames ------------------------------------------------
   file_aout=${File_src##*/}; file_aout=${file_aout%.c}
-  File_src_e=$(printf '%s\n' "$File_src"                |
-               sed "$(printf 's/[ \t\\\047"]/\\\\&/g')" )
-  File_aout_e=$(printf '%s\n' "$Dir_aout/$file_aout"     |
-                sed "$(printf 's/[ \t\\\047"]/\\\\&/g')" )
+  File_src_e=$(printf '%s\n' "$File_src"                   |
+               sed "$(printf 's/[ \t\\\047\042]/\\\\&/g')" )
+  File_aout_e=$(printf '%s\n' "$Dir_aout/$file_aout"        |
+                sed "$(printf 's/[ \t\\\047\042]/\\\\&/g')" )
   # --- export variables ---------------------------------------------
   export CC
   export File_src_e
@@ -111,7 +111,6 @@ while IFS= read -r File_src; do
   s=$(cat "$File_src"                                                    |
       sed -n '1,/^##*\*\/$/p'                                            |
       sed -n '/^# *How to compile *: */{s/^# *How to compile *: *//;p;}' |
-      head -n 1                                                          |
       awk '{                                                             #
              line="";                                                    #
              for (i=1; i<=NF; i++) {                                     #
@@ -123,9 +122,23 @@ while IFS= read -r File_src; do
              }                                                           #
              print substr(line,2);                                       #
            }'                                                            )
-  # --- Compile it ---------------------------------------------------
-  printf '%s\n' "$s" 1>&2
-  eval $s
+  # --- Try to compile it --------------------------------------------
+  printf '%s\n' "$s$ACK" |
+  while IFS= read -r line; do
+    if [ "${line%$ACK}" != "$line" ]; then
+      line=${line%$ACK}
+      last=1
+    else
+      last=0
+    fi
+    eval echo $line 1>&2
+    eval $line
+    [ $? -eq 0 ] && break
+    case $last in
+      1) echo '*** FAILED!! Give up compiling the source file.'   1>&2;;
+      0) echo '*** Failed! Retry compiling with another options.' 1>&2;;
+    esac
+  done
 done
 
 
