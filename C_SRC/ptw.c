@@ -1,6 +1,6 @@
 /*####################################################################
 #
-# PTW - Pseudo Teletype Wrapper
+# PTW - Pseudo Terminal Wrapper
 #
 # USAGE   : ptw command [argument ...]
 # Retuen  : The return value will be decided by the wrapped command
@@ -43,13 +43,13 @@
 #include <sys/types.h>
 #include <signal.h>
 #include <sys/wait.h>
-#ifndef TIOCGWINSZ
+#if !defined(TIOCGWINSZ) || defined(__APPLE__)
   #include <sys/ioctl.h>
 #endif
 #if (defined(__unix__) || defined(unix)) && !defined(USG)
   #include <sys/param.h>
 #endif
-#if !defined(BSD) && !defined(__linux__)
+#if !defined(BSD) && !defined(__APPLE__) && !defined(__linux__)
   #include <stropts.h> /* for the systems using STREAMS subsystem */
 #endif
 /*--- prototype functions ------------------------------------------*/
@@ -70,7 +70,7 @@ void print_usage_and_exit(void) {
     "Retuen  : The return value will be decided by the wrapped command\n"
     "          when PTY wrapping has succeed. However, return a non-zero\n"
     "          number by this wrapper when failed.\n"
-    "Version : 2019-05-14 03:23:16 JST\n"
+    "Version : 2019-05-14 15:50:39 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -180,7 +180,7 @@ if (pidMS == 0) {
   if ((giFd1s=open(psz,O_RDWR)) < 0) {
     error_exit(errno,"open(%s): %s\n", psz, strerror(errno));
   }
-  #if !defined(BSD) && !defined(__linux__)
+  #if !defined(BSD) && !defined(__APPLE__) && !defined(__linux__)
     /* On traditional System V OSs whose TTYs are impremented by STREAMS,
        it is necessary to set up stream if not enabled by autopush facility */
     if ((i=ioctl(giFd1s,I_FIND,"ldterm")) < 0) {
@@ -202,8 +202,9 @@ if (pidMS == 0) {
       #endif
     }
   #endif
-  #if defined(BSD)
-    /* On BSD, it's necessary to use TIOCSCTTY to assign controlling terminal */
+  #if defined(BSD) || defined(__APPLE__)
+    /* On BSD family (also macOS), it's necessary to use TIOCSCTTY to
+       assign controlling terminal.                                   */
     if (ioctl(giFd1s,TIOCSCTTY,(char*)0) < 0) {
       error_exit(255,"ioctl(TIOCSCTTY) error\n");
     }
