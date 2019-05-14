@@ -9,7 +9,7 @@
 #                 directory
 # RET    : $?=0 (when all of the options are valid)
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-14
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-15
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -38,7 +38,7 @@ print_usage_and_exit () {
 	Usage   : ${0##*/} [-u]
 	Options : -u ... Put the compiled executable files onto the upper
 	                 directory
-	Version : 2019-05-14 21:32:59 JST
+	Version : 2019-05-15 00:16:21 JST
 	USAGE
   exit 1
 }
@@ -133,10 +133,10 @@ while IFS= read -r File_src; do
     fi
     eval echo $line 1>&2
     eval $line
-    [ $? -eq 0 ] && break
+    [ $? -eq 0 ] && { echo '==> OK' 1>&2; break; }
     case $last in
-      1) echo '*** FAILED!! Give up compiling the source file.'   1>&2;;
-      0) echo '*** Failed! Retry compiling with another options.' 1>&2;;
+      1) echo '==> FAILED!! Give up compiling the source file.' 1>&2;;
+      0) echo '==> Failed! Retry compiling in another way.'     1>&2;;
     esac
   done
 done
