@@ -76,7 +76,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-14
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-16
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -108,7 +108,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <locale.h>
-#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__)
+#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
   #include <sched.h>
   #include <sys/resource.h>
 #endif
@@ -156,7 +156,7 @@ int      giVerbose;       /* speaks more verbosely by the greater number     */
 /*--- exit with usage ----------------------------------------------*/
 void print_usage_and_exit(void) {
   fprintf(stderr,
-#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__)
+#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
     "USAGE   : %s [-c|-l] [-r|-s] [-p n] periodictime [file ...]\n"
     "          %s [-c|-l] [-r|-s] [-p n] controlfile [file ...]\n"
 #else
@@ -217,7 +217,7 @@ void print_usage_and_exit(void) {
     "                        strictly the maximum instantaneous speed limit\n"
     "                        decided by periodictime.\n"
     "                        -r option will be disabled by this option.\n"
-#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__)
+#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
     "          -p n ........ Process priority setting [0-3] (if possible)\n"
     "                         0: Normal process\n"
     "                         1: Weakest realtime process (default)\n"
@@ -227,7 +227,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-05-14 21:12:19 JST\n"
+    "Version : 2019-05-16 12:16:48 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -306,7 +306,7 @@ while ((i=getopt(argc, argv, "clp:rsvh")) != -1) {
   switch (i) {
     case 'c': iUnit = 0;      break;
     case 'l': iUnit = 1;      break;
-#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__)
+#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
     case 'p': if (sscanf(optarg,"%d",&iPrio) != 1) {print_usage_and_exit();}
               break;
 #endif
@@ -573,7 +573,7 @@ int64_t parse_periodictime(char *pszArg) {
  *       > 0 : error (by system call, and the value means "errno")       */
 int change_to_rtprocess(int iPrio) {
 
-#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__)
+#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
   /*--- Variables --------------------------------------------------*/
   struct sched_param spPrio;
   #ifdef RLIMIT_RTPRIO
