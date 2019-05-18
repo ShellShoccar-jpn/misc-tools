@@ -9,7 +9,7 @@
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-18
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-19
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -43,14 +43,13 @@
 #include <sys/types.h>
 #include <signal.h>
 #include <sys/wait.h>
-#if !defined(TIOCGWINSZ) || defined(__APPLE__)
-  #include <sys/ioctl.h>
-#endif
 #if (defined(__unix__) || defined(unix)) && !defined(USG)
   #include <sys/param.h>
 #endif
 #if !defined(BSD) && !defined(__APPLE__) && !defined(__linux__)
-  #include <stropts.h> /* for the systems using STREAMS subsystem */
+  #include <stropts.h>    /* include file for ioctl() on POSIX-compliant OS */
+#else
+  #include <sys/ioctl.h>  /* include file for ioctl() on *BSD and Linux */
 #endif
 #if !defined(TABDLY) && defined(OXTABS)
   #define TABDLY OXTABS /* for classiic BSD */
@@ -73,7 +72,7 @@ void print_usage_and_exit(void) {
     "Retuen  : The return value will be decided by the wrapped command\n"
     "          when PTY wrapping has succeed. However, return a non-zero\n"
     "          number by this wrapper when failed.\n"
-    "Version : 2019-05-18 23:47:12 JST\n"
+    "Version : 2019-05-19 01:02:40 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
