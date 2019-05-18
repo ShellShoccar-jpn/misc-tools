@@ -72,7 +72,7 @@ void print_usage_and_exit(void) {
     "Retuen  : The return value will be decided by the wrapped command\n"
     "          when PTY wrapping has succeed. However, return a non-zero\n"
     "          number by this wrapper when failed.\n"
-    "Version : 2019-05-19 01:02:40 JST\n"
+    "Version : 2019-05-19 01:09:47 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -251,8 +251,8 @@ if (pidMS == 0) {
     if (tcgetattr(STDOUT_FILENO, &stTerms) < 0) {
       error_exit(errno,"tcgetattr() on slave: %s\n"   , strerror(errno));
     }
-    stTerms.c_lflag &= ~(ECHO  | ECHOE  | ECHOK | ECHONL);
-    stTerms.c_oflag &= ~(ONLCR | TABDLY                 );
+    stTerms.c_lflag &= ~( ECHO  | ECHOE  | ECHOK | ECHONL );
+    stTerms.c_oflag &= ~( ONLCR | TABDLY                  );
     if (tcsetattr(STDOUT_FILENO, TCSANOW, &stTerms)     < 0) {
       error_exit(errno,"tcsetattr() on slave #2: %s\n", strerror(errno));
     }
