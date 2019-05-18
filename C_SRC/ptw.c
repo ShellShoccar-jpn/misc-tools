@@ -6,7 +6,6 @@
 # Retuen  : The return value will be decided by the wrapped command
 #           when PTY wrapping has succeed. However, return a non-zero
 #           number by this wrapper when failed.
-#             * On OpenBSD, 0 will be always returned if success.
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
@@ -74,7 +73,7 @@ void print_usage_and_exit(void) {
     "Retuen  : The return value will be decided by the wrapped command\n"
     "          when PTY wrapping has succeed. However, return a non-zero\n"
     "          number by this wrapper when failed.\n"
-    "Version : 2019-05-18 22:37:27 JST\n"
+    "Version : 2019-05-18 23:47:12 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -303,6 +302,7 @@ if (isatty(STDOUT_FILENO) == 1) {
 
 /*=== Transceive data from/to the PTY ==============================*/
 /*--- Transceive ---------------------------------------------------*/
+iRet = 0;
 while (1) {
   j = (int)read(giFd1m, szTran, BUFSIZE);
   if (j <0) {
@@ -324,11 +324,16 @@ while (1) {
            - read() for PTY seems to work in non-blocking mode forcibly.
            - waitpid() can return 0 even though its children are still alive.
          Thus I give the following codes only to OpenBSD.                     */
-      if (waitpid(-1,&j,WNOHANG) >= 0) {continue;}
+      if (waitpid(-1,&j,WNOHANG) >= 0) {
+        iRet = (WIFEXITED(j)  ) ? WEXITSTATUS(j)  :
+               (WIFSIGNALED(j)) ? WTERMSIG(i)+127 :
+                                  254             ;
+        continue;
+      }
       if (errno!=ECHILD) {error_exit(errno,"waitpid(): %s\n", strerror(errno));}
       if (giVerbose>0) {warning("waitpid(): ECHILD occured\n");}
       close(giFd1m); giFd1m=-1;
-      return 0;
+      return iRet;
     #endif
   }
   k = j;
@@ -343,7 +348,9 @@ close(giFd1m); giFd1m=-1;
 
 /*=== Wait for the child to exit ===================================*/
 if (wait(&i) < 0) {error_exit(errno,"wait(): %s\n", strerror(errno));}
-iRet = (WIFEXITED(i)) ? WEXITSTATUS(i) : 254;
+iRet = (WIFEXITED(i)  ) ? WEXITSTATUS(i)  :
+       (WIFSIGNALED(i)) ? WTERMSIG(i)+127 :
+                          254             ;
 
 /*=== Finish with exit status the child returned basically =========*/
 return iRet;}
