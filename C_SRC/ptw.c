@@ -6,10 +6,11 @@
 # Retuen  : The return value will be decided by the wrapped command
 #           when PTY wrapping has succeed. However, return a non-zero
 #           number by this wrapper when failed.
+#             * On OpenBSD, 0 will be always returned if success.
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-14
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-18
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -73,7 +74,7 @@ void print_usage_and_exit(void) {
     "Retuen  : The return value will be decided by the wrapped command\n"
     "          when PTY wrapping has succeed. However, return a non-zero\n"
     "          number by this wrapper when failed.\n"
-    "Version : 2019-05-14 17:59:05 JST\n"
+    "Version : 2019-05-18 22:37:27 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -119,6 +120,10 @@ pid_t    pidMS;           /* PID (master or slave)                  */
 char   szTran[BUFSIZE];   /* for master-slave transceiver           */
 int    i, j, k, l;        /* all-purpose int                        */
 char*  psz;               /* all-purpose char*                      */
+#ifdef __OpenBSD__
+  struct sigaction saIgnr;  /* for ignoring SIGHUP during preparation */
+  struct sigaction saOrig;  /* for backing up signal action           */
+#endif
 /*--- Initialize ---------------------------------------------------*/
 gpszCmdname = argv[0];
 for (i=0; *(gpszCmdname+i)!='\0'; i++) {
@@ -212,7 +217,23 @@ if (pidMS == 0) {
       error_exit(255,"ioctl(TIOCSCTTY) error\n");
     }
   #endif
-  close(giFd1m); giFd1m=-1;
+  #ifndef __OpenBSD__
+    close(giFd1m); giFd1m=-1;
+  #else
+    /* On OpenBSD (at least <=6.5), it seems that it has some strange
+       behaviors on PTY.
+         - SIGHUP will be sent when the parent closes PTY master.
+       Thus I give the following codes only to OpenBSD.               */
+    memset(&saIgnr, 0, sizeof(saIgnr));
+    saIgnr.sa_handler   = SIG_IGN;
+    if (sigaction(SIGHUP,&saIgnr,&saOrig) != 0) {
+      error_exit(errno,"sigaction() #1: %s\n",strerror(errno));
+    }
+    close(giFd1m); giFd1m=-1;
+    if (sigaction(SIGHUP,&saOrig,NULL) != 0) {
+      error_exit(errno,"sigaction() #2c: %s\n",strerror(errno));
+    }
+  #endif
   /* Restore the saved STDIN parameters */
   if (iStdinIsATTY == 1) {
     if (tcsetattr(giFd1s, TCSANOW, &gstTermm)    < 0) {
@@ -294,7 +315,22 @@ while (1) {
     if (giVerbose>0) {warning("read() on mono RX: EIO occured\n");}
     j = 0;
   }
-  if (j==0) {break;}
+  if (j==0) {
+    #ifndef __OpenBSD__
+      break;
+    #else
+      /* On OpenBSD (at least <=6.5), it seems that it has some strange
+         behaviors on PTY.
+           - read() for PTY seems to work in non-blocking mode forcibly.
+           - waitpid() can return 0 even though its children are still alive.
+         Thus I give the following codes only to OpenBSD.                     */
+      if (waitpid(-1,&j,WNOHANG) >= 0) {continue;}
+      if (errno!=ECHILD) {error_exit(errno,"waitpid(): %s\n", strerror(errno));}
+      if (giVerbose>0) {warning("waitpid(): ECHILD occured\n");}
+      close(giFd1m); giFd1m=-1;
+      return 0;
+    #endif
+  }
   k = j;
   while (k > 0) {
     l = (int)write(STDOUT_FILENO, szTran+j-k, k);
