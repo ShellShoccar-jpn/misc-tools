@@ -50,7 +50,7 @@ print_usage_and_exit () {
 	                       the base directory of the relative path is
 	                       regarded as the directory which MAKE.sh is in.
 	          -c compiler  Set the compiler command to "compiler"
-	Version : 2019-05-20 02:00:10 JST
+	Version : 2019-05-20 02:45:19 JST
 	USAGE
   exit 1
 }
@@ -121,12 +121,12 @@ while [ $# -gt 0 ]; do
        esac
        CMD_cc=$s
        optmode=''; shift; continue                                            ;;
-    d) case "$Dir_bin" in
-         /*) [ -d "$Dir_bin"             ] || {
-               error_exit 1 'Invalid dir by -d,--bindir option'
+    d) case "$s" in
+         /*) ([ -d "$s"          ] && [ -w "$s"          ]) || {
+               error_exit 1 'Invalid directory by -d,--bindir option'
              }                                                         ;;
-          *) [ -d "$Homedir/$Dir_bin"    ] || {
-               error_exit 1 'Invalid dir by -d,--bindir option'
+          *) ([ -d "$Homedir/$s" ] && [ -w "$Homedir/$s" ]) || {
+               error_exit 1 'Invalid directory by -d,--bindir option'
              }                                                         ;;
        esac
        Dir_bin=${s%/}
