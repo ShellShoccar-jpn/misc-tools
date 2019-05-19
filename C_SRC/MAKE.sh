@@ -4,12 +4,18 @@
 #
 # MAKE.SH - Compile All C-progs in the Directory I am in
 #
-# USAGE  : MAKE.sh [-u]
-# Options: -u ... Put the compiled executable files onto the upper
-#                 directory
-# RET    : $?=0 (when all of the options are valid)
+# USAGE   : MAKE.sh [options]
+# Options : -u ......... Put the compiled executable files onto the
+#                        upper directory
+#           -d dir ..... Set the directory for compiled execute files
+#                        to "dir"
+#                        Howerer, if you set it as a relative path,
+#                        the base directory of the relative path is
+#                        regarded as the directory which MAKE.sh is in.
+#           -c compiler  Set the compiler command to "compiler"
+# Ret     : $?=0 (when all of the options are valid)
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-15
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-20
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -35,10 +41,16 @@ export UNIX_STD=2003     # to make HP-UX comply with POSIX
 # === Define the functions for printing usage and error message ======
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
-	Usage   : ${0##*/} [-u]
-	Options : -u ... Put the compiled executable files onto the upper
-	                 directory
-	Version : 2019-05-15 00:16:21 JST
+	Usage   : ${0##*/} [options]
+	Options : -u ......... Put the compiled executable files onto the
+	                       upper directory
+	          -d dir ..... Set the directory for compiled execute files
+	                       to "dir"
+	                       Howerer, if you set it as a relative path,
+	                       the base directory of the relative path is
+	                       regarded as the directory which MAKE.sh is in.
+	          -c compiler  Set the compiler command to "compiler"
+	Version : 2019-05-20 02:00:10 JST
 	USAGE
   exit 1
 }
@@ -46,6 +58,9 @@ error_exit() {
   ${2+:} false && echo "${0##*/}: $2" 1>&2
   exit $1
 }
+
+# === Get my directory path ==========================================
+Homedir=$(d=${0%/*}/; [ "_$d" = "_$0/" ] && d='./'; cd "$d"; pwd)
 
 # === Define the other parameters ====================================
 COMPILERS='clang gcc xlc cc c99 tcc'
@@ -57,54 +72,109 @@ NAK=$(printf '\025')
 # Parse arguments
 ######################################################################
 
-# === Initialize option parameters ===================================
-upperdir=0
-
-# === Parse arguments ================================================
-[ $# -gt 1 ] && print_usage_and_exit
-for arg in ${1+"$@"}; do
-  case "$arg" in
-    '-u') upperdir=1          ;;
-       *) print_usage_and_exit;;
+# === Get the options ================================================
+# --- initialize option parameters -----------------------------------
+optu=0
+CMD_cc=''
+Dir_bin=''
+#
+# --- get them -------------------------------------------------------
+optmode=''
+while [ $# -gt 0 ]; do
+  case $# in 0) break;; esac
+  case "$optmode" in
+    '') case "$1" in
+          -[cdu]*)      s=$(printf '%s\n' "${1#-}"                           |
+                            awk '{c = "_"; d = "_"; u = "_"; err = 0;        #
+                                  for (i=1;i<=length($0);i++) {              #
+                                    s = substr($0,i,1);                      #
+                                    if      (s == "c") {c  ="c";i++;break;}  #
+                                    else if (s == "d") {d  ="d";i++;break;}  #
+                                    else if (s == "u") {u  ="u";          }  #
+                                    else               {err= 1 ;          }  #
+                                  }                                          #
+                                  arg=substr($0,i);                          #
+                                  printf("%s%s%s%s %s",c,d,u,err,arg);     }')
+                        optarg=${s#* }
+                        case "${s%% *}" in *1*) print_usage_and_exit;; esac
+                        case "${s%% *}" in *c*) optmode='c'         ;; esac
+                        case "${s%% *}" in *d*) optmode='d'         ;; esac
+                        case "${s%% *}" in *u*) optu=1;             ;; esac
+                        case "$optarg" in
+                          '') shift; continue;;
+                           *) s=$optarg      ;;                        esac ;;
+          --upperdir)   optu=1     ; shift; continue                        ;;
+          --compiler=*) optmode='c'; s=${1#--compiler=}                     ;;
+          --bindir=*)   optmode='d'; s=${1#--bindir=}                       ;;
+          -*)           print_usage_and_exit                                ;;
+        esac                                                                  ;;
+    *)  s=$1                                                                  ;;
   esac
-done
+  case "$optmode" in
+    c) case "$s" in
+         */*) ([ -f "$s" ] && [ -x "$s" ]) || {
+                error_exit 1 'Invalid compiler by -c,--compiler option'
+              }                                                        ;;
+           *) type "$s" >/dev/null 2>&1    || {
+                error_exit 1 'Invalid compiler by -c,--compiler option'
+              }                                                        ;;
+       esac
+       CMD_cc=$s
+       optmode=''; shift; continue                                            ;;
+    d) case "$Dir_bin" in
+         /*) [ -d "$Dir_bin"             ] || {
+               error_exit 1 'Invalid dir by -d,--bindir option'
+             }                                                         ;;
+          *) [ -d "$Homedir/$Dir_bin"    ] || {
+               error_exit 1 'Invalid dir by -d,--bindir option'
+             }                                                         ;;
+       esac
+       Dir_bin=${s%/}
+       optmode=''; shift; continue                                            ;;
+  esac
+break; done
+
 
 
 ######################################################################
 # Main
 ######################################################################
 
-# === Get my directory path ==========================================
-Homedir=$(d=${0%/*}/; [ "_$d" = "_$0/" ] && d='./'; cd "$d"; pwd)
-
 # === Get the output directory path ==================================
-case $upperdir in
+case $optu in
   0) Dir_aout=. ;;
   *) Dir_aout=..;;
 esac
+case "$Dir_bin" in
+  '') :                    ;;
+   *) Dir_aout=${Dir_bin%/};;
+esac
 
 # === Choose the compiler command ====================================
-CC=''
-for cc in $COMPILERS; do
-  type $cc >/dev/null 2>&1 && { CC=$cc; break; }
-done
-case "$CC" in
-  '') error_exit 1 'No compiler found'          ;;
-   *) echo "I will use \"$CC\" as compiler" 1>&2;;
+case "$CMD_cc" in '')
+  for cc in $COMPILERS; do
+    type $cc >/dev/null 2>&1 && { CMD_cc=$cc; break; }
+  done
+;; esac
+case "$CMD_cc" in
+  '') s='No compiler found. Set an available compiler by -c,--compiler option'
+      error_exit 1 "$s"                                                       ;;
+   *) echo "I will use \"$CMD_cc\" as compiler" 1>&2                          ;;
 esac
 
 # === Complie all c-progs ============================================
 cd "$Homedir" || error_exit 1 "$Homedir: Can't move to the directory"
 find . -name '[0-9A-Za-z]*.c' |
+sed 's/^\.\///'               |
 while IFS= read -r File_src; do
   # --- set filenames ------------------------------------------------
-  file_aout=${File_src##*/}; file_aout=${file_aout%.c}
+  file_aout=${File_src%.c}
   File_src_e=$(printf '%s\n' "$File_src"                   |
                sed "$(printf 's/[ \t\\\047\042]/\\\\&/g')" )
   File_aout_e=$(printf '%s\n' "$Dir_aout/$file_aout"        |
                 sed "$(printf 's/[ \t\\\047\042]/\\\\&/g')" )
   # --- export variables ---------------------------------------------
-  export CC
+  export CMD_cc
   export File_src_e
   export File_aout_e
   # --- generate one liner to compile the file -----------------------
@@ -114,7 +184,7 @@ while IFS= read -r File_src; do
       awk '{                                                             #
              line="";                                                    #
              for (i=1; i<=NF; i++) {                                     #
-               if      ($i=="cc" && i==1 ) {s=ENVIRON["CC"         ];}   #
+               if      ($i=="cc" && i==1 ) {s=ENVIRON["CMD_cc"     ];}   #
                else if ($i=="__CMDNAME__") {s=ENVIRON["File_aout_e"];}   #
                else if ($i=="__SRCNAME__") {s=ENVIRON["File_src_e" ];}   #
                else                        {s=$i;                    }   #
