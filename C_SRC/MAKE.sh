@@ -15,7 +15,7 @@
 #           -c compiler  Set the compiler command to "compiler"
 # Ret     : $?=0 (when all of the options are valid)
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-20
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-21
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -50,7 +50,7 @@ print_usage_and_exit () {
 	                       the base directory of the relative path is
 	                       regarded as the directory which MAKE.sh is in.
 	          -c compiler  Set the compiler command to "compiler"
-	Version : 2019-05-20 02:45:19 JST
+	Version : 2019-05-21 03:50:55 JST
 	USAGE
   exit 1
 }
@@ -66,6 +66,8 @@ Homedir=$(d=${0%/*}/; [ "_$d" = "_$0/" ] && d='./'; cd "$d"; pwd)
 COMPILERS='clang gcc xlc cc c99 tcc'
 ACK=$(printf '\006')
 NAK=$(printf '\025')
+EE=$(printf 's/[]\t -\044\046-\052\073\074\076\077\134\140\173-\176[]/\\\\&/g')
+
 
 
 ######################################################################
@@ -169,10 +171,8 @@ sed 's/^\.\///'               |
 while IFS= read -r File_src; do
   # --- set filenames ------------------------------------------------
   file_aout=${File_src%.c}
-  File_src_e=$(printf '%s\n' "$File_src"                   |
-               sed "$(printf 's/[ \t\\\047\042]/\\\\&/g')" )
-  File_aout_e=$(printf '%s\n' "$Dir_aout/$file_aout"        |
-                sed "$(printf 's/[ \t\\\047\042]/\\\\&/g')" )
+  File_src_e=$( printf '%s\n' "$File_src"            | sed "$EE")
+  File_aout_e=$(printf '%s\n' "$Dir_aout/$file_aout" | sed "$EE")
   # --- export variables ---------------------------------------------
   export CMD_cc
   export File_src_e
