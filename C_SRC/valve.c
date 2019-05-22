@@ -76,7 +76,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-16
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-22
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -135,8 +135,8 @@
 /*--- prototype functions ------------------------------------------*/
 int64_t parse_periodictime(char *pszArg);
 int change_to_rtprocess(int iPrio);
-void spend_my_spare_time(void);
-int read_1line(FILE *fp);
+void spend_my_spare_time(struct timespec *ptsPrev);
+int read_1line(FILE *fp, struct timespec *ptsGet1stchar);
 void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct);
 #ifndef NOTTY
   void update_periodic_time_type_c(int iSig, siginfo_t *siInfo, void *pct);
@@ -227,7 +227,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-05-16 12:16:48 JST\n"
+    "Version : 2019-05-22 02:02:37 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -274,6 +274,8 @@ char    *pszFilename;     /* filepath (for message)                */
 int      iFileno;         /* file# of filepath                     */
 int      iFd;             /* file descriptor                       */
 FILE    *fp;              /* file handle                           */
+struct timespec ts1st;    /* the time when the 1st char was got
+                             (only for line mode)                  */
 int      i;               /* all-purpose int                       */
 #if !defined(__APPLE__) && !defined(__OpenBSD__)
   struct itimerspec itInt;  /* for signal trap definition (interval) */
@@ -434,10 +436,11 @@ switch (iUnit) {
 if (change_to_rtprocess(iPrio)==-1) {print_usage_and_exit();}
 
 /*=== Each file loop ===============================================*/
-iRet     =  0;
-iFileno  =  0;
-iFd      = -1;
-iRet_r1l =  0;
+iRet         =  0;
+iFileno      =  0;
+iFd          = -1;
+iRet_r1l     =  0;
+ts1st.tv_nsec= -1; /* -1 means that a valid time is not in yet */
 while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
 
   /*--- Open one of the input files --------------------------------*/
@@ -466,7 +469,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
   switch (iUnit) {
     case 0:
               while ((i=getc(fp)) != EOF) {
-                spend_my_spare_time();
+                spend_my_spare_time(NULL);
                 while (putchar(i)==EOF) {
                   if (errno == EINTR) {continue;}
                   error_exit(errno,"main() #C1: %s\n",strerror(errno));
@@ -474,9 +477,18 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
               }
               break;
     case 1:
+              if (ts1st.tv_nsec == -1) {
+                iRet_r1l = read_1line(fp,&ts1st);
+                spend_my_spare_time(&ts1st);
+                if (iRet_r1l != 0) {break;}
+              }
               while (1) {
-                if ( iRet_r1l                 != EOF) {spend_my_spare_time();}
-                if ((iRet_r1l=read_1line(fp)) !=   0) {break;                }
+                if ( iRet_r1l                      != EOF) {
+                  spend_my_spare_time(NULL);
+                }
+                if ((iRet_r1l=read_1line(fp,NULL)) !=   0) {
+                  break;
+                }
               }
               break;
     default:
@@ -632,11 +644,14 @@ int change_to_rtprocess(int iPrio) {
 }
 
 /*=== Read and write only one line ===================================
+ * [in] fp            : Filehandle for read
+ *      ptsGet1stchar : If this is not null, the time when the top
+ *                      character has been gotten will be set.
  * [ret] 0   : Finished reading/writing due to '\n'
  *       1   : Finished reading/writing due to '\n', which is the last
  *             char of the file
  *       EOF : Finished reading/writing due to EOF              */
-int read_1line(FILE *fp) {
+int read_1line(FILE *fp, struct timespec *ptsGet1stchar) {
 
   /*--- Variables --------------------------------------------------*/
   static int iHold = 0; /* set 1 if next character is currently held */
@@ -644,8 +659,13 @@ int read_1line(FILE *fp) {
   int        iChar;
 
   /*--- Reading and writing a line ---------------------------------*/
+  if (iHold) {iChar=iNextchar; iHold=0;} else {iChar=getc(fp);}
+  if (ptsGet1stchar != NULL) {
+    if (clock_gettime(CLOCK_MONOTONIC,ptsGet1stchar) != 0) {
+      error_exit(errno,"clock_gettime() in read_1line(): %s\n",strerror(errno));
+    }
+  }
   while (1) {
-    if (iHold) {iChar=iNextchar; iHold=0;} else {iChar=getc(fp);}
     switch (iChar) {
       case EOF:
                   return(EOF);
@@ -663,12 +683,14 @@ int read_1line(FILE *fp) {
                     error_exit(errno,"putchar() #R1L-2: %s\n",strerror(errno));
                   }
     }
+    if (iHold) {iChar=iNextchar; iHold=0;} else {iChar=getc(fp);}
   }
 }
 
 /*=== Sleep until the next interval period ===========================
- * [in] gi8Peritime : Periodic time (-1 means infinity)             */
-void spend_my_spare_time(void) {
+ * [in] gi8Peritime : Periodic time (-1 means infinity)
+        ptsPrev     : If not null, set it to tsPrev and exit immediately */
+void spend_my_spare_time(struct timespec *ptsPrev) {
 
   /*--- Variables --------------------------------------------------*/
   static struct timespec tsPrev = {0,0}; /* the time when this func
@@ -678,16 +700,24 @@ void spend_my_spare_time(void) {
   struct timespec        tsTo                ;
   struct timespec        tsDiff              ;
 
-  static int64_t         i8LastPertitime = -1;
+  static int64_t         i8LastPeritime  = -1;
 
   uint64_t               ui8                 ;
 
+  /*--- Set tsPrev and exit if ptsPrev has a time ------------------*/
+  if (ptsPrev) {
+    tsPrev.tv_sec  = ptsPrev->tv_sec ;
+    tsPrev.tv_nsec = ptsPrev->tv_nsec;
+    i8LastPeritime = gi8Peritime;
+    return;
+  }
+
 top:
-  /*--- Reset tsPrev if gi8Peritime was changed ------------------*/
-  if (gi8Peritime != i8LastPertitime) {
-    tsPrev.tv_sec   = 0;
-    tsPrev.tv_nsec  = 0;
-    i8LastPertitime = gi8Peritime;
+  /*--- Reset tsPrev if gi8Peritime was changed --------------------*/
+  if (gi8Peritime != i8LastPeritime) {
+    tsPrev.tv_sec  = 0;
+    tsPrev.tv_nsec = 0;
+    i8LastPeritime = gi8Peritime;
   }
 
   /*--- If "gi8Peritime" is neg., sleep until a signal comes -----*/
@@ -700,7 +730,7 @@ top:
           error_exit(errno,"nanosleep() #1: %s\n",strerror(errno));
         }
         if (clock_gettime(CLOCK_MONOTONIC,&tsPrev) != 0) {
-          error_exit(errno,"clock_gettime()#1: %s\n",strerror(errno));
+          error_exit(errno,"clock_gettime() #1: %s\n",strerror(errno));
         }
         goto top; /* Go to "top" in case of a signal trap */
       }
@@ -714,7 +744,7 @@ top:
 
   /*--- If the "tsTo" has been already past, return immediately without sleep */
   if (clock_gettime(CLOCK_MONOTONIC,&tsNow) != 0) {
-    error_exit(errno,"clock_gettime()#2: %s\n",strerror(errno));
+    error_exit(errno,"clock_gettime() #2: %s\n",strerror(errno));
   }
   if ((tsTo.tv_nsec - tsNow.tv_nsec) < 0) {
     tsDiff.tv_sec  = tsTo.tv_sec  - tsNow.tv_sec  -          1;
