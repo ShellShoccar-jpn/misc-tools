@@ -2,14 +2,19 @@
 #
 # PTW - Pseudo Terminal Wrapper
 #
-# USAGE   : ptw command [argument ...]
+# USAGE   : ptw [-f] command [argument ...]
+# Options : -f ... Forcibly wrap the command in a PTY even though the
+#                  command is placed at the end of the pipeline.
+#                  Originally, it isn't necessary to use a PTY because
+#                  the command placed at the end has a TTY-connected
+#                  STDOUT.
 # Retuen  : The return value will be decided by the wrapped command
 #           when PTY wrapping has succeed. However, return a non-zero
 #           number by this wrapper when failed.
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-19
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-21
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -44,12 +49,12 @@
 #include <signal.h>
 #include <sys/wait.h>
 #if (defined(__unix__) || defined(unix)) && !defined(USG)
-  #include <sys/param.h>
+  #include <sys/param.h> /* get OS identification macro */
 #endif
 #if !defined(BSD) && !defined(__APPLE__) && !defined(__linux__)
-  #include <stropts.h>    /* include file for ioctl() on POSIX-compliant OS */
+  #include <stropts.h>   /* include file for ioctl() on POSIX-compliant OS */
 #else
-  #include <sys/ioctl.h>  /* include file for ioctl() on *BSD and Linux */
+  #include <sys/ioctl.h> /* include file for ioctl() on *BSD and Linux */
 #endif
 #if !defined(TABDLY) && defined(OXTABS)
   #define TABDLY OXTABS /* for classiic BSD */
@@ -61,6 +66,7 @@
 /*--- global variables ---------------------------------------------*/
 char*    gpszCmdname;     /* The name of this command                        */
 int      giVerbose;       /* speaks more verbosely by the greater number     */
+int      giForciblepty;   /* set 1 or more to use PTY forcibly               */
 int      giFd1m, giFd1s;  /* PTY file descriptors                            */
 struct termios gstTermm;  /* stdin terimios for master                       */
 
@@ -68,11 +74,16 @@ struct termios gstTermm;  /* stdin terimios for master                       */
 /*--- exit with usage ----------------------------------------------*/
 void print_usage_and_exit(void) {
   fprintf(stderr,
-    "USAGE   : %s command [argument ...]\n"
+    "USAGE   : %s [-f] command [argument ...]\n"
+    "Options : -f ... Forcibly wrap the command in a PTY even though the\n"
+    "                 command is placed at the end of the pipeline.\n"
+    "                 Originally, it isn't necessary to use a PTY because\n"
+    "                 the command placed at the end has a TTY-connected\n"
+    "                 STDOUT.\n"
     "Retuen  : The return value will be decided by the wrapped command\n"
     "          when PTY wrapping has succeed. However, return a non-zero\n"
     "          number by this wrapper when failed.\n"
-    "Version : 2019-05-19 01:09:47 JST\n"
+    "Version : 2019-05-21 14:09:38 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -131,14 +142,15 @@ giFd1m=-1;
 giFd1s=-1;
 /*=== Parse arguments ==============================================*/
 #if !defined(__linux__)
-while ((i=getopt(argc, argv,  "vh")) != -1) {
+while ((i=getopt(argc, argv,  "fvh")) != -1) {
 #else
 /* To make Linux complieant POSIX, "+" is required at the head of
    optstring on getopt() for only Linux                            */
-while ((i=getopt(argc, argv, "+vh")) != -1) {
+while ((i=getopt(argc, argv, "+fvh")) != -1) {
 #endif
   switch (i) {
-    case 'v': giVerbose++;    break;
+    case 'f': giForciblepty=1; break;
+    case 'v': giVerbose++;     break;
     case 'h': print_usage_and_exit();
     default : print_usage_and_exit();
   }
@@ -150,8 +162,15 @@ if (giVerbose>0) {warning("verbose mode (level %d)\n",giVerbose);}
 
 /*=== Just exec() immediately if connected a tty ===================*/
 if (isatty(STDOUT_FILENO) == 1) {
-  execvp(argv[0],&argv[0]);
-  error_exit(errno,"%s: %s\n", argv[0], strerror(errno));
+  if (giVerbose > 0) {warning("STDOUT is already connected to a TTY.\n", psz);}
+  if (!giForciblepty) {
+    if (giVerbose > 0) {warning("So, I'll do exec() without PTY.\n", psz);}
+    execvp(argv[0],&argv[0]);
+    error_exit(errno,"%s: %s\n", argv[0], strerror(errno));
+  }
+  if (giVerbose > 0) {
+    warning("However, I'll wrap it in a PTY because of \"-f\" option.\n", psz);
+  }
 }
 
 /*=== Save parameters "termios"/"winsize" of STDIN =================*/
@@ -182,7 +201,7 @@ if (pidMS == 0) {
   if (setsid() <0) {error_exit(errno,"setsid(): %s\n",strerror(errno));}
                        /* to be independent of the parent's session */
   if ((psz=ptsname(giFd1m)) == NULL) {error_exit(255,"Failed to ptsname()\n");}
-  if (giVerbose>0) {warning("PTY slave is \"%s\"\n", psz);}
+  if (giVerbose > 0) {warning("PTY slave is \"%s\"\n", psz);}
   if ((giFd1s=open(psz,O_RDWR)) < 0) {
     error_exit(errno,"open(%s): %s\n", psz, strerror(errno));
   }
@@ -311,7 +330,7 @@ while (1) {
     /* EIO suggests, in this case, that the child is already dead and
        it's no problem. However, I will print a message just in case
        if -v option is given.                                         */
-    if (giVerbose>0) {warning("read() on mono RX: EIO occured\n");}
+    if (giVerbose > 0) {warning("read() on mono RX: EIO occured\n");}
     j = 0;
   }
   if (j==0) {
@@ -330,7 +349,7 @@ while (1) {
         continue;
       }
       if (errno!=ECHILD) {error_exit(errno,"waitpid(): %s\n", strerror(errno));}
-      if (giVerbose>0) {warning("waitpid(): ECHILD occured\n");}
+      if (giVerbose > 0) {warning("waitpid(): ECHILD occured\n");}
       close(giFd1m); giFd1m=-1;
       return iRet;
     #endif
