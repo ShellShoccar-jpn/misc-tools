@@ -23,7 +23,7 @@
 #   * If the following headers is omitted, inserted by this function.
 #     "Content-Type:", "Content-Transfer-Encoding:", "MIME-Version:"
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-29
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-08-14
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -51,7 +51,7 @@ print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <mailfile>
 	Args    : <mailfile> ... Text data as an e-mail
-	Version : 2018-08-29 16:01:43 JST
+	Version : 2019-08-14 19:07:30 JST
 	          (POSIX Bourne Shell/POSIX commands/sendmail command/UTF-8)
 	USAGE
   exit 1
@@ -375,8 +375,13 @@ s=`f=''                                                                        #
      esac                                                                      #
    done                                                                        #
    # --- attach "From:" header value after the header section with only 1 line #
-   printf '_%s\n' "$f" | tr '\n' "$ACK"                                        `
-
+   printf '_%s\n' "$f" | tr '\n' "$ACK"                                        #
+   # --- return the variables "$ct_m" and "$cte"                               #
+   printf ":$ct_m $cte"                                                        #
+   `
+ct_m=${s##*:}; ct_m=${ct_m% *}
+cte=${s##* }
+s=${s%:*}
 
 # ===== Send the mail ================================================
 # --- take out the "From:" header value  -----------------------------
