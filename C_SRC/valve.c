@@ -76,7 +76,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-22
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-09-27
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -123,8 +123,13 @@
 /* If you set the following definition to 2 or more, recovery mode will be
  * probably more effective. If unnecessary, set 0 to disable this.         */
 #define RECOVMAX_MULTIPLIER 2
-#ifndef CLOCK_MONOTONIC
-  #define CLOCK_MONOTONIC CLOCK_REALTIME /* for HP-UX */
+#if !defined(MONOTONIC)
+  #define CLOCK_FOR_ME CLOCK_REALTIME /* for HP-UX */
+#elif defined(__sun) || defined(__SunOS)
+  /* timer_create() on Solaris requires privillage */
+  #define CLOCK_FOR_ME CLOCK_REALTIME
+#else
+  #define CLOCK_FOR_ME CLOCK_MONOTONIC
 #endif
 #if !defined(__APPLE__) && !defined(__OpenBSD__)
   #define SIG_FOR_ME SIGHUP
@@ -227,7 +232,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-05-22 02:02:37 JST\n"
+    "Version : 2019-09-27 08:39:18 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -390,7 +395,7 @@ if (gi8Peritime <= -2) {
     seInf.sigev_value.sival_int  = 0;
     seInf.sigev_notify           = SIGEV_SIGNAL;
     seInf.sigev_signo            = SIG_FOR_ME;
-    if (timer_create(CLOCK_MONOTONIC, &seInf, &trId)) {
+    if (timer_create(CLOCK_FOR_ME, &seInf, &trId)) {
       error_exit(errno,"timer_create(): %s\n" ,strerror(errno));
     }
     memset(&itInt, 0, sizeof(itInt));
@@ -661,7 +666,7 @@ int read_1line(FILE *fp, struct timespec *ptsGet1stchar) {
   /*--- Reading and writing a line ---------------------------------*/
   if (iHold) {iChar=iNextchar; iHold=0;} else {iChar=getc(fp);}
   if (ptsGet1stchar != NULL) {
-    if (clock_gettime(CLOCK_MONOTONIC,ptsGet1stchar) != 0) {
+    if (clock_gettime(CLOCK_FOR_ME,ptsGet1stchar) != 0) {
       error_exit(errno,"clock_gettime() in read_1line(): %s\n",strerror(errno));
     }
   }
@@ -729,7 +734,7 @@ top:
         if (errno != EINTR) {
           error_exit(errno,"nanosleep() #1: %s\n",strerror(errno));
         }
-        if (clock_gettime(CLOCK_MONOTONIC,&tsPrev) != 0) {
+        if (clock_gettime(CLOCK_FOR_ME,&tsPrev) != 0) {
           error_exit(errno,"clock_gettime() #1: %s\n",strerror(errno));
         }
         goto top; /* Go to "top" in case of a signal trap */
@@ -743,7 +748,7 @@ top:
   tsTo.tv_nsec = (long)(ui8%1000000000);
 
   /*--- If the "tsTo" has been already past, return immediately without sleep */
-  if (clock_gettime(CLOCK_MONOTONIC,&tsNow) != 0) {
+  if (clock_gettime(CLOCK_FOR_ME,&tsNow) != 0) {
     error_exit(errno,"clock_gettime() #2: %s\n",strerror(errno));
   }
   if ((tsTo.tv_nsec - tsNow.tv_nsec) < 0) {
@@ -783,7 +788,7 @@ top:
   /*--- Update the amount of threshold time for recovery -----------*/
   if (giRecovery) {
     /* investigate the current time again */
-    if (clock_gettime(CLOCK_MONOTONIC,&tsNow) != 0) {
+    if (clock_gettime(CLOCK_FOR_ME,&tsNow) != 0) {
       error_exit(errno,"clock_gettime() #3: %s\n",strerror(errno));
     }
     /* calculate the oversleeping time */
