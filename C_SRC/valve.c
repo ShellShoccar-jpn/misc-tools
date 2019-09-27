@@ -123,7 +123,7 @@
 /* If you set the following definition to 2 or more, recovery mode will be
  * probably more effective. If unnecessary, set 0 to disable this.         */
 #define RECOVMAX_MULTIPLIER 2
-#if !defined(MONOTONIC)
+#if !defined(CLOCK_MONOTONIC)
   #define CLOCK_FOR_ME CLOCK_REALTIME /* for HP-UX */
 #elif defined(__sun) || defined(__SunOS)
   /* timer_create() on Solaris requires privillage */
@@ -232,7 +232,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-09-27 08:39:18 JST\n"
+    "Version : 2019-09-27 13:56:15 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
