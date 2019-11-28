@@ -33,7 +33,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-29
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-11-28
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -74,17 +74,17 @@ print_usage_and_exit () {
 	Return  : \$?     ==0 ... one or more locking were success
 	                 !=0 ... all failure
 	          stdout ....... generated path of the lockfile
-	Example : lockid=$(pexlock -d /tmp/plock -w 10 foo) || exit 1 # do ex-lock
+	Example : lockid=\$(pexlock -d /tmp/plock -w 10 foo) || exit 1 # do ex-lock
 	             :
 	          (do something requires exclusive lock)
 	             :
-	          touch -c "$lockid" # extend lifetime if you want
+	          touch -c "\$lockid" # extend lifetime if you want
 	             :               # (but it needs to remain SUFFICIENT LIFETIME)
-	          punlock "$lockid"  # release the lock
+	          punlock "\$lockid"  # release the lock
 	Notice  : The lockfile is written with rw-rw-rw for sharing.
 	          If you want not to share it with others,
 	          you have to give the lockdir rwxrwx--- or rwx------ permisson.
-	Version : 2018-08-29 15:49:41 JST
+	Version : 2019-11-28 20:55:06 JST
 	USAGE
   exit 1
 }
