@@ -25,7 +25,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-29
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-12-27
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -68,7 +68,7 @@ print_usage_and_exit () {
 	Notice  : The lockfile is written with rw-rw-rw for sharing.
 	          If you want not to share it with others,
 	          you have to give the lockdir rwxrwx--- or rwx------ permisson.
-	Version : 2018-08-29 16:00:08 JST
+	Version : 2019-12-27 19:19:17 JST
 	USAGE
   exit 1
 }
@@ -81,7 +81,7 @@ error_exit() {
 }
 exit_trap () {
   trap - EXIT HUP INT QUIT PIPE ALRM TERM
-  rm -rf "${File_modlk:-}" >/dev/null 2>&1
+  rm -rf "${File_busy:-}" >/dev/null 2>&1
   case $# in 0) exit $?;; *) exit ${1:-0};; esac
 }
 
@@ -184,9 +184,9 @@ for lockname in ${1+"$@"}; do
   # 0) trim "/" at the end of argument
   lockname=${lockname%/}
   # 1) if the argument is as a sh-lock, separate lock-id from the argument
-  sublockname=''
+  memberid=''
   echo "_$lockname" | grep -Eq '^_.+/[0-9]{14}\.[0-9]+\.[0-9]+$' && {
-    sublockname=${lockname##*/}
+    memberid=${lockname##*/}
     lockname=${lockname%/*}
   }
   # 2) make the argument an absolute filepath and separate it into the
@@ -196,7 +196,7 @@ for lockname in ${1+"$@"}; do
      './'*) lockname="${Dir_home%}/${lockname#./}"   ;;    # as a path
     '../'*) lockname="${Dir_home%/*}/${lockname#../}";;    # as a path
        */*) lockname="${Dir_home%}/$lockname"        ;;    # as a path
-         *) case "$sublockname" in
+         *) case "$memberid" in
               '') lockname="$Dir_lock$lockname"          ;; # just a ex-lockname
                *) lockname="$Dir_lock$lockname/$lockname";; # just a sh-lockname
             esac
@@ -204,9 +204,9 @@ for lockname in ${1+"$@"}; do
   esac
   Dir_path="${lockname%/*}/"
   lockname="${lockname##*/}"
-  # 3) skip if the argument is a sh-lock without sublock-id
-  [ -d "$Dir_path$lockname" ] && [ -z "$sublockname" ] && {
-    warning "$lockname"': It is a sh-lockfile, but without sublock-id'
+  # 3) skip if the argument is a sh-lock without member-id
+  [ -d "$Dir_path$lockname" ] && [ -z "$memberid" ] && {
+    warning "$lockname"': member-id is required to unlock a sh-lockfile'
     continue
   }
   # 4) skip if the argument is one of some reserve names
@@ -218,17 +218,17 @@ for lockname in ${1+"$@"}; do
   esac
   printf '%s\n' "$lockname"                              |
   grep -Eq '^\.preshlock\.[0-9]{14}\.[0-9]+\.[0-9]+$' && {
-    warning "$lockname: '/' is reserved, skipped"
+    warning "$lockname: It contains some reserved phrases, skipped"
     continue
   }
 
-  # --- Try to unlock as a exclusive-lock ----------------------------
+  # --- Try to unlock the lockfile as a exclusive-lock ---------------
   rm "$Dir_path$lockname" 2>/dev/null && {
     count_success=$((count_success+1))
     continue
   }
 
-  # --- If failed, then try to unlock as a shared-lock ---------------
+  # --- If failed, then try to unlock it as a shared-lock ------------
   # 0) already unlocked?
   [ -d "$Dir_path$lockname" ] || {
     count_success=$((count_success+1))
@@ -241,36 +241,38 @@ for lockname in ${1+"$@"}; do
     try=1
   fi
   while [ $try -gt 0 ]; do
-    # 1-2) try to create the accesing right token file "modifying"
-    File_modlk="${Dir_path}$lockname.modifying"
-    (set -C; echo $ppid > "$File_modlk") 2>/dev/null || {
-      File_modlk=''                                   # retry  if already exists
+    # 1-2) try to create the accesing right token file "busy"
+    File_busy="${Dir_path}$lockname/.busy"
+    (set -C; echo $ppid > "$File_busy") 2>/dev/null || {
+      File_busy=''                                   # retry  if already exists
       [ $max_waiting_secs -ge 0 ] && try=$((try-1))
       case $try in 0) :;; *) sleep 1;; esac
       continue
     }
-    # 1-3) remove the sublock-id directory
-    [ -d "${Dir_path}$lockname/$sublockname" ] && {
-      rmdir "${Dir_path}$lockname/$sublockname" || {
-        try=-1                                        # exit loop abnormally
-        rm -f "$File_modlk" 2>/dev/null
-        File_modlk=''
+    # 1-3) remove the member-id directory
+    [ -d "${Dir_path}$lockname/$memberid" ] && {
+      rmdir "${Dir_path}$lockname/$memberid" || {
+        try=-2                                        # exit loop abnormally
+        rm -f "$File_busy" 2>/dev/null
+        File_busy=''
         break
       }
     }
     # 1-5) if the current number of the locking processes is 0,
     #      remove the sh-lock directory
-    n=$(ls -ld "${Dir_path}$lockname" 2>/dev/null |
-        awk '{n=$2-2;print (n>=0)?n:0;}'          )
+    n=$(ls -f1 "${Dir_path}$lockname" 2>/dev/null      |
+        awk 'BEGIN{n=0}; /^[0-9]/{n++;}; END{print n;}')
     case $n in
-      0) rm -rf "${Dir_path%/*}"
-         File_modlk=''
+      0) s=${Dir_path%/}; s="${s%/*}/.pshlock.${s##*/}.$$"
+         mv "${Dir_path%/}" "$s" || { try=-3; break; }
+         rm -rf "$s"
+         File_busy=''
          break
          ;;
     esac
     # 1-6) finish the loop successfully
-    rm -f "${Dir_path}$lockname.modifying" 2>/dev/null
-    File_modlk=''
+    rm -f "$File_busy" 2>/dev/null
+    File_busy=''
     break
   done
   # 2) $try > 0 : success and print the path of the generated lockfile
@@ -280,11 +282,15 @@ for lockname in ${1+"$@"}; do
   case $try in
     [1-9]*) :
             ;;
-         0) warning "$lockname"': timeout, try again later'
+         0) warning "$lockname"': timeout, try again later'        ; continue
             ;;
-        -1) warning "$lockname"': timeout, the lock-dir is broken!'
+        -1) warning "$lockname"': timeout, the lock-dir is broken!'; continue
             ;;
-        -*) warning "$lockname"': unexpedter error!'
+        -2) warning "$memberid"': Cannot remove the member'        ; continue
+            ;;
+        -3) warning "$lockname"': Cannot remove the lock-dir'      ; continue
+            ;;
+        -*) warning "$lockname"': unexpedter error!'               ; continue
             ;;
   esac
 

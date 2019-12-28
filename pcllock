@@ -33,7 +33,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2018-08-29
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-12-28
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -80,7 +80,7 @@ print_usage_and_exit () {
 	          stdout ....... enerated path of the lockfile (just lock-id)
 	Example : write the following line into the crontab file someone owned
 	          * * * * * pcllock -l 300 -w 10 -d /PATH/TO/LOCKDIR
-	Version : 2018-08-29 15:57:05 JST
+	Version : 2019-12-28 13:15:11 JST
 	USAGE
   exit 1
 }
@@ -93,7 +93,7 @@ error_exit() {
 }
 exit_trap () {
   trap - EXIT HUP INT QUIT PIPE ALRM TERM
-  rm -f "${tmpf_pids:-}" "${tmpf_time:-}" "${File_modlk:-}" >/dev/null 2>&1
+  rm -f "${tmpf_pids:-}" "${tmpf_time:-}" "${File_busy:-}" >/dev/null 2>&1
   i=$?
   case $# in 0) exit $i;; *) exit ${1:-0};; esac
 }
@@ -381,7 +381,7 @@ tmpf_time=$(mktempf0) || {
 # (And also remove the orphaned sh-lock access token file "modifying")
 touch -t $(expire_date_and_time $max_lifetime_secs) "$tmpf_time"
 find './' -type f \( \! -newer "$tmpf_time" \) |
-grep -E '^./[^/]+($|/[^/]+\.modifying$)'       | # <- with sh-lock access
+grep -E '^./[^/]+($|/[^/]+\.busy$)'          | # <- with sh-lock access
 # 1:old_ex-files                               # #    token file "modifying"
 xargs grep '^' /dev/null                       |
 grep ':[0-9]\{1,\}$'                           |
@@ -410,8 +410,8 @@ do
     try=1
   fi
   while [ $try -gt 0 ]; do
-    File_modlk="${Dir_lock}$lockname/$lockname.modifying"
-    (set -C; umask 0000; echo $$ > "$File_modlk") 2>/dev/null || {
+    File_busy="${Dir_lock}$lockname/$lockname/.busy"
+    (set -C; umask 0000; echo $$ > "$File_busy") 2>/dev/null || {
       [ $max_waiting_secs -ge 0 ] && try=$((try-1))   # retry if already exists
       case $try in 0) :;; *) sleep 1;; esac
       continue
@@ -434,17 +434,17 @@ do
   xargs rmdir
   # 3) if the current number of the locking processes is 0,
   #    remove the sh-lock directory
-  n=$(ls -ld "./$lockname/$lockname" 2>/dev/null |
-      awk '{n=$2-2;print (n>=0)?n:0;}'           )
+  n=$(ls -f1 "./$lockname/$lockname" 2>/dev/null     |
+      awk 'BEGIN{n=0}; /^[0-9]/{n++;}; END{print n;}')
   case $n in
     0) rm -rf "$Dir_lock$lockname"
-       File_modlk=''
+       File_busy=''
        continue
        ;;
   esac
   # 4) finish the loop successfully
-  rm -f "$File_modlk"
-  File_modlk=''
+  rm -f "$File_busy"
+  File_busy=''
 done
 IFS=$IFS0
 

@@ -23,7 +23,7 @@
 #                               The default value is 10.
 # Return  : $?     ==0 ... one or more locking were success
 #                  !=0 ... all failure
-#           stdout ....... enerated path of the lockfile (just lock-id)
+#           stdout ....... generated path of the lock-id
 #
 # Example : lockid=$(pshlock -n 5 -d /tmp/plock -w 10 foo) || exit 1 #do
 #              :                                                     #sh-lock
@@ -37,7 +37,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-11-28
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-12-27
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -81,7 +81,7 @@ print_usage_and_exit () {
 	                              The default value is 10.
 	Return  : \$?     ==0 ... one or more locking were success
 	                 !=0 ... all failure
-	          stdout ....... enerated path of the lockfile (just lock-id)
+	          stdout ....... generated path of the lock-id
 	Example : lockid=\$(pshlock -n 5 -d /tmp/plock -w 10 foo) || exit 1 #<do
 	             :                                                     # sh-lock
 	          (do something requires shared lock among up to 5 processes)
@@ -92,7 +92,7 @@ print_usage_and_exit () {
 	Notice  : The lockfile is written with rw-rw-rw for sharing.
 	          If you want not to share it with others,
 	          you have to give the lockdir rwxrwx--- or rwx------ permisson.
-	Version : 2019-11-28 20:55:55 JST
+	Version : 2019-12-27 19:19:17 JST
 	USAGE
   exit 1
 }
@@ -105,7 +105,7 @@ error_exit() {
 }
 exit_trap () {
   trap - EXIT HUP INT QUIT PIPE ALRM TERM
-  rm -rf "${Dir_prelk:-}" "${File_modlk:-}" >/dev/null 2>&1
+  rm -rf "${Dir_prelk:-}" "${File_busy:-}" >/dev/null 2>&1
   i=$?
   case $# in 0) exit $i;; *) exit ${1:-0};; esac
 }
@@ -227,28 +227,21 @@ for lockname in ${1+"$@"}; do
     continue
   }
   echo "_$lockname" | grep -Eq '^_\.preshlock\.[0-9]{14}\.[0-9]+\.[0-9]+$' && {
-    warning "$lockname: '/' is reserved, skip"
+    warning "$lockname: '.preshlock...' is reserved, skip"
     continue
   }
 
   # --- Prepare the pre-lock directory -------------------------------
   # 1) decide a lock-procid(yyyymmddhhmmss.uniqid.pid)
   s=$(ps -o pid,ppid | awk '$2=='"$$"'{print $1;exit}')
-  sublockname="$(date '+%Y%m%d%H%M%S').${s}.$ppid"
-  # 2) make a temp-dir
-  Dir_prelk="${Dir_lock}.preshlock.$sublockname"
-  mkdir "$Dir_prelk"
+  memberid="$(date '+%Y%m%d%H%M%S').${s}.$ppid"
+  # 2) make the pre-lock directory and the 1st member directory
+  #    - A "pre-lock" directory has to have a "2-layered-lockname",
+  #      like "<Dir_lock>/<pre-lock_dir}>/<LOCKNAME>/<LOCKNAME>"
+  Dir_prelk="${Dir_lock}.preshlock.$memberid"
+  mkdir -p "$Dir_prelk/$lockname/$lockname/$memberid"
   case $? in [!0]*)
-    warning "$lockname"': Failed to make a pre-lock dir #1'
-    continue
-    ;;
-  esac
-  # 3) make the 1st lockproc-id directory "into and into" the lockname directory
-  #    (The reason of "into and into" is to prevent from succeeding mv command
-  #     when the samenamed lock directory already exists.)
-  mkdir -p "$Dir_prelk/$lockname/$lockname/$sublockname"
-  case $? in [!0]*)
-    warning "$lockname"': Failed to make a pre-lock dir #2'
+    warning "$lockname"': Failed to make a pre-lock dir'
     continue
     ;;
   esac
@@ -261,9 +254,9 @@ for lockname in ${1+"$@"}; do
     try=1
   fi
   while [ $try -gt 0 ]; do
-    # 1-1) try to "mv" if the normal lockdir does not exist
+    # 1-1) try "mv" command to change the pre-lock directory to an authentic one
     cd "$Dir_lock$lockname/$lockname" 2>/dev/null || {
-      touch -c "$Dir_prelk/$lockname/$lockname/$sublockname"
+      touch -c "$Dir_prelk/$lockname/$lockname/$memberid"
       mv "$Dir_prelk/$lockname" "$Dir_lock$lockname" 2>/dev/null || {
         [ $max_waiting_secs -ge 0 ] && try=$((try-1)) # retry  if failed  to mv
         case $try in 0) :;; *) sleep 1;; esac
@@ -271,35 +264,36 @@ for lockname in ${1+"$@"}; do
       }
       break                                           # finish if succeed to mv
     }
-    # 1-2) try to create the accesing right token file "modifying"
-    File_modlk="$Dir_lock$lockname/$lockname.modifying"
-    (set -C; echo $ppid > "../$lockname.modifying") 2>/dev/null || {
-      File_modlk=''                                   # retry  if already exists
+    # 1-2) If couldn't do the change, then I'd try to create the member file.
+    #      For the purpose, try to create the editing token ".edit" at first
+    File_busy="$Dir_lock$lockname/$lockname/.busy"
+    (set -C; echo $ppid > "$File_busy") 2>/dev/null || {
+      File_busy=''                                    # retry  if already exists
       [ $max_waiting_secs -ge 0 ] && try=$((try-1))
       case $try in 0) :;; *) sleep 1;; esac
       continue
     }
     # 1-3) check the current number of the locking processes
-    n=$(ls -ld . 2>/dev/null | awk '{print $2-2;}')
+    n=$(ls -f1 2>/dev/null | awk 'BEGIN{n=0}; /^[0-9]/{n++;}; END{print n;}')
     [ $max_num_of_sharing -lt 0 ] || [ $n -lt $max_num_of_sharing ] || {
-      rm -f "../$lockname.modifying" 2>/dev/null                   # retry  if reached limit
-      File_modlk=''
+      rm -f "$File_busy" 2>/dev/null                  # retry  if reached limit
+      File_busy=''
       [ $max_waiting_secs -ge 0 ] && try=$((try-1))
       case $try in 0) :;; *) sleep 1;; esac
       continue
     }
-    # 1-4) create a sublock-id directory
+    # 1-4) create the member file
     s=$(ps -o pid,ppid | awk '$2=='"$$"'{print $1;exit}')
-    sublockname="$(date '+%Y%m%d%H%M%S').${s}.$ppid"
-    mkdir $sublockname || {
+    memberid="$(date '+%Y%m%d%H%M%S').${s}.$ppid"
+    mkdir "$memberid" || {
       try=-1                                          # exit loop abnormally
-      rm -f "../$lockname.modifying" 2>/dev/null
-      File_modlk=''
+      rm -f "$File_busy" 2>/dev/null
+      File_busy=''
       break
     }
     # 1-5) finish the loop successfully
-    rm -f "../$lockname.modifying" 2>/dev/null
-    File_modlk=''
+    rm -f "$File_busy" 2>/dev/null
+    File_busy=''
     break
   done
   # 2) $try > 0 : success and print the path of the generated lockfile
@@ -309,7 +303,7 @@ for lockname in ${1+"$@"}; do
   err=0
   case $try in
     [1-9]*) printf '%s%s/%s/%s\n'                                           \
-                   "$Dir_lock" "${lockname}" "${lockname}" "$sublockname"
+                   "$Dir_lock" "${lockname}" "${lockname}" "$memberid"
             ;;
          0) warning "$lockname"': timeout, try again later'
             err=1
