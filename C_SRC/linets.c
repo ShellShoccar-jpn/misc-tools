@@ -27,10 +27,13 @@
 #                                -6 or -9 option is specified)
 #                         -e ... "n[.n]"
 #                                The number of seconds since the UNIX
-#                                epoch (".n" is the same as -s)
+#                                epoch (".n" is the same as -c)
 #                         -z ... "n[.n]"
 #                                The number of seconds since this command
-#                                started (".n" is the same as -s)
+#                                started (".n" is the same as -c)
+#                         -Z ... "n[.n]"
+#                                The number of seconds since the first
+#                                line came (".n" is the same as -c)
 #           -d ........ Insert "delta-t" (the number of seconds since
 #                       started writing the previous line) into the next
 #                       to the current timestamp. So, two fields will
@@ -43,7 +46,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-14
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-01
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -118,10 +121,13 @@ void print_usage_and_exit(void) {
     "                               -6 or -9 option is specified)\n"
     "                        -e ... \"n[.n]\"\n"
     "                               The number of seconds since the UNIX\n"
-    "                               epoch (\".n\" is the same as -s)\n"
+    "                               epoch (\".n\" is the same as -c)\n"
     "                        -z ... \"n[.n]\"\n"
     "                               The number of seconds since this command\n"
-    "                               started (\".n\" is the same as -s)\n"
+    "                               started (\".n\" is the same as -c)\n"
+    "                        -Z ... \"n[.n]\"\n"
+    "                               The number of seconds since the fisrt\n"
+    "                               line came (\".n\" is the same as -c)\n"
     "          -d ........ Insert \"delta-t\" (the number of seconds since\n"
     "                      started writing the previous line) into the next\n"
     "                      to the current timestamp. So, two fields will\n"
@@ -129,7 +135,7 @@ void print_usage_and_exit(void) {
     "          -u ........ Set the date in UTC when -c option is set\n"
     "                      (same as that of date command)\n"
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2019-05-14 21:18:00 JST\n"
+    "Version : 2020-03-01 11:33:17 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -195,7 +201,7 @@ giVerbose  = 0             ;
 gclkId     = CLOCK_REALTIME;
 
 /*--- Parse options which start by "-" -----------------------------*/
-while ((i=getopt(argc, argv, "0369cezduvh")) != -1) {
+while ((i=getopt(argc, argv, "0369cezZduvh")) != -1) {
   switch (i) {
     case '0': giTimeResol = 0  ;                           break;
     case '3': giTimeResol = 3  ;                           break;
@@ -203,7 +209,9 @@ while ((i=getopt(argc, argv, "0369cezduvh")) != -1) {
     case '9': giTimeResol = 9  ;                           break;
     case 'c': giFmtType   = 'c'; gclkId = CLOCK_REALTIME ; break;
     case 'e': giFmtType   = 'e'; gclkId = CLOCK_REALTIME ; break;
-    case 'z': giFmtType   = 'z'; gclkId = CLOCK_MONOTONIC; break;
+    case 'Z': giFmtType   = 'Z'; gclkId = CLOCK_MONOTONIC; break;
+    case 'z': giFmtType   = 'z'; gclkId = CLOCK_MONOTONIC;
+              print_cur_timestamp();                       break;
     case 'd': giDeltaMode = 1  ;                           break;
     case 'u': (void)setenv("TZ", "UTC0", 1)              ; break;
     case 'v': giVerbose++      ;                           break;
@@ -377,7 +385,7 @@ void print_cur_timestamp(void) {
               strftime(szBuf, LINE_BUF, "%s", ptm);
               printf("%s", szBuf);
               break;
-    case 'z':
+    case 'Z':
               if (iFirst) {
                 tsZero.tv_sec=tsNow.tv_sec; tsZero.tv_nsec=tsNow.tv_nsec;
                 tsPrev.tv_sec=0           ; tsPrev.tv_nsec=0            ;
@@ -394,6 +402,12 @@ void print_cur_timestamp(void) {
               strftime(szBuf, LINE_BUF, "%s", ptm);
               printf("%s", szBuf);
               break;
+    case 'z':
+              tsZero.tv_sec=tsNow.tv_sec; tsZero.tv_nsec=tsNow.tv_nsec;
+              tsPrev.tv_sec=0           ; tsPrev.tv_nsec=0            ;
+              iFirst = 0;
+              giFmtType = 'Z';
+              return;
     default : error_exit(255,"print_cur_timestamp(): Unknown format\n");
   }
 
