@@ -90,15 +90,13 @@ int  read_1st_field_as_a_timestamp(FILE *fp, char *pszTime);
 int  read_and_write_a_line(FILE *fp);
 int  parse_calendartime(char* pszTime, struct timespec *ptsTime);
 int  parse_unixtime(char* pszTime, struct timespec *ptsTime);
-void spend_my_spare_time(struct timespec *ptsTo);
-void spend_my_spare_time_adj(struct timespec *ptsTo);
+void spend_my_spare_time(struct timespec *ptsTo, struct timespec *ptsOffset);
 int  change_to_rtprocess(int iPrio);
 
 /*--- global variables ---------------------------------------------*/
-struct timespec gtsZero;     /* The zero-point time                         */
-struct timespec gtsOffset;   /* Zero-point time to adjust the 1st field one */
 char*           gpszCmdname; /* The name of this command                    */
 int             giVerbose;   /* speaks more verbosely by the greater number */
+struct timespec gtsZero;     /* The zero-point time                         */
 
 /*=== Define the functions for printing usage and error ============*/
 
@@ -151,7 +149,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2020-03-17 01:34:50 JST\n"
+    "Version : 2020-03-17 02:27:36 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -190,19 +188,20 @@ int main(int argc, char *argv[]) {
 
 /*--- Variables ----------------------------------------------------*/
 int      iMode;           /* 0:"-c"  1:"-e"  2:"-z",
-                             4:"-cZ" 5:"-eZ" 6:"-zZ"                */
-int      iPrio;           /* -p option number (default 1)           */
-int      iRet;            /* return code                            */
-int      iGotOffset;      /* 0:NotYet 1:GetZeroPoint 2:Done         */
-char     szTime[33];      /* Buffer for the 1st field of lines      */
-struct timespec tsTime;   /* Parsed time for the 1st field          */
-fd_set   fdsRead;         /* To get the time when data has arrived  */
-char    *pszPath;         /* filepath on arguments                 */
-char    *pszFilename;     /* filepath (for message)                */
-int      iFileno;         /* file# of filepath                     */
-int      iFd;             /* file descriptor                       */
-FILE    *fp;              /* file handle                           */
-int      i;               /* all-purpose int                       */
+                             4:"-cZ" 5:"-eZ" 6:"-zZ"                     */
+int      iPrio;           /* -p option number (default 1)                */
+int      iRet;            /* return code                                 */
+int      iGotOffset;      /* 0:NotYet 1:GetZeroPoint 2:Done              */
+char     szTime[33];      /* Buffer for the 1st field of lines           */
+struct timespec tsTime;   /* Parsed time for the 1st field               */
+struct timespec tsOffset; /* Zero-point time to adjust the 1st field one */
+fd_set   fdsRead;         /* To get the time when data has arrived       */
+char    *pszPath;         /* filepath on arguments                       */
+char    *pszFilename;     /* filepath (for message)                      */
+int      iFileno;         /* file# of filepath                           */
+int      iFd;             /* file descriptor                             */
+FILE    *fp;              /* file handle                                 */
+int      i;               /* all-purpose int                             */
 
 /*--- Initialize ---------------------------------------------------*/
 gpszCmdname = argv[0];
@@ -288,7 +287,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           if (! parse_calendartime(szTime, &tsTime)) {
                             goto CLOSE_THISFILE;
                           }
-                          spend_my_spare_time(&tsTime);
+                          spend_my_spare_time(&tsTime, NULL);
                           switch (read_and_write_a_line(fp)) {
                             case  1: /* expected LF */
                                      break;
@@ -330,7 +329,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           if (! parse_unixtime(szTime, &tsTime)) {
                             goto CLOSE_THISFILE;
                           }
-                          spend_my_spare_time(&tsTime);
+                          spend_my_spare_time(&tsTime, NULL);
                           switch (read_and_write_a_line(fp)) {
                             case  1: /* expected LF */
                                      break;
@@ -373,19 +372,19 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                             goto CLOSE_THISFILE;
                           }
                           if (iGotOffset<2) {
-                            /* gtsOffset = gtsZero - tsTime */
+                            /* tsOffset = gtsZero - tsTime */
                             if ((gtsZero.tv_nsec - tsTime.tv_nsec) < 0) {
-                              gtsOffset.tv_sec = gtsZero.tv_sec 
+                              tsOffset.tv_sec  = gtsZero.tv_sec 
                                                  - tsTime.tv_sec  -          1;
-                              gtsOffset.tv_nsec= gtsZero.tv_nsec
+                              tsOffset.tv_nsec = gtsZero.tv_nsec
                                                  - tsTime.tv_nsec + 1000000000;
                             } else {
-                              gtsOffset.tv_sec = gtsZero.tv_sec -tsTime.tv_sec ;
-                              gtsOffset.tv_nsec= gtsZero.tv_nsec-tsTime.tv_nsec;
+                              tsOffset.tv_sec  = gtsZero.tv_sec -tsTime.tv_sec ;
+                              tsOffset.tv_nsec = gtsZero.tv_nsec-tsTime.tv_nsec;
                             }
                             iGotOffset=2;
                           }
-                          spend_my_spare_time_adj(&tsTime);
+                          spend_my_spare_time(&tsTime, &tsOffset);
                           switch (read_and_write_a_line(fp)) {
                             case  1: /* expected LF */
                                      break;
@@ -432,19 +431,19 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                             goto CLOSE_THISFILE;
                           }
                           if (iGotOffset==1) {
-                            /* gtsOffset = gtsZero - tsTime */
+                            /* tsOffset = gtsZero - tsTime */
                             if ((gtsZero.tv_nsec - tsTime.tv_nsec) < 0) {
-                              gtsOffset.tv_sec = gtsZero.tv_sec 
+                              tsOffset.tv_sec  = gtsZero.tv_sec 
                                                  - tsTime.tv_sec  -          1;
-                              gtsOffset.tv_nsec= gtsZero.tv_nsec
+                              tsOffset.tv_nsec = gtsZero.tv_nsec
                                                  - tsTime.tv_nsec + 1000000000;
                             } else {
-                              gtsOffset.tv_sec = gtsZero.tv_sec -tsTime.tv_sec ;
-                              gtsOffset.tv_nsec= gtsZero.tv_nsec-tsTime.tv_nsec;
+                              tsOffset.tv_sec  = gtsZero.tv_sec -tsTime.tv_sec ;
+                              tsOffset.tv_nsec = gtsZero.tv_nsec-tsTime.tv_nsec;
                             }
                             iGotOffset=2;
                           }
-                          spend_my_spare_time_adj(&tsTime);
+                          spend_my_spare_time(&tsTime, &tsOffset);
                           switch (read_and_write_a_line(fp)) {
                             case  1: /* expected LF */
                                      break;
@@ -492,19 +491,19 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                             goto CLOSE_THISFILE;
                           }
                           if (iGotOffset==1) {
-                            /* gtsOffset = gtsZero - tsTime */
+                            /* tsOffset = gtsZero - tsTime */
                             if ((gtsZero.tv_nsec - tsTime.tv_nsec) < 0) {
-                              gtsOffset.tv_sec = gtsZero.tv_sec 
+                              tsOffset.tv_sec  = gtsZero.tv_sec 
                                                  - tsTime.tv_sec  -          1;
-                              gtsOffset.tv_nsec= gtsZero.tv_nsec
+                              tsOffset.tv_nsec = gtsZero.tv_nsec
                                                  - tsTime.tv_nsec + 1000000000;
                             } else {
-                              gtsOffset.tv_sec = gtsZero.tv_sec -tsTime.tv_sec ;
-                              gtsOffset.tv_nsec= gtsZero.tv_nsec-tsTime.tv_nsec;
+                              tsOffset.tv_sec  = gtsZero.tv_sec -tsTime.tv_sec ;
+                              tsOffset.tv_nsec = gtsZero.tv_nsec-tsTime.tv_nsec;
                             }
                             iGotOffset=2;
                           }
-                          spend_my_spare_time_adj(&tsTime);
+                          spend_my_spare_time(&tsTime, &tsOffset);
                           switch (read_and_write_a_line(fp)) {
                             case  1: /* expected LF */
                                      break;
@@ -787,44 +786,11 @@ int parse_unixtime(char* pszTime, struct timespec *ptsTime) {
   return 1;
 }
 
-/*=== Sleep until the next interval period (w/o adjustment) ==========
- * [in] ptsTo : Time until which this function wait                */
-void spend_my_spare_time(struct timespec *ptsTo) {
-
-  /*--- Variables --------------------------------------------------*/
-  struct timespec tsDiff;
-  struct timespec tsNow ;
-
-  /*--- Calculate how long I wait ----------------------------------*/
-  /* tsNow = (current_time) */
-  if (clock_gettime(CLOCK_REALTIME,&tsNow) != 0) {
-    error_exit(errno,"clock_gettime() in spend_my_spare_time: %s\n",
-               strerror(errno));
-  }
-  /* tsDiff = ptsTo - tsNow */
-  if ((ptsTo->tv_nsec - gtsZero.tv_nsec) < 0) {
-    tsDiff.tv_sec  = ptsTo->tv_sec  - tsNow.tv_sec  -          1;
-    tsDiff.tv_nsec = ptsTo->tv_nsec - tsNow.tv_nsec + 1000000000;
-  } else {
-    tsDiff.tv_sec  = ptsTo->tv_sec  - tsNow.tv_sec ;
-    tsDiff.tv_nsec = ptsTo->tv_nsec - tsNow.tv_nsec;
-  }
-
-  /*--- Sleeping for tsDiff ----------------------------------------*/
-  while (nanosleep(&tsDiff,NULL) != 0) {
-    if (errno == EINVAL) { /* It means ptsNow is a past time, doesn't matter */
-      break;
-    }
-    error_exit(errno,"nanosleep() in spend_my_spare_time: %s\n",
-               strerror(errno));
-  }
-}
-
 /*=== Sleep until the next interval period (with adjustment) =========
  * [in] ptsTo     : Time until which this function wait
                     (given from the 1st field of a line, which not adjusted yet)
-        gtsOffset : [global] Offset for ptsTo                       */
-void spend_my_spare_time_adj(struct timespec *ptsTo) {
+        ptsOffset : Offset for ptsTo (set NULL if unnecessary)      */
+void spend_my_spare_time(struct timespec *ptsTo, struct timespec *ptsOffset) {
 
   /*--- Variables --------------------------------------------------*/
   struct timespec tsTo  ;
@@ -832,17 +798,23 @@ void spend_my_spare_time_adj(struct timespec *ptsTo) {
   struct timespec tsNow ;
 
   /*--- Calculate how long I wait ----------------------------------*/
-  /* tsTo = ptsTo + gtsOffset */
-  tsTo.tv_nsec = ptsTo->tv_nsec + gtsOffset.tv_nsec;
-  if (tsTo.tv_nsec > 999999999) {
-    tsTo.tv_nsec -= 1000000000;
-    tsTo.tv_sec   = ptsTo->tv_sec + gtsOffset.tv_sec + 1;
-  } else {
-    tsTo.tv_sec   = ptsTo->tv_sec + gtsOffset.tv_sec;
+  if (! ptsOffset) {
+    /* tsTo = ptsTo */
+    tsTo.tv_sec  = ptsTo->tv_sec ;
+    tsTo.tv_nsec = ptsTo->tv_nsec;
+  } else           {
+    /* tsTo = ptsTo + ptsOffset */
+    tsTo.tv_nsec = ptsTo->tv_nsec + ptsOffset->tv_nsec;
+    if (tsTo.tv_nsec > 999999999) {
+      tsTo.tv_nsec -= 1000000000;
+      tsTo.tv_sec   = ptsTo->tv_sec + ptsOffset->tv_sec + 1;
+    } else {
+      tsTo.tv_sec   = ptsTo->tv_sec + ptsOffset->tv_sec;
+    }
   }
   /* tsNow = (current_time) */
   if (clock_gettime(CLOCK_REALTIME,&tsNow) != 0) {
-    error_exit(errno,"clock_gettime() in spend_my_spare_time_adj(): %s\n",
+    error_exit(errno,"clock_gettime() in spend_my_spare_time(): %s\n",
                strerror(errno));
   }
   /* tsDiff = tsTo - tsNow */
@@ -859,7 +831,7 @@ void spend_my_spare_time_adj(struct timespec *ptsTo) {
     if (errno == EINVAL) { /* It means ptsNow is a past time, doesn't matter */
       break;
     }
-    error_exit(errno,"nanosleep() in spend_my_spare_time_adj(): %s\n",
+    error_exit(errno,"nanosleep() in spend_my_spare_time(): %s\n",
                strerror(errno));
   }
 }
