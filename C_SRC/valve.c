@@ -39,7 +39,7 @@
 #                         current line to sending the top character of
 #                         the next line.
 #                         -c option will be disabled by this option.
-#           [The following options are professional]
+#           [The following options are for professional]
 #           -r .......... (Default) Recovery mode
 #                         On low spec computers, nanosleep() often over-
 #                         sleeps too much and that causes lower throughput
@@ -76,7 +76,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-09-27
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-17
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -126,7 +126,7 @@
 #if !defined(CLOCK_MONOTONIC)
   #define CLOCK_FOR_ME CLOCK_REALTIME /* for HP-UX */
 #elif defined(__sun) || defined(__SunOS)
-  /* timer_create() on Solaris requires privillege */
+  /* CLOCK_MONOTONIC on Solaris requires privillege */
   #define CLOCK_FOR_ME CLOCK_REALTIME
 #else
   #define CLOCK_FOR_ME CLOCK_MONOTONIC
@@ -206,7 +206,7 @@ void print_usage_and_exit(void) {
     "                        current line to sending the top character of\n"
     "                        the next line.\n"
     "                        -c option will be disabled by this option.\n"
-    "          [The following options are professional]\n"
+    "          [The following options are for professional]\n"
     "          -r .......... (Default) Recovery mode \n"
     "                        On low spec computers, nanosleep() often over-\n"
     "                        sleeps too much and that causes lower throughput\n"
@@ -232,7 +232,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2019-09-27 14:34:31 JST\n"
+    "Version : 2020-03-17 02:12:25 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
