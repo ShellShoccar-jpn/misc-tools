@@ -149,7 +149,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2020-03-17 02:27:36 JST\n"
+    "Version : 2020-03-17 11:26:59 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -195,7 +195,6 @@ int      iGotOffset;      /* 0:NotYet 1:GetZeroPoint 2:Done              */
 char     szTime[33];      /* Buffer for the 1st field of lines           */
 struct timespec tsTime;   /* Parsed time for the 1st field               */
 struct timespec tsOffset; /* Zero-point time to adjust the 1st field one */
-fd_set   fdsRead;         /* To get the time when data has arrived       */
 char    *pszPath;         /* filepath on arguments                       */
 char    *pszFilename;     /* filepath (for message)                      */
 int      iFileno;         /* file# of filepath                           */
@@ -219,9 +218,9 @@ if (clock_gettime(CLOCK_REALTIME,&gtsZero) != 0) {
 /*=== Parse arguments ==============================================*/
 
 /*--- Set default parameters of the arguments ----------------------*/
-iMode     =2; /* 0:"-c" 1:"-e" 2:"-z"(default) 4:"-cZ" 5:"-eZ" 6:"-zZ" */
-iPrio     =1;
-giVerbose =0;
+iMode     = 2; /* 0:"-c" 1:"-e" 2:"-z"(default) 4:"-cZ" 5:"-eZ" 6:"-zZ" */
+iPrio     = 1;
+giVerbose = 0;
 /*--- Parse options which start by "-" -----------------------------*/
 while ((i=getopt(argc, argv, "cep:vhZz")) != -1) {
   switch (i) {
@@ -305,7 +304,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           }
                           break;
                  case  0: /* unexpected LF */
-                          warning("%s: It contain the line with no timestamp, "
+                          warning("%s: No first field which contains the line, "
                                   "skipping it\n",pszFilename);
                           goto CLOSE_THISFILE;
                  case -2: /* unexpected EOF */
@@ -347,7 +346,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           }
                           break;
                  case  0: /* unexpected LF */
-                          warning("%s: It contain the line with no timestamp, "
+                          warning("%s: No first field which contains the line, "
                                   "skipping it\n",pszFilename);
                           goto CLOSE_THISFILE;
                  case -2: /* unexpected EOF */
@@ -402,7 +401,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           }
                           break;
                  case  0: /* unexpected LF */
-                          warning("%s: It contain the line with no timestamp, "
+                          warning("%s: No first field which contains the line, "
                                   "skipping it\n",pszFilename);
                           goto CLOSE_THISFILE;
                  case -2: /* unexpected EOF */
@@ -461,7 +460,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           }
                           break;
                  case  0: /* unexpected LF */
-                          warning("%s: It contain the line with no timestamp, "
+                          warning("%s: No first field which contains the line, "
                                   "skipping it\n",pszFilename);
                           goto CLOSE_THISFILE;
                  case -2: /* unexpected EOF */
@@ -521,7 +520,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           }
                           break;
                  case  0: /* unexpected LF */
-                          warning("%s: It contain the line with no timestamp, "
+                          warning("%s: No first field which contains the line, "
                                   "skipping it\n",pszFilename);
                           goto CLOSE_THISFILE;
                  case -2: /* unexpected EOF */
@@ -612,9 +611,23 @@ int read_1st_field_as_a_timestamp(FILE *fp, char *pszTime) {
                  pszTime[iTslen]=0;
                  return 1;
       case EOF :
-                 if (feof(  fp)) {return (iTslen==0)?-1:-2;}
-                 if (ferror(fp)) {return -3;               }
-                 else            {return -4;               }
+                 if         (feof(  fp)) {
+                   if (iTslen==0) {
+                     return -1;
+                   } else         {
+                     if (giVerbose>0) {
+                       warning("EOF came while reading 1st field\n");
+                     }
+                     return -2;
+                   }
+                 } else  if (ferror(fp)) {
+                   if (giVerbose>0) {
+                     warning("error while reading 1st field\n");
+                   }
+                   return -3;
+                 } else                  {
+                   return -4;
+                 }
       case '\n':
                  return 0;
       default  :
@@ -646,12 +659,14 @@ int read_and_write_a_line(FILE *fp) {
                  else            {return -3;}
       case '\n':
                  if (putchar('\n' )==EOF) {
-                   error_exit(errno,"putchar() #R1L-1: %s\n",strerror(errno));
+                   error_exit(errno,"stdout write error #1: %s\n",
+                              strerror(errno));
                  }
                  return 1;
       default  :
                  if (putchar(iChar)==EOF) {
-                   error_exit(errno,"putchar() #R1L-21: %s\n",strerror(errno));
+                   error_exit(errno,"stdout write error #2: %s\n",
+                              strerror(errno));
                  }
                  break;
     }
@@ -679,13 +694,20 @@ int parse_calendartime(char* pszTime, struct timespec *ptsTime) {
     if      (('0'<=c) && (c<='9')) {szDate[i]=c;                       }
     else if (c=='.'              ) {szDate[i]=0; iStatus=2; i++; break;}
     else if (c==0                ) {szDate[i]=0; iStatus=1;      break;}
-    else                           {return 0;                          }
+    else                           {if (giVerbose>0) {
+                                      warning("%c: Unexpected chr. in "
+                                              "the integer part\n",c);
+                                    }
+                                    return 0;
+                                   }
   }
   if ((iStatus==0) && (i==20)) {
     switch (pszTime[20]) {
       case '.': szDate[20]=0; iStatus=2; i++; break;
       case  0 : szDate[20]=0; iStatus=1;      break;
-      default : return 0;
+      default : warning("The integer part of the timestamp is too big "
+                        "as a calendar-time\n",c);
+                return 0;
     }
   }
   switch (iStatus) {
@@ -697,12 +719,19 @@ int parse_calendartime(char* pszTime, struct timespec *ptsTime) {
                c = pszTime[i];
                if      (('0'<=c) && (c<='9')) {szNsec[k]=c; k++;}
                else if (c==0                ) {break;           }
-               else                           {return 0;        }
+               else                           {
+                 if (giVerbose>0) {
+                   warning("%c: Unexpected chr. in the decimal part\n",c);
+                 }
+                 return 0;
+               }
              }
              for (; k<9; k++) {szNsec[k]='0';}
              szNsec[9]=0;
              break;
-    default: return 0;
+    default: warning("Unexpected error in parse_calendartime(), "
+                     "maybe a bug?\n");
+             return 0;
   }
 
   /*--- Pack the time-string into the timespec structure -----------*/
@@ -750,13 +779,20 @@ int parse_unixtime(char* pszTime, struct timespec *ptsTime) {
     if      (('0'<=c) && (c<='9')) {szSec[i]=c;                       }
     else if (c=='.'              ) {szSec[i]=0; iStatus=2; i++; break;}
     else if (c==0                ) {szSec[i]=0; iStatus=1;      break;}
-    else                           {return 0;                         }
+    else                           {if (giVerbose>0) {
+                                      warning("%c: Unexpected chr. in "
+                                              "the integer part\n",c);
+                                    }
+                                    return 0;
+                                   }
   }
   if ((iStatus==0) && (i==19)) {
     switch (pszTime[19]) {
       case '.': szSec[19]=0; iStatus=2; i++; break;
       case  0 : szSec[19]=0; iStatus=1;      break;
-      default : return 0;
+      default : warning("The integer part of the timestamp is too big "
+                        "as a UNIX-time\n");
+                return 0;
     }
   }
   switch (iStatus) {
@@ -768,12 +804,18 @@ int parse_unixtime(char* pszTime, struct timespec *ptsTime) {
                c = pszTime[i];
                if      (('0'<=c) && (c<='9')) {szNsec[k]=c; k++;}
                else if (c==0                ) {break;           }
-               else                           {return 0;        }
+               else                           {
+                 if (giVerbose>0) {
+                   warning("%c: Unexpected chr. in the decimal part\n",c);
+                 }
+                 return 0;
+               }
              }
              for (; k<9; k++) {szNsec[k]='0';}
              szNsec[9]=0;
              break;
-    default: return 0;
+    default: warning("Unexpected error in parse_unixtime(), maybe a bug?\n");
+             return 0;
   }
 
   /*--- Pack the time-string into the timespec structure -----------*/
@@ -786,7 +828,7 @@ int parse_unixtime(char* pszTime, struct timespec *ptsTime) {
   return 1;
 }
 
-/*=== Sleep until the next interval period (with adjustment) =========
+/*=== Sleep until the next interval period ===========================
  * [in] ptsTo     : Time until which this function wait
                     (given from the 1st field of a line, which not adjusted yet)
         ptsOffset : Offset for ptsTo (set NULL if unnecessary)      */
@@ -829,6 +871,7 @@ void spend_my_spare_time(struct timespec *ptsTo, struct timespec *ptsOffset) {
   /*--- Sleeping for tsDiff ----------------------------------------*/
   while (nanosleep(&tsDiff,NULL) != 0) {
     if (errno == EINVAL) { /* It means ptsNow is a past time, doesn't matter */
+      if (giVerbose>1) {warning("Waiting time is negative\n");}
       break;
     }
     error_exit(errno,"nanosleep() in spend_my_spare_time(): %s\n",
