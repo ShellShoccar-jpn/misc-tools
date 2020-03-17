@@ -66,10 +66,8 @@
 /*=== Initial Setting ==============================================*/
 
 /*--- headers ------------------------------------------------------*/
-#if 0
-  /* The compilers on some OSes, such as Ubuntu, warn for strptime().
-     The following define could disable the warning but that is harmful
-     on some other OSes, such as NetBSD, Solaris.                   */
+#if defined(__linux) || defined(__linux__)
+  /* This definition is for strptime() on Linux */
   #define _XOPEN_SOURCE 700
 #endif
 #include <errno.h>
@@ -163,7 +161,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2020-03-17 17:43:18 JST\n"
+    "Version : 2020-03-17 22:08:52 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
