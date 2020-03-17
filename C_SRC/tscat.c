@@ -66,8 +66,12 @@
 /*=== Initial Setting ==============================================*/
 
 /*--- headers ------------------------------------------------------*/
-#define _XOPEN_SOURCE 700
-#include <limits.h>
+#if 0
+  /* The compilers on some OSes, such as Ubuntu, warn for strptime().
+     The following define could disable the warning but that is harmful
+     on some other OSes, such as NetBSD, Solaris.                   */
+  #define _XOPEN_SOURCE 700
+#endif
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -82,6 +86,16 @@
 #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
   #include <sched.h>
   #include <sys/resource.h>
+#endif
+
+/*--- macro constants ----------------------------------------------*/
+/* Some OSes, such as HP-UX, may not know the following macros whenever
+   <limit.h> is included. So, this source code defines them by itself. */
+#ifndef LONG_MAX
+  #define LONG_MAX           2147483647
+#endif
+#ifndef LLONG_MAX
+  #define LLONG_MAX 9223372036854775807
 #endif
 
 /*--- prototype functions ------------------------------------------*/
@@ -149,7 +163,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2020-03-17 11:26:59 JST\n"
+    "Version : 2020-03-17 17:43:18 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
