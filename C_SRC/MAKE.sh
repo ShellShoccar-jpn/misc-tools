@@ -2,7 +2,7 @@
  
 ######################################################################
 #
-# MAKE.SH - Compile All C-progs in the Directory I am in
+# MAKE.SH - Compile All C-progs in the Directory Where I Am
 #
 # USAGE   : MAKE.sh [options]
 # Options : -u ......... Put the compiled executable files onto the
@@ -15,12 +15,15 @@
 #           -c compiler  Set the compiler command to "compiler"
 # Ret     : $?=0 (when all of the options are valid)
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-21
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-19
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
 # By the way, We are fed up with the side effects which are brought
 # about by the major licenses.
+#
+# The latest version is distributed at the following page.
+# https://github.com/ShellShoccar-jpn/misc-tools
 #
 ######################################################################
 
@@ -50,7 +53,7 @@ print_usage_and_exit () {
 	                       the base directory of the relative path is
 	                       regarded as the directory which MAKE.sh is in.
 	          -c compiler  Set the compiler command to "compiler"
-	Version : 2019-05-21 03:50:55 JST
+	Version : 2020-03-19 12:18:14 JST
 	USAGE
   exit 1
 }

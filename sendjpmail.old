@@ -33,6 +33,9 @@
 # people can use this for any purposes with no restrictions at all.
 # By the way, We are fed up with the side effects which are brought
 # about by the major licenses.
+#
+# The latest version is distributed at the following page.
+# https://github.com/ShellShoccar-jpn/misc-tools
 
 # ----- preparing --------------------------------------------------
 CMD_SENDMAIL=/usr/sbin/sendmail
