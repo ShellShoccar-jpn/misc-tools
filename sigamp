@@ -49,12 +49,15 @@
 #                        formula, write as follows. (use with "/")
 #                        ex. "4,20:0,255/0/0,255"
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-09-13
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-19
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
 # By the way, We are fed up with the side effects which are brought
 # about by the major licenses.
+#
+# The latest version is distributed at the following page.
+# https://github.com/ShellShoccar-jpn/misc-tools
 #
 ######################################################################
 
@@ -117,7 +120,7 @@ print_usage_and_exit () {
 	                       When you want to use these after 1-3 and a
 	                       formula, write as follows. (use with "/")
 	                       ex. "4,20:0,255/0/0,255"
-	Version : 2019-09-13 01:41:17 JST
+	Version : 2020-03-19 12:28:12 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1

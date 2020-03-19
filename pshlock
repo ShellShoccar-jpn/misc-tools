@@ -37,12 +37,15 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-12-27
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-19
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
 # By the way, We are fed up with the side effects which are brought
 # about by the major licenses.
+#
+# The latest version is distributed at the following page.
+# https://github.com/ShellShoccar-jpn/misc-tools
 #
 ######################################################################
 
@@ -92,7 +95,7 @@ print_usage_and_exit () {
 	Notice  : The lockfile is written with rw-rw-rw for sharing.
 	          If you want not to share it with others,
 	          you have to give the lockdir rwxrwx--- or rwx------ permisson.
-	Version : 2019-12-27 19:19:17 JST
+	Version : 2020-03-19 12:28:12 JST
 	USAGE
   exit 1
 }

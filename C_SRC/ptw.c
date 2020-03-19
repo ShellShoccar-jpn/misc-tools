@@ -14,12 +14,15 @@
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-21
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-19
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
 # By the way, We are fed up with the side effects which are brought
 # about by the major licenses.
+#
+# The latest version is distributed at the following page.
+# https://github.com/ShellShoccar-jpn/misc-tools
 #
 ####################################################################*/
 
@@ -83,11 +86,14 @@ void print_usage_and_exit(void) {
     "Retuen  : The return value will be decided by the wrapped command\n"
     "          when PTY wrapping has succeed. However, return a non-zero\n"
     "          number by this wrapper when failed.\n"
-    "Version : 2019-05-21 14:09:38 JST\n"
+    "Version : 2020-03-19 12:18:14 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
     "This is public domain software. (CC0)\n"
+    "\n"
+    "The latest version is distributed at the following page.\n"
+    "https://github.com/ShellShoccar-jpn/misc-tools\n"
     ,gpszCmdname);
   exit(1);
 }

@@ -10,12 +10,15 @@
 #
 # How to compile : cc -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2019-05-13
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-19
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
 # By the way, We are fed up with the side effects which are brought
 # about by the major licenses.
+#
+# The latest version is distributed at the following page.
+# https://github.com/ShellShoccar-jpn/misc-tools
 #
 ####################################################################*/
 
@@ -41,11 +44,14 @@ void print_usage_and_exit(void) {
     "                      give not only an integer number but also a\n"
     "                      non-integer number here.\n"
     "Retuen  : Return 0 only when succeeded to sleep\n"
-    "Version : 2019-05-13 19:24:23 JST\n"
+    "Version : 2020-03-19 12:18:14 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
     "This is public domain software. (CC0)\n"
+    "\n"
+    "The latest version is distributed at the following page.\n"
+    "https://github.com/ShellShoccar-jpn/misc-tools\n"
     ,gpszCmdname);
   exit(1);
 }

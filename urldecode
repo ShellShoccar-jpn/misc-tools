@@ -6,12 +6,15 @@
 #
 # USAGE: urldecode <file> ...
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2017-07-18
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-19
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
 # By the way, We are fed up with the side effects which are brought
 # about by the major licenses.
+#
+# The latest version is distributed at the following page.
+# https://github.com/ShellShoccar-jpn/misc-tools
 #
 ######################################################################
 
@@ -33,7 +36,7 @@ print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <file> ...
 	Args    : <file> ... Text file for URL decoding
-	Version : 2017-07-18 02:39:39 JST
+	Version : 2020-03-19 12:28:12 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
