@@ -2,7 +2,7 @@
  
 ######################################################################
 #
-# SESSIONF - Session File Manager (useful for CGI scripts)
+# SESSIONF - Session File Manager (Useful for CGI Scripts)
 #
 # USAGE: sessionf <subcommand> [argument] ...
 #
@@ -69,7 +69,7 @@ print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <subcommand> [argument] ...
 	          * See the header comment of me for detail
-	Version : 2020-03-19 12:28:12 JST
+	Version : 2020-03-19 13:05:03 JST
 	USAGE
   exit 1
 }

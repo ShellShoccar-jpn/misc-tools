@@ -2,7 +2,7 @@
 
 ######################################################################
 #
-# PEXLOCK - A Exclusive Lock Command within POSIX
+# PEXLOCK - A Exclusive Lock Command Within POSIX
 #
 # Usage   : pexlock [options] <lockname> [lockname ...]
 #           -d <lockdir> ...... the directory for lockfiles.
@@ -87,7 +87,7 @@ print_usage_and_exit () {
 	Notice  : The lockfile is written with rw-rw-rw for sharing.
 	          If you want not to share it with others,
 	          you have to give the lockdir rwxrwx--- or rwx------ permisson.
-	Version : 2020-03-19 12:28:12 JST
+	Version : 2020-03-19 13:05:03 JST
 	USAGE
   exit 1
 }

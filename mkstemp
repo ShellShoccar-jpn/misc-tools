@@ -2,7 +2,7 @@
 
 ######################################################################
 #
-# MKTEMP - The "mktemp" Command Also Works On Just A POSIX Environment
+# MKTEMP - The "mktemp" Command also Works on Just a POSIX Environment
 #
 # USAGE: mktemp [--by-myself] [options] [template [...]]
 #
@@ -53,7 +53,7 @@ print_usage_and_exit () {
 	            -d, -p <DIR>, -q, -u, -t, --suffix=<suff>
 	          But --by-myself is the only original option, it prevent
 	          from use the built-in same name command even if available
-	Version : 2020-03-19 12:28:12 JST
+	Version : 2020-03-19 13:05:03 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1

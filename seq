@@ -2,8 +2,8 @@
 
 ######################################################################
 #
-# SEQ - A POSIX Compatible Implementation Of The "seq" Command
-#       Also Works On Just A POSIX Environment
+# SEQ - A POSIX Compatible Implementation of the "seq" Command
+#       Also Works on Just a POSIX Environment
 #
 # USAGE: seq [options] last
 #        seq [options] first last
@@ -54,7 +54,7 @@ print_usage_and_exit () {
 	            -f <format>, -s <string>, -w
 	          But --by-myself is the only original option, it prevent
 	          from use the built-in same name command even if available
-	Version : 2020-03-19 12:28:12 JST
+	Version : 2020-03-19 13:05:03 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	            * Although the bult-in seq produces better performance
 	              than the POSIX commands set

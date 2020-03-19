@@ -2,7 +2,7 @@
 
 ######################################################################
 #
-# FSED - flexible sed (looks like the fgrep)
+# FSED - Flexible sed (Looks Like the fgrep)
 #
 # Usage  : fsed <pattern_str> <substitute_str> <file> [file...]
 #
@@ -40,7 +40,7 @@ export UNIX_STD=2003  # to make HP-UX conform to POSIX
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <pattern_str> <substitute_str> <file> [file...]
-	Version : 2020-03-19 12:28:12 JST
+	Version : 2020-03-19 13:05:03 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1

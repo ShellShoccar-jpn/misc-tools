@@ -2,7 +2,7 @@
 
 ######################################################################
 #
-# URLDECODE - URL decoder on the basis of RFC 3986
+# URLDECODE - URL Decoder on the Basis of RFC 3986
 #
 # USAGE: urldecode <file> ...
 #
@@ -36,7 +36,7 @@ print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <file> ...
 	Args    : <file> ... Text file for URL decoding
-	Version : 2020-03-19 12:28:12 JST
+	Version : 2020-03-19 13:05:03 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1

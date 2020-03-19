@@ -2,8 +2,8 @@
 
 ######################################################################
 #
-# REV - A POSIX Compatible Implementation Of The "rev" Command
-#       Also Works On Just A POSIX Environment
+# REV - A POSIX Compatible Implementation of the "rev" Command
+#       Also Works on Just a POSIX Environment
 #
 # USAGE: rev [--by-myself] [filename ...]
 #
@@ -45,7 +45,7 @@ print_usage_and_exit () {
 	Arg&Opts: Almost compatible with the original rev command
 	          But --by-myself is the only original option, it prevent
 	          from use the built-in same name command even if available
-	Version : 2020-03-19 12:28:12 JST
+	Version : 2020-03-19 13:05:03 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	            * Although the bult-in rev produces better performance
 	              than the POSIX commands set

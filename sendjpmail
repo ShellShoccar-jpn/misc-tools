@@ -2,7 +2,7 @@
 
 ######################################################################
 #
-# SENDJPMAIL - Send An E-mail Which Has UTF-8 Characters
+# SENDJPMAIL - Send an E-mail Which Has UTF-8 Characters
 #
 # USAGE: sendjpmail <mailfile>
 #
@@ -54,7 +54,7 @@ print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} <mailfile>
 	Args    : <mailfile> ... Text data as an e-mail
-	Version : 2020-03-19 12:28:12 JST
+	Version : 2020-03-19 13:05:03 JST
 	          (POSIX Bourne Shell/POSIX commands/sendmail command/UTF-8)
 	USAGE
   exit 1

@@ -2,7 +2,7 @@
  
 ######################################################################
 #
-# TRUNCATE - The "truncate"-Like Command Also Works On Just A POSIX Environment
+# TRUNCATE - The "truncate"-Like Command Also Works on Just a POSIX Environment
 #
 # USAGE: truncate [--by-myself] [-c] -s [+|-]size[K|k|M|m|G|g|T|t] file ...
 #        truncate [--by-myself] [-c] -r rfile file ...
@@ -68,7 +68,7 @@ print_usage_and_exit () {
 	                            relative, otherwise absolute.
 	                            And when the unit suffix is written at last,
 	                            the value is multiplied by the unit suffix.
-	Version : 2020-03-19 12:28:12 JST
+	Version : 2020-03-19 13:05:03 JST
 	USAGE
   exit 1
 }

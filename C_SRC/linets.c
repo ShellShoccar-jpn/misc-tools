@@ -21,7 +21,7 @@
 #           -c,-e,-z .. Specify the format for timestamp. You can choose
 #                       one of them.
 #                         -c ... "YYYYMMDDhhmmss[.n]" (default)
-#                                Civil time (standard time) in your
+#                                Calendar-time (standard time) in your
 #                                timezone (".n" is the digits under
 #                                second. It will be attached when -3 or
 #                                -6 or -9 option is specified)
@@ -90,9 +90,9 @@ void print_cur_timestamp(void);
 /*--- global variables ---------------------------------------------*/
 char* gpszCmdname; /* The name of this command                        */
 int   giVerbose;   /* speaks more verbosely by the greater number     */
-int   giFmtType;   /* 'c':Civil-time
+int   giFmtType;   /* 'c':calendar-time
                       'e':UNIX-epoch-time
-                      'z':Command-running-sec                         */
+                      'z':command-running-sec                         */
 clockid_t gclkId;  /* CLOCK_MONOTONIC will be set when giFmtType is 'z'.
                       Or CLOCK_REALTIME */
 int   giTimeResol; /* 0:second 3:millisec 6:microsec 9:nanosec        */
@@ -138,7 +138,7 @@ void print_usage_and_exit(void) {
     "          -u ........ Set the date in UTC when -c option is set\n"
     "                      (same as that of date command)\n"
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2020-03-19 12:18:14 JST\n"
+    "Version : 2020-03-19 13:05:03 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"

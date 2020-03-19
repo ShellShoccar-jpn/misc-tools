@@ -2,7 +2,7 @@
 
 ######################################################################
 #
-# EXFLOCK : A file lock command that you can use like flock(2)
+# EXFLOCK : A File Lock Command that You Can Use Like flock(2)
 #
 # Usage  : exflock <seconds> <file> [maxlifetime]
 #          <seconds> ...... maximum waiting time to succeed locking
@@ -72,7 +72,7 @@ print_usage_and_exit () {
 	                          (0 means infinity, and default=$DEFAULT_MAXLIFETIME)
 	          * See the document at the source code of this command
 	            for more infomation
-	Version : 2020-03-19 12:28:12 JST
+	Version : 2020-03-19 13:05:03 JST
 	USAGE
   exit 1
 }

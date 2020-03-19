@@ -2,7 +2,7 @@
  
 ######################################################################
 #
-# ENUMDATE - Enumerate dates from arg#1 to arg#2
+# ENUMDATE - Enumerate Dates from arg#1 to arg#2
 #
 # USAGE: enumdate <yyyymmdd1> <yyyymmdd2>
 # ARGS : <yyyymmdd1> ... Date you want to enumerate from
@@ -51,7 +51,7 @@ print_usage_and_exit () {
 	            for instance "87" will be regarded as not "1987" but "87".
 	          * It is OK altough <yyyymmdd1> is bigger, smaller than
 	            <yyyymmdd2>, or <yyyymmdd1> is equal with <yyyymmdd2>.
-	Version : 2020-03-19 12:28:12 JST
+	Version : 2020-03-19 13:05:03 JST
 	USAGE
   exit 1
 }

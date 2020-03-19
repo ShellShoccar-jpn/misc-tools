@@ -2,7 +2,7 @@
 
 ######################################################################
 #
-# UTCONV - UNIX time and Real DateTime Converter
+# UTCONV - A Converter Between UNIX-time and Calendar-time
 #
 # USAGE: utconv [datetime_text_or_file]    # for Real-datetime -> Unixtime
 #        utconv -r [unixtime_text_or_file] # for Unixtime      -> Real-datetime
@@ -51,11 +51,11 @@ export UNIX_STD=2003  # to make HP-UX conform to POSIX
 # === Define the functions for printing usage ========================
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
-	USAGE   : ${0##*/} [datetime_text_or_file]    # Real-datetime -> Unixtime
-	          ${0##*/} -r [unixtime_text_or_file] # Unixtime -> Real-datetime
+	USAGE   : ${0##*/} [datetime_text_or_file]    # Cal.-time -> Unixtime
+	          ${0##*/} -r [unixtime_text_or_file] # Unixtime -> Cal.-time
 	Args    : datetime_text_or_file ... A time to converting
-	Options : -r ...................... Swithes mode to Unixtime->Real-datetime
-	Version : 2020-03-19 12:28:12 JST
+	Options : -r ...................... Swithes mode to Unixtime -> Cal.-time
+	Version : 2020-03-19 13:05:03 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
