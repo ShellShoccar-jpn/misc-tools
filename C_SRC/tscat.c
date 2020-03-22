@@ -48,7 +48,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-19
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-22
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -164,7 +164,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2020-03-19 12:18:14 JST\n"
+    "Version : 2020-03-22 12:17:18 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -221,6 +221,9 @@ FILE    *fp;              /* file handle                                 */
 int      i;               /* all-purpose int                             */
 
 /*--- Initialize ---------------------------------------------------*/
+if (clock_gettime(CLOCK_REALTIME,&gtsZero) != 0) {
+  error_exit(errno,"clock_gettime() at initialize: %s\n",strerror(errno));
+}
 gpszCmdname = argv[0];
 for (i=0; *(gpszCmdname+i)!='\0'; i++) {
   if (*(gpszCmdname+i)=='/') {gpszCmdname=gpszCmdname+i+1;}
@@ -229,14 +232,11 @@ if (setenv("POSIXLY_CORRECT","1",1) < 0) {
   error_exit(errno,"setenv() at initialization: \n", strerror(errno));
 }
 setlocale(LC_CTYPE, "");
-if (clock_gettime(CLOCK_REALTIME,&gtsZero) != 0) {
-  error_exit(errno,"clock_gettime() at initialize: %s\n",strerror(errno));
-}
 
 /*=== Parse arguments ==============================================*/
 
 /*--- Set default parameters of the arguments ----------------------*/
-iMode     = 2; /* 0:"-c" 1:"-e" 2:"-z"(default) 4:"-cZ" 5:"-eZ" 6:"-zZ" */
+iMode     = 0; /* 0:"-c"(default) 1:"-e" 2:"-z" 4:"-cZ" 5:"-eZ" 6:"-zZ" */
 iPrio     = 1;
 giVerbose = 0;
 /*--- Parse options which start by "-" -----------------------------*/
