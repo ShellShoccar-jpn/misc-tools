@@ -48,7 +48,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-22
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-25
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -164,7 +164,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2020-03-22 12:17:18 JST\n"
+    "Version : 2020-03-25 01:27:57 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -302,6 +302,8 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                switch (read_1st_field_as_a_timestamp(fp, szTime)) {
                  case  1: /* read successfully */
                           if (! parse_calendartime(szTime, &tsTime)) {
+                            warning("%s: %s: Invalid calendar-time, "
+                                    "abandon this file\n",pszFilename,szTime);
                             goto CLOSE_THISFILE;
                           }
                           spend_my_spare_time(&tsTime, NULL);
@@ -322,8 +324,8 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           }
                           break;
                  case  0: /* unexpected LF */
-                          warning("%s: No first field which contains the line, "
-                                  "skipping it\n",pszFilename);
+                          warning("%s: Invalid timestamp field found, abandon "
+                                  "this file.\n", pszFilename);
                           goto CLOSE_THISFILE;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n",pszFilename);
@@ -344,6 +346,8 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                switch (read_1st_field_as_a_timestamp(fp, szTime)) {
                  case  1: /* read successfully */
                           if (! parse_unixtime(szTime, &tsTime)) {
+                            warning("%s: %s: Invalid UNIX-time, "
+                                    "abandon this file\n",pszFilename,szTime);
                             goto CLOSE_THISFILE;
                           }
                           spend_my_spare_time(&tsTime, NULL);
@@ -364,8 +368,8 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           }
                           break;
                  case  0: /* unexpected LF */
-                          warning("%s: No first field which contains the line, "
-                                  "skipping it\n",pszFilename);
+                          warning("%s: Invalid timestamp field found, abandon "
+                                  "this file.\n", pszFilename);
                           goto CLOSE_THISFILE;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n",pszFilename);
@@ -386,6 +390,8 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                switch (read_1st_field_as_a_timestamp(fp, szTime)) {
                  case  1: /* read successfully */
                           if (! parse_unixtime(szTime, &tsTime)) {
+                            warning("%s: %s: Invalid number of seconds, "
+                                    "abandon this file\n",pszFilename,szTime);
                             goto CLOSE_THISFILE;
                           }
                           if (iGotOffset<2) {
@@ -419,8 +425,8 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           }
                           break;
                  case  0: /* unexpected LF */
-                          warning("%s: No first field which contains the line, "
-                                  "skipping it\n",pszFilename);
+                          warning("%s: Invalid timestamp field found, abandon "
+                                  "this file.\n", pszFilename);
                           goto CLOSE_THISFILE;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n",pszFilename);
@@ -445,6 +451,8 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                switch (read_1st_field_as_a_timestamp(fp, szTime)) {
                  case  1: /* read successfully */
                           if (! parse_calendartime(szTime, &tsTime)) {
+                            warning("%s: %s: Invalid calendar-time, "
+                                    "abandon this file\n",pszFilename,szTime);
                             goto CLOSE_THISFILE;
                           }
                           if (iGotOffset==1) {
@@ -478,8 +486,8 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           }
                           break;
                  case  0: /* unexpected LF */
-                          warning("%s: No first field which contains the line, "
-                                  "skipping it\n",pszFilename);
+                          warning("%s: Invalid timestamp field found, abandon "
+                                  "this file.\n", pszFilename);
                           goto CLOSE_THISFILE;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n",pszFilename);
@@ -505,6 +513,8 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                switch (read_1st_field_as_a_timestamp(fp, szTime)) {
                  case  1: /* read successfully */
                           if (! parse_unixtime(szTime, &tsTime)) {
+                            warning("%s: %s: Invalid timestamp, "
+                                    "abandon this file\n",pszFilename,szTime);
                             goto CLOSE_THISFILE;
                           }
                           if (iGotOffset==1) {
@@ -538,8 +548,8 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           }
                           break;
                  case  0: /* unexpected LF */
-                          warning("%s: No first field which contains the line, "
-                                  "skipping it\n",pszFilename);
+                          warning("%s: Invalid timestamp field found, abandon "
+                                  "this file.\n", pszFilename);
                           goto CLOSE_THISFILE;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n",pszFilename);
@@ -701,7 +711,7 @@ int parse_calendartime(char* pszTime, struct timespec *ptsTime) {
 
   /*--- Variables --------------------------------------------------*/
   char szDate[21], szNsec[10], szDate2[26];
-  unsigned int i, j, k;    /* +-- 0:(reading integer part)          */
+  int  i, j, k;            /* +-- 0:(reading integer part)          */
   char c;                  /* +-- 1:finish reading without_decimals */
   int  iStatus = 0; /* <--------- 2:to_be_started reading decimals  */
   struct tm tmDate;
@@ -770,9 +780,6 @@ int parse_calendartime(char* pszTime, struct timespec *ptsTime) {
   memset(&tmDate, 0, sizeof(tmDate));
   if(! strptime(szDate2, "%Y-%m-%dT%H:%M:%S", &tmDate)) {return 0;}
   ptsTime->tv_sec = mktime(&tmDate);
-  if (ptsTime->tv_sec<0) {
-    ptsTime->tv_sec = (sizeof(time_t)>=8) ? LLONG_MAX : LONG_MAX;
-  }
   ptsTime->tv_nsec = atol(szNsec);
 
   return 1;
@@ -787,7 +794,7 @@ int parse_unixtime(char* pszTime, struct timespec *ptsTime) {
 
   /*--- Variables --------------------------------------------------*/
   char szSec[20], szNsec[10];
-  unsigned int i, j, k;    /* +-- 0:(reading integer part)          */
+  int  i, j, k;            /* +-- 0:(reading integer part)          */
   char c;                  /* +-- 1:finish reading without_decimals */
   int  iStatus = 0; /* <--------- 2:to_be_started reading decimals  */
 
