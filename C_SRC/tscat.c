@@ -164,7 +164,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2020-03-25 01:27:57 JST\n"
+    "Version : 2020-03-25 13:28:08 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -304,6 +304,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           if (! parse_calendartime(szTime, &tsTime)) {
                             warning("%s: %s: Invalid calendar-time, "
                                     "abandon this file\n",pszFilename,szTime);
+                            iRet = 1;
                             goto CLOSE_THISFILE;
                           }
                           spend_my_spare_time(&tsTime, NULL);
@@ -314,7 +315,8 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                      goto CLOSE_THISFILE;
                             case -2: /* file access error */
                                      warning("%s: File access error, "
-                                             "skipping it\n",pszFilename);
+                                             "skip it\n",pszFilename);
+                                     iRet = 1;
                                      goto CLOSE_THISFILE;
                                      break;
                             default: /* bug of system error */
@@ -326,15 +328,18 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                  case  0: /* unexpected LF */
                           warning("%s: Invalid timestamp field found, abandon "
                                   "this file.\n", pszFilename);
+                          iRet = 1;
                           goto CLOSE_THISFILE;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n",pszFilename);
+                          iRet = 1;
                  case -1: /*   expected EOF */
                           goto CLOSE_THISFILE;
                           break;
                  case -3: /* file access error */
-                          warning("%s: File access error, skipping it\n",
+                          warning("%s: File access error, skip it\n",
                                   pszFilename);
+                          iRet = 1;
                           goto CLOSE_THISFILE;
                  default: /* bug or system error */
                           error_exit(1,"Unexpected error at %d\n", __LINE__);
@@ -348,6 +353,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           if (! parse_unixtime(szTime, &tsTime)) {
                             warning("%s: %s: Invalid UNIX-time, "
                                     "abandon this file\n",pszFilename,szTime);
+                            iRet = 1;
                             goto CLOSE_THISFILE;
                           }
                           spend_my_spare_time(&tsTime, NULL);
@@ -358,7 +364,8 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                      goto CLOSE_THISFILE;
                             case -2: /* file access error */
                                      warning("%s: File access error, "
-                                             "skipping it\n",pszFilename);
+                                             "skip it\n",pszFilename);
+                                     iRet = 1;
                                      goto CLOSE_THISFILE;
                                      break;
                             default: /* bug of system error */
@@ -370,15 +377,18 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                  case  0: /* unexpected LF */
                           warning("%s: Invalid timestamp field found, abandon "
                                   "this file.\n", pszFilename);
+                          iRet = 1;
                           goto CLOSE_THISFILE;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n",pszFilename);
+                          iRet = 1;
                  case -1: /*   expected EOF */
                           goto CLOSE_THISFILE;
                           break;
                  case -3: /* file access error */
-                          warning("%s: File access error, skipping it\n",
+                          warning("%s: File access error, skip it\n",
                                   pszFilename);
+                          iRet = 1;
                           goto CLOSE_THISFILE;
                  default: /* bug or system error */
                           error_exit(1,"Unexpected error at %d\n", __LINE__);
@@ -392,6 +402,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           if (! parse_unixtime(szTime, &tsTime)) {
                             warning("%s: %s: Invalid number of seconds, "
                                     "abandon this file\n",pszFilename,szTime);
+                            iRet = 1;
                             goto CLOSE_THISFILE;
                           }
                           if (iGotOffset<2) {
@@ -415,7 +426,8 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                      goto CLOSE_THISFILE;
                             case -2: /* file access error */
                                      warning("%s: File access error, "
-                                             "skipping it\n",pszFilename);
+                                             "skip it\n",pszFilename);
+                                     iRet = 1;
                                      goto CLOSE_THISFILE;
                                      break;
                             default: /* bug of system error */
@@ -427,15 +439,18 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                  case  0: /* unexpected LF */
                           warning("%s: Invalid timestamp field found, abandon "
                                   "this file.\n", pszFilename);
+                          iRet = 1;
                           goto CLOSE_THISFILE;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n",pszFilename);
+                          iRet = 1;
                  case -1: /*   expected EOF */
                           goto CLOSE_THISFILE;
                           break;
                  case -3: /* file access error */
-                          warning("%s: File access error, skipping it\n",
+                          warning("%s: File access error, skip it\n",
                                   pszFilename);
+                          iRet = 1;
                           goto CLOSE_THISFILE;
                  default: /* bug or system error */
                           error_exit(1,"Unexpected error at %d\n", __LINE__);
@@ -453,6 +468,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           if (! parse_calendartime(szTime, &tsTime)) {
                             warning("%s: %s: Invalid calendar-time, "
                                     "abandon this file\n",pszFilename,szTime);
+                            iRet = 1;
                             goto CLOSE_THISFILE;
                           }
                           if (iGotOffset==1) {
@@ -476,7 +492,8 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                      goto CLOSE_THISFILE;
                             case -2: /* file access error */
                                      warning("%s: File access error, "
-                                             "skipping it\n",pszFilename);
+                                             "skip it\n",pszFilename);
+                                     iRet = 1;
                                      goto CLOSE_THISFILE;
                                      break;
                             default: /* bug of system error */
@@ -488,14 +505,16 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                  case  0: /* unexpected LF */
                           warning("%s: Invalid timestamp field found, abandon "
                                   "this file.\n", pszFilename);
+                          iRet = 1;
                           goto CLOSE_THISFILE;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n",pszFilename);
+                          iRet = 1;
                  case -1: /*   expected EOF */
                           goto CLOSE_THISFILE;
                           break;
                  case -3: /* file access error */
-                          warning("%s: File access error, skipping it\n",
+                          warning("%s: File access error, skip it\n",
                                   pszFilename);
                           goto CLOSE_THISFILE;
                  default: /* bug or system error */
@@ -515,6 +534,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           if (! parse_unixtime(szTime, &tsTime)) {
                             warning("%s: %s: Invalid timestamp, "
                                     "abandon this file\n",pszFilename,szTime);
+                            iRet = 1;
                             goto CLOSE_THISFILE;
                           }
                           if (iGotOffset==1) {
@@ -538,7 +558,8 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                      goto CLOSE_THISFILE;
                             case -2: /* file access error */
                                      warning("%s: File access error, "
-                                             "skipping it\n",pszFilename);
+                                             "skip it\n",pszFilename);
+                                     iRet = 1;
                                      goto CLOSE_THISFILE;
                                      break;
                             default: /* bug of system error */
@@ -550,15 +571,18 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                  case  0: /* unexpected LF */
                           warning("%s: Invalid timestamp field found, abandon "
                                   "this file.\n", pszFilename);
+                          iRet = 1;
                           goto CLOSE_THISFILE;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n",pszFilename);
+                          iRet = 1;
                  case -1: /*   expected EOF */
                           goto CLOSE_THISFILE;
                           break;
                  case -3: /* file access error */
-                          warning("%s: File access error, skipping it\n",
+                          warning("%s: File access error, skip it\n",
                                   pszFilename);
+                          iRet = 1;
                           goto CLOSE_THISFILE;
                  default: /* bug or system error */
                           error_exit(1,"Unexpected error at %d\n", __LINE__);
