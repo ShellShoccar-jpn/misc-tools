@@ -46,7 +46,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-19
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-04-19
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -83,21 +83,27 @@
   #define CLOCK_MONOTONIC CLOCK_REALTIME /* for HP-UX */
 #endif
 
+/*--- data type definitions ----------------------------------------*/
+typedef struct timespec tmsp;
+
 /*--- prototype functions ------------------------------------------*/
 int read_1line(FILE *fp);
+int read_Z1st_1line(FILE *fp);
 void print_cur_timestamp(void);
 
 /*--- global variables ---------------------------------------------*/
-char* gpszCmdname; /* The name of this command                        */
-int   giVerbose;   /* speaks more verbosely by the greater number     */
-int   giFmtType;   /* 'c':calendar-time
-                      'e':UNIX-epoch-time
-                      'z':command-running-sec                         */
-clockid_t gclkId;  /* CLOCK_MONOTONIC will be set when giFmtType is 'z'.
-                      Or CLOCK_REALTIME */
-int   giTimeResol; /* 0:second 3:millisec 6:microsec 9:nanosec        */
-int   giDeltaMode; /* attach the number of seconds since printing the 
-                      previous line after the timestamp when >0       */
+char* gpszCmdname      ; /* The name of this command                      */
+int   giVerbose   =  0 ; /* speaks more verbosely by the greater number   */
+int   giFmtType   = 'c'; /* 'c':calendar-time (default)
+                            'e':UNIX-epoch-time
+                            'z':command-running-sec                       */
+int   giTimeResol =  0 ; /* 0:second(def) 3:millisec 6:microsec 9:nanosec */
+int   giDeltaMode =  0 ; /* attach the number of seconds since printing
+                            the previous line after the timestamp when >0 */
+tmsp  gtsZero     = {0}; /* Time this command booted                      */
+tmsp  gtsPrev     = {0}; /* Time the previous line has come (-gtsZero)    */
+int   giHold      =  0 ; /* for read_1line(): 1 if next character exists  */
+int   giNextchar       ; /* for read_1line(): the next character          */
 
 /*=== Define the functions for printing usage and error ============*/
 
@@ -138,7 +144,7 @@ void print_usage_and_exit(void) {
     "          -u ........ Set the date in UTC when -c option is set\n"
     "                      (same as that of date command)\n"
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2020-03-19 14:22:56 JST\n"
+    "Version : 2020-04-19 19:01:31 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -186,9 +192,13 @@ char    *pszFilename;     /* filepath (for message)                */
 int      iFileno;         /* file# of filepath                     */
 int      iFd;             /* file descriptor                       */
 FILE    *fp;              /* file handle                           */
+int      iZfirstline=0;   /* >0 when Z-opt and no line come yet    */
 int      i;               /* all-purpose int                       */
 
 /*--- Initialize ---------------------------------------------------*/
+if (clock_gettime(CLOCK_REALTIME,&gtsZero) != 0) {
+  error_exit(errno,"clock_gettime() at initialize: %s\n",strerror(errno));
+}
 gpszCmdname = argv[0];
 for (i=0; *(gpszCmdname+i)!='\0'; i++) {
   if (*(gpszCmdname+i)=='/') {gpszCmdname=gpszCmdname+i+1;}
@@ -199,28 +209,20 @@ if (setenv("POSIXLY_CORRECT","1",1) < 0) {
 
 /*=== Parse arguments ==============================================*/
 
-/*--- Set default parameters of the arguments ----------------------*/
-giFmtType  ='c'            ;
-giTimeResol= 0             ;
-giDeltaMode= 0             ;
-giVerbose  = 0             ;
-gclkId     = CLOCK_REALTIME;
-
 /*--- Parse options which start by "-" -----------------------------*/
 while ((i=getopt(argc, argv, "0369cezZduvh")) != -1) {
   switch (i) {
-    case '0': giTimeResol = 0  ;                           break;
-    case '3': giTimeResol = 3  ;                           break;
-    case '6': giTimeResol = 6  ;                           break;
-    case '9': giTimeResol = 9  ;                           break;
-    case 'c': giFmtType   = 'c'; gclkId = CLOCK_REALTIME ; break;
-    case 'e': giFmtType   = 'e'; gclkId = CLOCK_REALTIME ; break;
-    case 'Z': giFmtType   = 'Z'; gclkId = CLOCK_MONOTONIC; break;
-    case 'z': giFmtType   = 'z'; gclkId = CLOCK_MONOTONIC;
-              print_cur_timestamp();                       break;
-    case 'd': giDeltaMode = 1  ;                           break;
-    case 'u': (void)setenv("TZ", "UTC0", 1)              ; break;
-    case 'v': giVerbose++      ;                           break;
+    case '0': giTimeResol =  0 ;                break;
+    case '3': giTimeResol =  3 ;                break;
+    case '6': giTimeResol =  6 ;                break;
+    case '9': giTimeResol =  9 ;                break;
+    case 'c': giFmtType   = 'c'; iZfirstline=0; break;
+    case 'e': giFmtType   = 'e'; iZfirstline=0; break;
+    case 'Z': giFmtType   = 'Z'; iZfirstline=1; break;
+    case 'z': giFmtType   = 'z'; iZfirstline=0; break;
+    case 'd': giDeltaMode =  1 ;                break;
+    case 'u': (void)setenv("TZ", "UTC0", 1);    break;
+    case 'v': giVerbose++      ;                break;
     case 'h': print_usage_and_exit();
     default : print_usage_and_exit();
   }
@@ -264,10 +266,10 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
   }
 
   /*--- Reading and writing loop -----------------------------------*/
-  if (feof(fp)==0) {
-    while (1) {
-      if ((iRet_r1l=read_1line(fp)) !=   0) {break;}
-    }
+  if (! feof(fp)) {
+    if (iZfirstline) {iRet_r1l=read_Z1st_1line(fp); iZfirstline = 0;}
+    else             {iRet_r1l=0                  ;                 }
+    while (iRet_r1l==0) {iRet_r1l=read_1line(fp);}
   }
 
   /*--- Close the input file ---------------------------------------*/
@@ -288,19 +290,19 @@ return(iRet);}
 ####################################################################*/
 
 /*=== Read and write only one line ===================================
- * [ret] 0   : Finished reading/writing due to '\n'
- *       1   : Finished reading/writing due to '\n', which is the last
- *             char of the file
- *       EOF : Finished reading/writing due to EOF              */
+ * [in]  giHold     : (must be defined as a global variable)
+ *       giNextchar : (must be defined as a global variable)
+ * [ret] 0          : Finished reading/writing due to '\n'
+ *       1          : Finished reading/writing due to '\n',
+ *                    which is the last char of the file
+ *       EOF        : Finished reading/writing due to EOF           */
 int read_1line(FILE *fp) {
 
   /*--- Variables --------------------------------------------------*/
-  static int iHold = 0; /* set 1 if next character is currently held */
-  static int iNextchar; /* variable for the next character           */
   int        iChar;
 
   /*--- Reading and writing a line (1st letter of the line) --------*/
-  if (iHold) {iChar=iNextchar; iHold=0;} else {iChar=getc(fp);}
+  if (giHold) {iChar=giNextchar; giHold=0;} else {iChar=getc(fp);}
   switch (iChar) {
     case EOF:
                 return(EOF);
@@ -308,73 +310,144 @@ int read_1line(FILE *fp) {
                 print_cur_timestamp();
                 while (putchar('\n' )==EOF) {
                   if (errno == EINTR) {continue;}
-                  error_exit(errno,"putchar() #R1L-1: %s\n",strerror(errno));
+                  error_exit(errno,"read_1line(): putchar() #1: %s\n",
+                             strerror(errno)                          );
                 }
-                iNextchar = getc(fp);
-                if (iNextchar!=EOF) {iHold=1;return 0;}
-                else                {        return 1;}
+                giNextchar = getc(fp);
+                if (giNextchar!=EOF) {giHold=1;return 0;}
+                else                 {         return 1;}
     default:
                 print_cur_timestamp();
                 while (putchar(iChar)==EOF) {
                   if (errno == EINTR) {continue;}
-                  error_exit(errno,"putchar() #R1L-2: %s\n",strerror(errno));
+                  error_exit(errno,"read_1line(): putchar() #2: %s\n",
+                             strerror(errno)                          );
                 }
   }
 
   /*--- Reading and writing a line ---------------------------------*/
   while (1) {
-    if (iHold) {iChar=iNextchar; iHold=0;} else {iChar=getc(fp);}
+    if (giHold) {iChar=giNextchar; giHold=0;} else {iChar=getc(fp);}
     switch (iChar) {
       case EOF:
                   return(EOF);
       case '\n':
                   while (putchar('\n' )==EOF) {
                     if (errno == EINTR) {continue;}
-                    error_exit(errno,"putchar() #R1L-3: %s\n",strerror(errno));
+                    error_exit(errno,"read_1line(): putchar() #3: %s\n",
+                               strerror(errno)                          );
                   }
-                  iNextchar = getc(fp);
-                  if (iNextchar!=EOF) {iHold=1;return 0;}
-                  else                {        return 1;}
+                  giNextchar = getc(fp);
+                  if (giNextchar!=EOF) {giHold=1;return 0;}
+                  else                 {         return 1;}
       default:
                   while (putchar(iChar)==EOF) {
                     if (errno == EINTR) {continue;}
-                    error_exit(errno,"putchar() #R1L-4: %s\n",strerror(errno));
+                    error_exit(errno,"read_1line(): putchar() #4: %s\n",
+                               strerror(errno)                          );
                   }
     }
   }
 }
 
 
+/*=== Read and write only one line (for Z-option and 1st line ) ======
+ * [in]  giHold     : (must be defined as a global variable)
+ *       giNextchar : (must be defined as a global variable)
+ * [ret] 0          : Finished reading/writing due to '\n'
+ *       1          : Finished reading/writing due to '\n',
+ *                    which is the last char of the file
+ *       EOF        : Finished reading/writing due to EOF           */
+int read_Z1st_1line(FILE *fp) {
+
+  /*--- Variables --------------------------------------------------*/
+  int        iChar;
+  /*--- FmtType 'Z' ==> 'z' ----------------------------------------*/
+  giFmtType = 'z';
+
+  /*--- Reading and writing a line (1st letter of the line) --------*/
+  if (giHold) {iChar=giNextchar; giHold=0;} else {iChar=getc(fp);}
+  switch (iChar) {
+    case EOF:
+                return(EOF);
+    case '\n':
+                if (clock_gettime(CLOCK_REALTIME,&gtsZero) != 0) {
+                  error_exit(errno,
+                             "read_Z1st_1line(): clock_gettime() #1: %s\n",
+                             strerror(errno)                               );
+                }
+                if (giDeltaMode) {printf("0 0 ");} else {printf("0 ");}
+                while (putchar('\n' )==EOF) {
+                  if (errno == EINTR) {continue;}
+                  error_exit(errno,
+                             "read_Z1st_1line(): putchar() #1: %s\n",
+                             strerror(errno)                         );
+                }
+                giNextchar = getc(fp);
+                if (giNextchar!=EOF) {giHold=1;return 0;}
+                else                 {         return 1;}
+    default:
+                if (clock_gettime(CLOCK_REALTIME,&gtsZero) != 0) {
+                  error_exit(errno,
+                             "read_Z1st_1line(): clock_gettime() #2: %s\n",
+                             strerror(errno)                               );
+                }
+                if (giDeltaMode) {printf("0 0 ");} else {printf("0 ");}
+                while (putchar(iChar)==EOF) {
+                  if (errno == EINTR) {continue;}
+                  error_exit(errno,"read_Z1st_1line(): putchar() #2: %s\n",
+                             strerror(errno)                               );
+                }
+  }
+
+  /*--- Reading and writing a line ---------------------------------*/
+  while (1) {
+    if (giHold) {iChar=giNextchar; giHold=0;} else {iChar=getc(fp);}
+    switch (iChar) {
+      case EOF:
+                  return(EOF);
+      case '\n':
+                  while (putchar('\n' )==EOF) {
+                    if (errno == EINTR) {continue;}
+                    error_exit(errno,"read_Z1st_1line(): putchar() #3: %s\n",
+                               strerror(errno)                               );
+                  }
+                  giNextchar = getc(fp);
+                  if (giNextchar!=EOF) {giHold=1;return 0;}
+                  else                 {         return 1;}
+      default:
+                  while (putchar(iChar)==EOF) {
+                    if (errno == EINTR) {continue;}
+                    error_exit(errno,"read_Z1st_1line(): putchar() #4: %s\n",
+                               strerror(errno)                               );
+                  }
+    }
+  }
+}
+
 
 /*=== Write the current timestamp to stdout ==========================
  * [in] giFmtType   : (must be defined as a global variable)
- *      gclkId      : (must be defined as a global variable)
  *      giTimeResol : (must be defined as a global variable)
- *      giDeltaMode : (must be defined as a global variable)        */
+ *      giDeltaMode : (must be defined as a global variable)
+ *      gtsZero     : (must be defined as a global variable)
+ *      gtsPrev     : (must be defined as a global variable) */
 void print_cur_timestamp(void) {
 
   /*--- Variables --------------------------------------------------*/
-  static int             iFirst = 1     ; /* >0 when called for the 1st time */
-  static struct timespec tsZero = {0,0} ;
-  static struct timespec tsPrev = {0,0} ;
-  struct timespec        tsNow          ;
-  struct timespec        tsDiff         ;
-  struct tm             *ptm            ;
-  char                   szBuf[LINE_BUF];
+  tmsp        tsNow          ; /* Current time but substructed by gtsZero */
+  tmsp        tsDiff         ;
+  struct tm  *ptm            ;
+  char        szBuf[LINE_BUF];
 
   /*--- Get the current time ---------------------------------------*/
-  if (clock_gettime(gclkId,&tsNow) != 0) {
+  if (clock_gettime(CLOCK_REALTIME,&tsNow) != 0) {
     error_exit(errno,"clock_gettime()#1: %s\n",strerror(errno));
   }
 
   /*--- Print the current timestamp ("YYYYMMDDhhmmss" part) --------*/
   switch (giFmtType) {
     case 'c':
-              if (iFirst) {
-                tsZero.tv_sec=tsNow.tv_sec; tsZero.tv_nsec=tsNow.tv_nsec;
-                tsPrev.tv_sec=tsNow.tv_sec; tsPrev.tv_nsec=tsNow.tv_nsec;
-                iFirst = 0;
-              }
               ptm = localtime(&tsNow.tv_sec);
               if (ptm==NULL) {error_exit(255,"localtime(): returned NULL\n");}
               printf("%04d%02d%02d%02d%02d%02d",
@@ -382,38 +455,22 @@ void print_cur_timestamp(void) {
                 ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec  );
               break;
     case 'e':
-              if (iFirst) {
-                tsZero.tv_sec=tsNow.tv_sec; tsZero.tv_nsec=tsNow.tv_nsec;
-                tsPrev.tv_sec=tsNow.tv_sec; tsPrev.tv_nsec=tsNow.tv_nsec;
-                iFirst = 0;
-              }
-              ptm = localtime(&tsNow.tv_sec);
-              strftime(szBuf, LINE_BUF, "%s", ptm);
-              printf("%s", szBuf);
-              break;
-    case 'Z':
-              if (iFirst) {
-                tsZero.tv_sec=tsNow.tv_sec; tsZero.tv_nsec=tsNow.tv_nsec;
-                tsPrev.tv_sec=0           ; tsPrev.tv_nsec=0            ;
-                iFirst = 0;
-              }
-              if ((tsNow.tv_nsec - tsZero.tv_nsec) < 0) {
-                tsNow.tv_sec  = tsNow.tv_sec  - tsZero.tv_sec  -          1;
-                tsNow.tv_nsec = tsNow.tv_nsec - tsZero.tv_nsec + 1000000000;
-              } else {
-                tsNow.tv_sec  = tsNow.tv_sec  - tsZero.tv_sec ;
-                tsNow.tv_nsec = tsNow.tv_nsec - tsZero.tv_nsec;
-              }
               ptm = localtime(&tsNow.tv_sec);
               strftime(szBuf, LINE_BUF, "%s", ptm);
               printf("%s", szBuf);
               break;
     case 'z':
-              tsZero.tv_sec=tsNow.tv_sec; tsZero.tv_nsec=tsNow.tv_nsec;
-              tsPrev.tv_sec=0           ; tsPrev.tv_nsec=0            ;
-              iFirst = 0;
-              giFmtType = 'Z';
-              return;
+              if ((tsNow.tv_nsec - gtsZero.tv_nsec) < 0) {
+                tsNow.tv_sec  = tsNow.tv_sec  - gtsZero.tv_sec  -          1;
+                tsNow.tv_nsec = tsNow.tv_nsec - gtsZero.tv_nsec + 1000000000;
+              } else {
+                tsNow.tv_sec  = tsNow.tv_sec  - gtsZero.tv_sec ;
+                tsNow.tv_nsec = tsNow.tv_nsec - gtsZero.tv_nsec;
+              }
+              ptm = localtime(&tsNow.tv_sec);
+              strftime(szBuf, LINE_BUF, "%s", ptm);
+              printf("%s", szBuf);
+              break;
     default : error_exit(255,"print_cur_timestamp(): Unknown format\n");
   }
 
@@ -440,14 +497,14 @@ void print_cur_timestamp(void) {
 
   /*--- Print the delta-t if required ------------------------------*/
   if (giDeltaMode) {
-    if ((tsNow.tv_nsec - tsPrev.tv_nsec) < 0) {
-      tsDiff.tv_sec  = tsNow.tv_sec  - tsPrev.tv_sec  -          1;
-      tsDiff.tv_nsec = tsNow.tv_nsec - tsPrev.tv_nsec + 1000000000;
+    if ((tsNow.tv_nsec - gtsPrev.tv_nsec) < 0) {
+      tsDiff.tv_sec  = tsNow.tv_sec  - gtsPrev.tv_sec  -          1;
+      tsDiff.tv_nsec = tsNow.tv_nsec - gtsPrev.tv_nsec + 1000000000;
     } else {
-      tsDiff.tv_sec  = tsNow.tv_sec  - tsPrev.tv_sec ;
-      tsDiff.tv_nsec = tsNow.tv_nsec - tsPrev.tv_nsec;
+      tsDiff.tv_sec  = tsNow.tv_sec  - gtsPrev.tv_sec ;
+      tsDiff.tv_nsec = tsNow.tv_nsec - gtsPrev.tv_nsec;
     }
-    tsPrev.tv_sec=tsNow.tv_sec; tsPrev.tv_nsec=tsNow.tv_nsec;
+    gtsPrev.tv_sec=tsNow.tv_sec; gtsPrev.tv_nsec=tsNow.tv_nsec;
     ptm = localtime(&tsDiff.tv_sec);
     strftime(szBuf, LINE_BUF, "%s", ptm);
     printf("%s", szBuf);
