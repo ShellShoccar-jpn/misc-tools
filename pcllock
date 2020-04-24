@@ -33,7 +33,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-19
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-04-24
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -83,7 +83,7 @@ print_usage_and_exit () {
 	          stdout ....... enerated path of the lockfile (just lock-id)
 	Example : write the following line into the crontab file someone owned
 	          * * * * * pcllock -l 300 -w 10 -d /PATH/TO/LOCKDIR
-	Version : 2020-03-19 12:28:12 JST
+	Version : 2020-04-24 14:43:01 JST
 	USAGE
   exit 1
 }
@@ -381,19 +381,19 @@ tmpf_time=$(mktempf0) || {
 }
 
 # === Remove the orphaned ex-lockfiles in the target directory =======
-# (And also remove the orphaned sh-lock access token file "modifying")
+# (And also remove the orphaned sh-lock access token file "*.busy")
 touch -t $(expire_date_and_time $max_lifetime_secs) "$tmpf_time"
-find './' -type f \( \! -newer "$tmpf_time" \) |
-grep -E '^./[^/]+($|/[^/]+\.busy$)'          | # <- with sh-lock access
-# 1:old_ex-files                               # #    token file "modifying"
-xargs grep '^' /dev/null                       |
-grep ':[0-9]\{1,\}$'                           |
-# 1:old_ex-files 2:pid_of_owner                #
-sort -t : -k 2,2                               |
-join -t : -1 1 -2 2 -v 2 "$tmpf_pids" -        |
-# 1:old_and_orphaned_ex-files 2:pid_of_owner   #
-sed 's/:[0-9]\{1,\}$//'                        |
-# 1:old_and_orphaned_ex-files                  #
+find './' -type f \( \! -newer "$tmpf_time" \)     |
+grep -E '^./[^/]+($|/[^/]+\.busy$)'          |     # <- with sh-lock access
+# 1:old_ex-files                                   # #    token file "*.busy"
+xargs grep '^' /dev/null                           |
+grep ':[0-9]\{1,\}$'                               |
+# 1:old_ex-files 2:pid_of_owner                    #
+sort -t : -k 2,2                                   |
+join -t : -1 1 -2 2 -v 2 -o 2.1,2.2 "$tmpf_pids" - |
+# 1:old_and_orphaned_ex-files 2:pid_of_owner       #
+sed 's/:[0-9]\{1,\}$//'                            |
+# 1:old_and_orphaned_ex-files                      #
 xargs rm -f
 
 # === Remove the orphaned sh-lockfiles in the target directory =======
@@ -406,7 +406,7 @@ for lockdir in $(find './' -type d     |
 do
   lockdir=${lockdir%/}
   lockname=${lockdir#./}
-  # 1) try to create the accesing right token file "modifying"
+  # 1) try to create the accesing right token file "*.busy"
   if [ $max_waiting_secs -ge 0 ]; then
     try=$((max_waiting_secs+1))
   else
@@ -432,7 +432,7 @@ do
   grep -E '/[0-9]{14}\.[0-9]+\.[0-9]+$'                             |
   sed 's!^.*/[0-9]\{14\}.[0-9]\{1,\}\.\([0-9]\{1,\}\)$!\1 &!'       |
   sort -k1,1                                                        |
-  join -1 1 -2 1 -v 2 "$tmpf_pids" -                                |
+  join -1 1 -2 1 -v 2 -o 2.1,2.2 "$tmpf_pids" -                     |
   sed 's/^[^ ]\{1,\} //'                                            |
   xargs rmdir
   # 3) if the current number of the locking processes is 0,
