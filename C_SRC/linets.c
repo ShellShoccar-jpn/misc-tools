@@ -46,7 +46,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-04-19
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-04-26
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -88,6 +88,8 @@ typedef struct timespec tmsp;
 
 /*--- prototype functions ------------------------------------------*/
 int read_1line(FILE *fp);
+int read_c1st_1line(FILE *fp);
+int read_e1st_1line(FILE *fp);
 int read_Z1st_1line(FILE *fp);
 void print_cur_timestamp(void);
 
@@ -144,7 +146,7 @@ void print_usage_and_exit(void) {
     "          -u ........ Set the date in UTC when -c option is set\n"
     "                      (same as that of date command)\n"
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2020-04-19 19:01:31 JST\n"
+    "Version : 2020-04-26 03:39:53 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -192,7 +194,7 @@ char    *pszFilename;     /* filepath (for message)                */
 int      iFileno;         /* file# of filepath                     */
 int      iFd;             /* file descriptor                       */
 FILE    *fp;              /* file handle                           */
-int      iZfirstline=0;   /* >0 when Z-opt and no line come yet    */
+int      iFirstline='c';  /* >0 when x-opt and no line come yet    */
 int      i;               /* all-purpose int                       */
 
 /*--- Initialize ---------------------------------------------------*/
@@ -212,17 +214,17 @@ if (setenv("POSIXLY_CORRECT","1",1) < 0) {
 /*--- Parse options which start by "-" -----------------------------*/
 while ((i=getopt(argc, argv, "0369cezZduvh")) != -1) {
   switch (i) {
-    case '0': giTimeResol =  0 ;                break;
-    case '3': giTimeResol =  3 ;                break;
-    case '6': giTimeResol =  6 ;                break;
-    case '9': giTimeResol =  9 ;                break;
-    case 'c': giFmtType   = 'c'; iZfirstline=0; break;
-    case 'e': giFmtType   = 'e'; iZfirstline=0; break;
-    case 'Z': giFmtType   = 'Z'; iZfirstline=1; break;
-    case 'z': giFmtType   = 'z'; iZfirstline=0; break;
-    case 'd': giDeltaMode =  1 ;                break;
-    case 'u': (void)setenv("TZ", "UTC0", 1);    break;
-    case 'v': giVerbose++      ;                break;
+    case '0': giTimeResol =  0 ;                 break;
+    case '3': giTimeResol =  3 ;                 break;
+    case '6': giTimeResol =  6 ;                 break;
+    case '9': giTimeResol =  9 ;                 break;
+    case 'c': giFmtType   = 'c'; iFirstline='c'; break;
+    case 'e': giFmtType   = 'e'; iFirstline='e'; break;
+    case 'Z': giFmtType   = 'Z'; iFirstline='Z'; break;
+    case 'z': giFmtType   = 'z'; iFirstline= 0 ; break;
+    case 'd': giDeltaMode =  1 ;                 break;
+    case 'u': (void)setenv("TZ", "UTC0", 1);     break;
+    case 'v': giVerbose++      ;                 break;
     case 'h': print_usage_and_exit();
     default : print_usage_and_exit();
   }
@@ -267,8 +269,12 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
 
   /*--- Reading and writing loop -----------------------------------*/
   if (! feof(fp)) {
-    if (iZfirstline) {iRet_r1l=read_Z1st_1line(fp); iZfirstline = 0;}
-    else             {iRet_r1l=0                  ;                 }
+    switch(iFirstline) {
+      case 'c': iRet_r1l=read_c1st_1line(fp); iFirstline=0;               break;
+      case 'e': iRet_r1l=read_e1st_1line(fp); iFirstline=0;               break;
+      case 'Z': iRet_r1l=read_Z1st_1line(fp); iFirstline=0;giFmtType='z'; break;
+      default : iRet_r1l=0;
+    }
     while (iRet_r1l==0) {iRet_r1l=read_1line(fp);}
   }
 
@@ -303,49 +309,160 @@ int read_1line(FILE *fp) {
 
   /*--- Reading and writing a line (1st letter of the line) --------*/
   if (giHold) {iChar=giNextchar; giHold=0;} else {iChar=getc(fp);}
-  switch (iChar) {
-    case EOF:
-                return(EOF);
-    case '\n':
-                print_cur_timestamp();
-                while (putchar('\n' )==EOF) {
-                  if (errno == EINTR) {continue;}
-                  error_exit(errno,"read_1line(): putchar() #1: %s\n",
-                             strerror(errno)                          );
-                }
-                giNextchar = getc(fp);
-                if (giNextchar!=EOF) {giHold=1;return 0;}
-                else                 {         return 1;}
-    default:
-                print_cur_timestamp();
-                while (putchar(iChar)==EOF) {
-                  if (errno == EINTR) {continue;}
-                  error_exit(errno,"read_1line(): putchar() #2: %s\n",
-                             strerror(errno)                          );
-                }
+  if (iChar == EOF) {return(EOF);}
+  print_cur_timestamp();
+  while (putchar(iChar)==EOF) {
+    if (errno == EINTR) {continue;}
+    error_exit(errno,"read_1line(): putchar() #1: %s\n",strerror(errno));
+  }
+  if (iChar == '\n') {
+    giNextchar = getc(fp);
+    if (giNextchar!=EOF) {giHold=1;return 0;}
+    else                 {         return 1;}
   }
 
   /*--- Reading and writing a line ---------------------------------*/
   while (1) {
     if (giHold) {iChar=giNextchar; giHold=0;} else {iChar=getc(fp);}
-    switch (iChar) {
-      case EOF:
-                  return(EOF);
-      case '\n':
-                  while (putchar('\n' )==EOF) {
-                    if (errno == EINTR) {continue;}
-                    error_exit(errno,"read_1line(): putchar() #3: %s\n",
-                               strerror(errno)                          );
-                  }
-                  giNextchar = getc(fp);
-                  if (giNextchar!=EOF) {giHold=1;return 0;}
-                  else                 {         return 1;}
-      default:
-                  while (putchar(iChar)==EOF) {
-                    if (errno == EINTR) {continue;}
-                    error_exit(errno,"read_1line(): putchar() #4: %s\n",
-                               strerror(errno)                          );
-                  }
+    if (iChar == EOF) {return(EOF);}
+    while (putchar(iChar)==EOF) {
+      if (errno == EINTR) {continue;}
+      error_exit(errno,"read_1line(): putchar() #2: %s\n",strerror(errno));
+    }
+    if (iChar == '\n') {
+      giNextchar = getc(fp);
+      if (giNextchar!=EOF) {giHold=1;return 0;}
+      else                 {         return 1;}
+    }
+  }
+}
+
+
+/*=== Read and write only one line (for c-option and 1st line ) ======
+ * [in]  giHold     : (must be defined as a global variable)
+ *       giNextchar : (must be defined as a global variable)
+ * [ret] 0          : Finished reading/writing due to '\n'
+ *       1          : Finished reading/writing due to '\n',
+ *                    which is the last char of the file
+ *       EOF        : Finished reading/writing due to EOF           */
+int read_c1st_1line(FILE *fp) {
+
+  /*--- Variables --------------------------------------------------*/
+  tmsp       tsNow;
+  struct tm *ptm  ;
+  int        iChar;
+
+  /*--- Reading and writing a line (1st letter of the line) --------*/
+  if (giHold) {iChar=giNextchar; giHold=0;} else {iChar=getc(fp);}
+  if (iChar == EOF) {return(EOF);}
+  if (clock_gettime(CLOCK_REALTIME,&tsNow) != 0) {
+    error_exit(errno,"read_c1st_1line(): clock_gettime(): %s\n",
+                     strerror(errno)                            );
+  }
+  if ((ptm=localtime(&tsNow.tv_sec)) == NULL) {
+    error_exit(255,"read_c1st_1line(): localtime(): returned NULL\n");
+  }
+  printf("%04d%02d%02d%02d%02d%02d",
+    ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
+    ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec  );
+  switch (giTimeResol) {
+    case 0 : putchar(' ')                                          ; break;
+    case 3 : printf(".%03d " , (int)(tsNow.tv_nsec+500000)/1000000); break;
+    case 6 : printf(".%06d " , (int)(tsNow.tv_nsec+   500)/   1000); break;
+    case 9 : printf(".%09ld ",       tsNow.tv_nsec                ); break;
+    default: error_exit(255,"read_e1st_1line(): Unknown resolution\n");
+  }
+  if (giDeltaMode) {
+    printf("0 ");
+    gtsPrev.tv_sec=tsNow.tv_sec; gtsPrev.tv_nsec=tsNow.tv_nsec;
+  }
+  while (putchar(iChar)==EOF) {
+    if (errno == EINTR) {continue;}
+    error_exit(errno,"read_c1st_1line(): putchar() #1: %s\n",strerror(errno));
+  }
+  if (iChar == '\n') {
+    giNextchar = getc(fp);
+    if (giNextchar!=EOF) {giHold=1;return 0;}
+    else                 {         return 1;}
+  }
+
+  /*--- Reading and writing a line ---------------------------------*/
+  while (1) {
+    if (giHold) {iChar=giNextchar; giHold=0;} else {iChar=getc(fp);}
+    if (iChar == EOF) {return(EOF);}
+    while (putchar(iChar)==EOF) {
+      if (errno == EINTR) {continue;}
+      error_exit(errno,"read_c1st_1line(): putchar() #2: %s\n",strerror(errno));
+    }
+    if (iChar == '\n') {
+      giNextchar = getc(fp);
+      if (giNextchar!=EOF) {giHold=1;return 0;}
+      else                 {         return 1;}
+    }
+  }
+}
+
+
+/*=== Read and write only one line (for e-option and 1st line ) ======
+ * [in]  giHold     : (must be defined as a global variable)
+ *       giNextchar : (must be defined as a global variable)
+ * [ret] 0          : Finished reading/writing due to '\n'
+ *       1          : Finished reading/writing due to '\n',
+ *                    which is the last char of the file
+ *       EOF        : Finished reading/writing due to EOF           */
+int read_e1st_1line(FILE *fp) {
+
+  /*--- Variables --------------------------------------------------*/
+  tmsp       tsNow          ;
+  struct tm *ptm            ;
+  char       szBuf[LINE_BUF];
+  int        iChar          ;
+
+  /*--- Reading and writing a line (1st letter of the line) --------*/
+  if (giHold) {iChar=giNextchar; giHold=0;} else {iChar=getc(fp);}
+  if (iChar == EOF) {return(EOF);}
+  if (clock_gettime(CLOCK_REALTIME,&tsNow) != 0) {
+    error_exit(errno,"read_e1st_1line(): clock_gettime(): %s\n",
+                     strerror(errno)                            );
+  }
+  if ((ptm=localtime(&tsNow.tv_sec)) == NULL) {
+    error_exit(255,"read_e1st_1line(): localtime(): returned NULL\n");
+  }
+  strftime(szBuf, LINE_BUF, "%s", ptm);
+  printf("%s", szBuf);
+  switch (giTimeResol) {
+    case 0 : putchar(' ')                                          ; break;
+    case 3 : printf(".%03d " , (int)(tsNow.tv_nsec+500000)/1000000); break;
+    case 6 : printf(".%06d " , (int)(tsNow.tv_nsec+   500)/   1000); break;
+    case 9 : printf(".%09ld ",       tsNow.tv_nsec                ); break;
+    default: error_exit(255,"read_e1st_1line(): Unknown resolution\n");
+  }
+  if (giDeltaMode) {
+    printf("0 ");
+    gtsPrev.tv_sec=tsNow.tv_sec; gtsPrev.tv_nsec=tsNow.tv_nsec;
+  }
+  while (putchar(iChar)==EOF) {
+    if (errno == EINTR) {continue;}
+    error_exit(errno,"read_e1st_1line(): putchar() #1: %s\n",strerror(errno));
+  }
+  if (iChar == '\n') {
+    giNextchar = getc(fp);
+    if (giNextchar!=EOF) {giHold=1;return 0;}
+    else                 {         return 1;}
+  }
+
+  /*--- Reading and writing a line ---------------------------------*/
+  while (1) {
+    if (giHold) {iChar=giNextchar; giHold=0;} else {iChar=getc(fp);}
+    if (iChar == EOF) {return(EOF);}
+    while (putchar(iChar)==EOF) {
+      if (errno == EINTR) {continue;}
+      error_exit(errno,"read_e1st_1line(): putchar() #2: %s\n",strerror(errno));
+    }
+    if (iChar == '\n') {
+      giNextchar = getc(fp);
+      if (giNextchar!=EOF) {giHold=1;return 0;}
+      else                 {         return 1;}
     }
   }
 }
@@ -362,65 +479,37 @@ int read_Z1st_1line(FILE *fp) {
 
   /*--- Variables --------------------------------------------------*/
   int        iChar;
-  /*--- FmtType 'Z' ==> 'z' ----------------------------------------*/
-  giFmtType = 'z';
 
   /*--- Reading and writing a line (1st letter of the line) --------*/
   if (giHold) {iChar=giNextchar; giHold=0;} else {iChar=getc(fp);}
-  switch (iChar) {
-    case EOF:
-                return(EOF);
-    case '\n':
-                if (clock_gettime(CLOCK_REALTIME,&gtsZero) != 0) {
-                  error_exit(errno,
-                             "read_Z1st_1line(): clock_gettime() #1: %s\n",
-                             strerror(errno)                               );
-                }
-                if (giDeltaMode) {printf("0 0 ");} else {printf("0 ");}
-                while (putchar('\n' )==EOF) {
-                  if (errno == EINTR) {continue;}
-                  error_exit(errno,
-                             "read_Z1st_1line(): putchar() #1: %s\n",
-                             strerror(errno)                         );
-                }
-                giNextchar = getc(fp);
-                if (giNextchar!=EOF) {giHold=1;return 0;}
-                else                 {         return 1;}
-    default:
-                if (clock_gettime(CLOCK_REALTIME,&gtsZero) != 0) {
-                  error_exit(errno,
-                             "read_Z1st_1line(): clock_gettime() #2: %s\n",
-                             strerror(errno)                               );
-                }
-                if (giDeltaMode) {printf("0 0 ");} else {printf("0 ");}
-                while (putchar(iChar)==EOF) {
-                  if (errno == EINTR) {continue;}
-                  error_exit(errno,"read_Z1st_1line(): putchar() #2: %s\n",
-                             strerror(errno)                               );
-                }
+  if (iChar == EOF) {return(EOF);}
+  if (clock_gettime(CLOCK_REALTIME,&gtsZero) != 0) {
+    error_exit(errno,"read_Z1st_1line(): clock_gettime(): %s\n",
+                     strerror(errno)                            );
+  }
+  if (giDeltaMode) {printf("0 0 ");} else {printf("0 ");}
+  while (putchar(iChar)==EOF) {
+    if (errno == EINTR) {continue;}
+    error_exit(errno,"read_Z1st_1line(): putchar() #1: %s\n",strerror(errno));
+  }
+  if (iChar == '\n') {
+    giNextchar = getc(fp);
+    if (giNextchar!=EOF) {giHold=1;return 0;}
+    else                 {         return 1;}
   }
 
   /*--- Reading and writing a line ---------------------------------*/
   while (1) {
     if (giHold) {iChar=giNextchar; giHold=0;} else {iChar=getc(fp);}
-    switch (iChar) {
-      case EOF:
-                  return(EOF);
-      case '\n':
-                  while (putchar('\n' )==EOF) {
-                    if (errno == EINTR) {continue;}
-                    error_exit(errno,"read_Z1st_1line(): putchar() #3: %s\n",
-                               strerror(errno)                               );
-                  }
-                  giNextchar = getc(fp);
-                  if (giNextchar!=EOF) {giHold=1;return 0;}
-                  else                 {         return 1;}
-      default:
-                  while (putchar(iChar)==EOF) {
-                    if (errno == EINTR) {continue;}
-                    error_exit(errno,"read_Z1st_1line(): putchar() #4: %s\n",
-                               strerror(errno)                               );
-                  }
+    if (iChar == EOF) {return(EOF);}
+    while (putchar(iChar)==EOF) {
+      if (errno == EINTR) {continue;}
+      error_exit(errno,"read_Z1st_1line(): putchar() #2: %s\n",strerror(errno));
+    }
+    if (iChar == '\n') {
+      giNextchar = getc(fp);
+      if (giNextchar!=EOF) {giHold=1;return 0;}
+      else                 {         return 1;}
     }
   }
 }
@@ -475,24 +564,12 @@ void print_cur_timestamp(void) {
   }
 
   /*--- Print the current timestamp (".n" part) --------------------*/
-  if (tsNow.tv_nsec==0) {
-    putchar(' ');
-  } else                {
-    switch (giTimeResol) {
-      case 0:
-              putchar(' ');
-              break;
-      case 3:
-              printf(".%03d " , (int)(tsNow.tv_nsec+500000)/1000000);
-              break;
-      case 6:
-              printf(".%06d " , (int)(tsNow.tv_nsec+   500)/   1000);
-              break;
-      case 9:
-              printf(".%09ld ",       tsNow.tv_nsec                );
-              break;
-      default : error_exit(255,"print_cur_timestamp(): Unknown resolution\n");
-    }
+  switch (giTimeResol) {
+    case 0 : putchar(' ')                                          ; break;
+    case 3 : printf(".%03d " , (int)(tsNow.tv_nsec+500000)/1000000); break;
+    case 6 : printf(".%06d " , (int)(tsNow.tv_nsec+   500)/   1000); break;
+    case 9 : printf(".%09ld ",       tsNow.tv_nsec                ); break;
+    default: error_exit(255,"print_cur_timestamp(): Unknown resolution\n");
   }
 
   /*--- Print the delta-t if required ------------------------------*/
@@ -512,18 +589,10 @@ void print_cur_timestamp(void) {
       putchar(' ');
     } else                 {
       switch (giTimeResol) {
-        case 0:
-                putchar(' ');
-                break;
-        case 3:
-                printf(".%03d " , (int)(tsDiff.tv_nsec+500000)/1000000);
-                break;
-        case 6:
-                printf(".%06d " , (int)(tsDiff.tv_nsec+   500)/   1000);
-                break;
-        case 9:
-                printf(".%09ld ",       tsDiff.tv_nsec                );
-                break;
+        case 0: putchar(' ')                                           ; break;
+        case 3: printf(".%03d " , (int)(tsDiff.tv_nsec+500000)/1000000); break;
+        case 6: printf(".%06d " , (int)(tsDiff.tv_nsec+   500)/   1000); break;
+        case 9: printf(".%09ld ",       tsDiff.tv_nsec                ); break;
       }
     }
   }
