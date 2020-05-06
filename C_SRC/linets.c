@@ -7,7 +7,7 @@
 #          current time" means the instant when this command starts
 #          writing the line which has been read.
 #
-# USAGE   : linets [-0|-3|-6|-9] [-c|-e|-z] [-du] [file ...]
+# USAGE   : linets [-0|-3|-6|-9] [-c|-e|-z|-Z] [-du] [file ...]
 # Args    : file ...... Filepath to be attached the current timestamp
 #                       ("-" means STDIN)
 # Options : -0,-3,-6,-9 Specify resolution unit of the time. For instance,
@@ -18,7 +18,7 @@
 #                         -3 ... millisecond
 #                         -6 ... microsecond
 #                         -9 ... nanosecond
-#           -c,-e,-z .. Specify the format for timestamp. You can choose
+#           -c,-e,-z,-Z Specify the format for timestamp. You can choose
 #                       one of them.
 #                         -c ... "YYYYMMDDhhmmss[.n]" (default)
 #                                Calendar-time (standard time) in your
@@ -46,7 +46,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-04-26
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-05-06
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -112,7 +112,7 @@ int   giNextchar       ; /* for read_1line(): the next character          */
 /*--- exit with usage ----------------------------------------------*/
 void print_usage_and_exit(void) {
   fprintf(stderr,
-    "USAGE   : %s [-0|-3|-6|-9] [-c|-e|-z] [-du] [file ...]\n"
+    "USAGE   : %s [-0|-3|-6|-9] [-c|-e|-z|-Z] [-du] [file ...]\n"
     "Args    : file ...... Filepath to be attached the current timestamp\n"
     "                      (\"-\" means STDIN)\n"
     "Options : -0,-3,-6,-9 Specify resolution unit of the time. For instance,\n"
@@ -123,7 +123,7 @@ void print_usage_and_exit(void) {
     "                        -3 ... millisecond\n"
     "                        -6 ... microsecond\n"
     "                        -9 ... nanosecond\n"
-    "          -c,-e,-z .. Specify the format for timestamp. You can choose\n"
+    "          -c,-e,-z,-Z Specify the format for timestamp. You can choose\n"
     "                      one of them.\n"
     "                        -c ... \"YYYYMMDDhhmmss[.n]\" (default)\n"
     "                               Calendar-time (standard time) in your\n"
@@ -146,7 +146,7 @@ void print_usage_and_exit(void) {
     "          -u ........ Set the date in UTC when -c option is set\n"
     "                      (same as that of date command)\n"
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2020-04-26 03:39:53 JST\n"
+    "Version : 2020-05-06 22:42:19 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"

@@ -2,7 +2,7 @@
 #
 # TSCAT - A "cat" Command Which Can Reprodude the Timing of Flow
 #
-# USAGE   : tscat [-c|-e|-z] [-Z] [-p n] [file ...]
+# USAGE   : tscat [-c|-e|-z] [-Z] [-u] [-p n] [file ...]
 # Args    : file ........ Filepath to be send ("-" means STDIN)
 #                         The file MUST be a textfile and MUST have
 #                         a timestamp at the first field to make the
@@ -33,6 +33,8 @@
 #                         "-c" option is given. In this case, the first
 #                         line is sent to stdout immediately, and after
 #                         five seconds, the second line is sent.
+#           -u .......... Set the date in UTC when -c option is set
+#                         (same as that of date command)
 #           [The following option is for professional]
 #           -p n ........ Process priority setting [0-3] (if possible)
 #                          0: Normal process
@@ -48,7 +50,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-25
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-05-06
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -153,6 +155,8 @@ void print_usage_and_exit(void) {
     "                        \"-c\" option is given. In this case, the first\n"
     "                        line is sent to stdout immediately, and after\n"
     "                        five seconds, the second line is sent.\n"
+    "          -u .......... Set the date in UTC when -c option is set\n"
+    "                        (same as that of date command)\n"
 #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
     "          [The following option is for professional]\n"
     "          -p n ........ Process priority setting [0-3] (if possible)\n"
@@ -164,7 +168,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2020-03-25 13:28:08 JST\n"
+    "Version : 2020-05-06 22:42:19 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -240,17 +244,18 @@ iMode     = 0; /* 0:"-c"(default) 1:"-e" 2:"-z" 4:"-cZ" 5:"-eZ" 6:"-zZ" */
 iPrio     = 1;
 giVerbose = 0;
 /*--- Parse options which start by "-" -----------------------------*/
-while ((i=getopt(argc, argv, "cep:vhZz")) != -1) {
+while ((i=getopt(argc, argv, "cep:uvhZz")) != -1) {
   switch (i) {
-    case 'c': iMode&=4; iMode+=0; break;
-    case 'e': iMode&=4; iMode+=1; break;
-    case 'z': iMode&=4; iMode+=2; break;
-    case 'Z': iMode&=3; iMode+=4; break;
+    case 'c': iMode&=4; iMode+=0;            break;
+    case 'e': iMode&=4; iMode+=1;            break;
+    case 'z': iMode&=4; iMode+=2;            break;
+    case 'Z': iMode&=3; iMode+=4;            break;
+    case 'u': (void)setenv("TZ", "UTC0", 1); break;
     #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
       case 'p': if (sscanf(optarg,"%d",&iPrio) != 1) {print_usage_and_exit();}
-                                    break;
+                                               break;
     #endif
-    case 'v': giVerbose++;        break;
+    case 'v': giVerbose++;                   break;
     case 'h': print_usage_and_exit();
     default : print_usage_and_exit();
   }
