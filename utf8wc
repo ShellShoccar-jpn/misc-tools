@@ -134,10 +134,12 @@ for file in "$@"; do
          }
          return len;
        }' "$file" 2>/dev/null
-  [ $? -eq 0 ] || {
+  case $? in
+    0) : ;;
+    *)
     echo "${0##*/}: Cannot open the file: $file" 1>&2
     ret=1
-  }
+  esac
 done
 
 
