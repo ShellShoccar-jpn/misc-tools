@@ -18,7 +18,7 @@
 #                       from wrapping.
 #        -i ........... When decoding, ignore non-alphabet characters.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-05-06
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-11-08
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -53,7 +53,7 @@ print_usage_and_exit () {
 	            -d, -w <COLS>, -i
 	          But --by-myself is the only original option, it prevent
 	          from use the built-in same name command even if available
-	Version : 2020-05-06 22:42:19 JST
+	Version : 2020-11-08 22:12:39 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	            * Although the built-in base64, uuencode and uudecode command or
 	              GNU AWK produces better performance than the POSIX commands set
@@ -241,7 +241,7 @@ case "$file" in ''|-|/*|./*|../*) :;; *) file="./$file";; esac
 # Main Routine
 ######################################################################
 
-# === If Mac OS X version base64 was requested, call it here =========
+# === If macOS version base64 was requested, call it here ============
 case "$by_myself${CMD_BASE64_MAC:-}" in 0/*)
   opts=''
   case $mode in d) opts="$opts -d";; esac
