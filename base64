@@ -55,7 +55,7 @@ print_usage_and_exit () {
 	          from use the built-in same name command even if available
 	Version : 2020-05-06 22:42:19 JST
 	          (POSIX Bourne Shell/POSIX commands)
-	            * Although the bult-in base64, uuencode and uudecode command or
+	            * Although the built-in base64, uuencode and uudecode command or
 	              GNU AWK produces better performance than the POSIX commands set
 	USAGE
   exit 1
@@ -101,7 +101,7 @@ case "${1:-}" in
      ;;
 esac
 #
-# --- use "bult-in" base64 if available and wanted -------------------
+# --- use "built-in" base64 if available and wanted -------------------
 if   [ $by_myself -eq 0 ] && printf 1 | "$CMD_builtin" -w 0 >/dev/null 2>&1;then
   exec "$CMD_builtin" ${1+"$@"}
   exit 1
