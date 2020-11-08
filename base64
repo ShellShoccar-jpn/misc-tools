@@ -55,7 +55,7 @@ print_usage_and_exit () {
 	          from use the built-in same name command even if available
 	Version : 2020-05-06 22:42:19 JST
 	          (POSIX Bourne Shell/POSIX commands)
-	            * Although the bult-in base64, uuencode and uudecode command or
+	            * Although the built-in base64, uuencode and uudecode command or
 	              GNU AWK produces better performance than the POSIX commands set
 	USAGE
   exit 1
@@ -101,22 +101,24 @@ case "${1:-}" in
      ;;
 esac
 #
-# --- use "bult-in" base64 if available and wanted -------------------
-if   [ $by_myself -eq 0 ] && printf 1 | "$CMD_builtin" -w 0 >/dev/null 2>&1;then
-  exec "$CMD_builtin" ${1+"$@"}
-  exit 1
-elif [ $by_myself -eq 0 ] && printf 1 | "$CMD_builtin" -b 0 >/dev/null 2>&1;then
-  # If Mac OS X version exists, I will use it after option parsing
-  CMD_BASE64_MAC=$CMD_builtin
-fi
+# --- use "built-in" base64 if available and wanted -------------------
+case $by_myself in (0)
+  if   printf 1 | "$CMD_builtin" -w 0 >/dev/null 2>&1;then
+    exec "$CMD_builtin" ${1+"$@"}
+    exit 1
+  elif printf 1 | "$CMD_builtin" -b 0 >/dev/null 2>&1;then
+    # If Mac OS X version exists, I will use it after option parsing
+    CMD_BASE64_MAC=$CMD_builtin
+  fi
+esac
 #
 # --- check whether this host has a "binarable" AWK command or not ---
 binarable_awk=1
 while :; do
   CMD_AWK=$(which gawk 2>/dev/null)
-  [ $? -eq 0 ] && break
+  case $? in (0) break;; esac
   CMD_AWK=$(which awk 2>/dev/null)
-  [ $($CMD_AWK 'BEGIN{print length(sprintf("\000"))}') -eq 1 ] && break
+  case $($CMD_AWK 'BEGIN{print length(sprintf("\000"))}') in (1) break;; esac
   binarable_awk=0; break
 done
 
