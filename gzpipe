@@ -47,7 +47,7 @@
 #   That means, you can join various filters to fd=2 (stderr). Although
 #   it is very tricky. ;-)
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-05-06
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-12-06
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -79,7 +79,7 @@ print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [-t timeout] <named_pipe_to_use> [output_file]
 	          * See the document at the source code of this command
-	Version : 2020-05-06 22:42:19 JST
+	Version : 2020-12-06 02:51:43 JST
 	USAGE
   exit 1
 }
@@ -201,8 +201,9 @@ case $check in 'p')
   # --- exit trap (for parent) ---------------------------------------
   exit_trap() {
     set -- ${1:-} $?  # $? is set as $1 if no argument given
-    trap - EXIT HUP INT QUIT PIPE ALRM TERM
+    trap '' EXIT HUP INT QUIT PIPE ALRM TERM
     rm -f "${namedpipe_to_del_by_myself:-}"
+    trap -  EXIT HUP INT QUIT PIPE ALRM TERM
     exit $1
   }
   #
@@ -315,7 +316,7 @@ case $check in 'p')
   # --- set exiting trap ---------------------------------------------
   exit_trap() {
     set -- ${1:-} $?  # $? is set as $1 if no argument given
-    trap - EXIT HUP INT QUIT PIPE ALRM TERM
+    trap '' EXIT HUP INT QUIT PIPE ALRM TERM
     ret=$1
     # --- the gzipped pipe has been used or not? ---
     while [ -f "${gz_file:-}" ]; do
@@ -332,6 +333,7 @@ case $check in 'p')
     rm -f "${gz_file:-}"
     case $del_the_pipe in 1) rm -f "$pipe";; esac
     # --- finish ---
+    trap -  EXIT HUP INT QUIT PIPE ALRM TERM
     exit $ret
   }
   trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM

@@ -36,7 +36,7 @@
 #              :
 #          kill $flock_pid
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-05-06
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-12-06
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -73,7 +73,7 @@ print_usage_and_exit () {
 	                          (0 means infinity, and default=$DEFAULT_MAXLIFETIME)
 	          * See the document at the source code of this command
 	            for more infomation
-	Version : 2020-05-06 22:42:19 JST
+	Version : 2020-12-06 02:56:52 JST
 	USAGE
   exit 1
 }
@@ -207,8 +207,9 @@ case $check in 'p')
   # --- exit trap (for parent) ---------------------------------------
   exit_trap () {
     set -- ${1:-} $?  # $? is set as $1 if no argument given
-    trap - EXIT HUP INT QUIT PIPE ALRM TERM
+    trap '' EXIT HUP INT QUIT PIPE ALRM TERM
     rm -f "${temp_datafile:-}"
+    trap -  EXIT HUP INT QUIT PIPE ALRM TERM
     exit $1
   }
   #
@@ -307,9 +308,10 @@ case $check in 'p')
   #
   # --- set exiting trap ---------------------------------------------
   exit_trap() {
-    trap - EXIT HUP INT QUIT PIPE ALRM TERM
+    trap '' EXIT HUP INT QUIT PIPE ALRM TERM
     kill -s TERM "${timerjob_pid:-}" "${timersleep_pid:-}"
     kill -s TERM "${pollingsleep_pid:-}"
+    trap -  EXIT HUP INT QUIT PIPE ALRM TERM
     exit ${1:-0}
   }
   trap 'exit_trap' EXIT HUP INT QUIT PIPE ALRM TERM

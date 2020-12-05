@@ -23,7 +23,7 @@
 #                          And when the unit suffix is written at last,
 #                          the value is multiplied by the unit suffix.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-05-06
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-12-06
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -68,7 +68,7 @@ print_usage_and_exit () {
 	                            relative, otherwise absolute.
 	                            And when the unit suffix is written at last,
 	                            the value is multiplied by the unit suffix.
-	Version : 2020-05-06 22:42:19 JST
+	Version : 2020-12-06 02:48:45 JST
 	USAGE
   exit 1
 }
@@ -81,8 +81,9 @@ error_exit() {
 }
 exit_trap() {
   set -- ${1:-} $?  # $? is set as $1 if no argument given
-  trap '-' EXIT HUP INT QUIT PIPE ALRM TERM
+  trap '' EXIT HUP INT QUIT PIPE ALRM TERM
   rm -f "${Tempfile:-}"
+  trap -  EXIT HUP INT QUIT PIPE ALRM TERM
   exit $1
 }
 

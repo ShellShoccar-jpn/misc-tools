@@ -37,7 +37,7 @@
 #           If you want not to share it with others,
 #           you have to give the lockdir rwxrwx--- or rwx------ permisson.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-05-06
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-12-06
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -95,7 +95,7 @@ print_usage_and_exit () {
 	Notice  : The lockfile is written with rw-rw-rw for sharing.
 	          If you want not to share it with others,
 	          you have to give the lockdir rwxrwx--- or rwx------ permisson.
-	Version : 2020-05-06 22:42:19 JST
+	Version : 2020-12-06 02:54:48 JST
 	USAGE
   exit 1
 }
@@ -107,9 +107,10 @@ error_exit() {
   exit $1
 }
 exit_trap () {
-  trap - EXIT HUP INT QUIT PIPE ALRM TERM
+  trap '' EXIT HUP INT QUIT PIPE ALRM TERM
   rm -rf "${Dir_prelk:-}" "${File_busy:-}" >/dev/null 2>&1
   i=$?
+  trap -  EXIT HUP INT QUIT PIPE ALRM TERM
   case $# in 0) exit $i;; *) exit ${1:-0};; esac
 }
 

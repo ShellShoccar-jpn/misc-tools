@@ -52,7 +52,7 @@
 #      $ greo -p -- '-R' '-r' *
 #
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-05-06
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-12-06
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -109,7 +109,7 @@ print_usage_and_exit () {
 	              * Quickly overwriting but permission, owner/group, link, ACL
 	                information will be reset
 	          --  Finish recognizing the following arguments as options
-	Version : 2020-05-06 22:42:19 JST
+	Version : 2020-12-06 02:56:02 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -120,8 +120,9 @@ error_exit() {
 }
 exit_trap() {
   set -- ${1:-} $?  # $? is set as $1 if no argument given
-  trap '-' EXIT HUP INT QUIT PIPE ALRM TERM
+  trap '' EXIT HUP INT QUIT PIPE ALRM TERM
   rm -f "${Tempfile:-}"
+  trap -  EXIT HUP INT QUIT PIPE ALRM TERM
   exit $1
 }
 
