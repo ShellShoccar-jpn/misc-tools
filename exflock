@@ -2,7 +2,7 @@
 
 ######################################################################
 #
-# EXFLOCK : A File Lock Command that You Can Use Like flock(2)
+# EXFLOCK : An Exclusive File Lock Command That Is Like the flock(2)
 #
 # Usage  : exflock <seconds> <file> [maxlifetime]
 #          <seconds> ...... maximum waiting time to succeed locking
@@ -14,23 +14,21 @@
 #          !=0 ... failure
 #
 # * This command tries to do exclusive flock and return locking process
-#   ID if it has succeeded.
-# * When the next command starts, locking continues.
+#   ID if it succeeds.
+# * Locking is kept even when the next command starts.
 # * When you want to unlock, do one of the following.
-#   (a) terminate the process which calls exflock
-#       (then the locking process will also terminate)
-#   (b) execute this "kill <PID>"
-#       (<PID> is the number you got from me as the locking process ID)
-#   (c) wait for timeout you set by <maxlifetime>
+#   (a) Terminate the process which executed exflock.
+#       (then the locking process will also terminate itself.)
+#   (b) Execute the command "kill <PID>"
+#       (<PID> is the number you got from me as the locking process ID.)
+#   (c) Wait for timeout you set by <maxlifetime>
 # * IMPORTANTS
 #   - This command now supports the following Operating Systems.
 #       FreeBSD, Linux, NetBSD
 #     I want to know how to lock file on the other Operating Systems.
 #
-# Sample : trap "rm -f locking_process.$$.pid; exit" EXIT HUP INT QUIT ALRM TERM
-#          exflock 5 "file_to_flock" > locking_process.$$.pid
-#          [ $? -eq 0 ] || { echo 'fail to lock'; exit 1; }
-#          flock_pid=$(cat locking_process.$$.pid)
+# Sample : flock_pid=$(exflock 5 "file_to_flock")
+#          case $flock_pid in '') echo 'fail to lock'; exit 1;; esac
 #              :
 #          (here is the locked zone)
 #              :
@@ -71,9 +69,8 @@ print_usage_and_exit () {
 	         <file> ......... the path of the file you want to lock
 	         [maxlifetime] .. the maximum life of the locking process (sec)
 	                          (0 means infinity, and default=$DEFAULT_MAXLIFETIME)
-	          * See the document at the source code of this command
-	            for more infomation
-	Version : 2020-12-06 02:56:52 JST
+	          * See the header comment on this command file for more infomation
+	Version : 2020-12-06 07:32:01 JST
 	USAGE
   exit 1
 }
@@ -187,22 +184,22 @@ esac
 
 # === Judge which I have started as a parent or a child ==============
 while :; do
-  pid=$$
-  check=$(ps -Ao pid,ppid | awk '$1=='$pid'{print $2}')
-  case "$check" in                       '') check='p'; break;; esac
-  check=$(ps -Ao pid,ppid,comm | awk '$1=='$check'{print $2,$3}')
-  case "${check#* }" in "$CMD_flock") :;; *) check='p'; break;; esac
-  check=$(ps -Ao pid,ppid | awk '$1=='${check% *}'{print $2}')
-  case "$check" in                       '') check='p'; break;; esac
-  check=$(ps -Ao pid,ppid | awk '$1=='${check% *}'{print $2}')
-  case "$check" in                       '') check='p'; break;; esac
-  case "$check" in              "$1") :;; *) check='p'; break;; esac
-  check='c'; break;
-done
+  case $#       in 3)                :;; *) check='p1'; break;; esac
+  case ${3##*/} in "tmp.${0##*/}."*) :;; *) check='p2'; break;; esac
+  [ -s "$3" ] || {                          check='p3'; break; }
+  case $1 in                      *[!0-9]*) check='p4'; break;; esac
+  check=$(ps -Ao ppid,pid,args                                       |
+          awk -v trgpid=$1 -v me=$$ '                                #
+            {    p[$2]=$1;                                         } #
+            END {print not_my_ans(me,trgpid) ? "p5" : "c"          } #
+            function not_my_ans(pid,trgpid) {                        #
+                 if (pid==trgpid) {return 0;}                        #
+                 return (pid in p) ? not_my_ans(p[pid],trgpid) : 1;}')
+break; done
 
 
 # ===== ROUTINE AS A PARENT ==========================================
-case $check in 'p')
+case $check in 'p'?)
   #
   # --- exit trap (for parent) ---------------------------------------
   exit_trap () {
