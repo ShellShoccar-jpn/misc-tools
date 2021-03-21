@@ -7,13 +7,13 @@
 # Args    : periodictime  Periodic time from start sending the current
 #                         block (means a character or a line) to start
 #                         sending the next block.
-#                         The unit of the periodic time is millisecond
+#                         The unit of the periodic time is second
 #                         defaultly. You can also specify the unit
 #                         like '100ms'. Available units are 's', 'ms',
 #                         'us', 'ns'.
 #                         You can also specify it by the units/words.
-#                          - speed  : 'bps' (regards as 1charater= 8bit)
-#                                     'cps' (regards as 1charater=10bit)
+#                          - speed  : '[kMG]bps' (regards as 1chr= 8bit)
+#                                     'cps' (regards as 1chr=10bit)
 #                          - output : '0%'   (completely shut the value)
 #                                     '100%' (completely open the value)
 #                         The maximum value is INT_MAX for all units.
@@ -76,7 +76,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-19
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2021-03-22
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -174,13 +174,13 @@ void print_usage_and_exit(void) {
     "Args    : periodictime  Periodic time from start sending the current\n"
     "                        block (means a character or a line) to start\n"
     "                        sending the next block.\n"
-    "                        The unit of the periodic time is millisecond\n"
+    "                        The unit of the periodic time is second\n"
     "                        defaultly. You can also specify the unit\n"
     "                        like '100ms'. Available units are 's', 'ms',\n"
     "                        'us', 'ns'.\n"
     "                        You can also specify it by the units/words.\n"
-    "                         - speed  : 'bps' (regards as 1charater= 8bit)\n"
-    "                                    'cps' (regards as 1charater=10bit)\n"
+    "                         - speed  : '[kMG]bps' (regards as 1chr= 8bit)\n"
+    "                                    'cps' (regards as 1chr=10bit)\n"
     "                         - output : '0%%'   (completely shut the value)\n"
     "                                    '100%%' (completely open the value)\n"
     "                        The maximum value is INT_MAX for all units.\n"
@@ -235,7 +235,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2020-03-19 12:18:14 JST\n"
+    "Version : 2021-03-22 02:20:40 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -341,7 +341,7 @@ if (giVerbose>0) {warning("verbose mode (level %d)\n",giVerbose);}
 if (argc < 2         ) {print_usage_and_exit();}
 gi8Peritime = parse_periodictime(argv[0]);
 if (gi8Peritime <= -2) {
-  /* Make sure that the ontrol file has an acceptable type */
+  /* Make sure that the control file has an acceptable type */
   if ((i=stat(argv[0],&stCtrlfile)) < 0) {
     error_exit(errno,"%s: %s\n",argv[0],strerror(errno));  
   }
@@ -530,51 +530,72 @@ return(iRet);}
 int64_t parse_periodictime(char *pszArg) {
 
   /*--- Variables --------------------------------------------------*/
-  char  szVal[CTRL_FILE_BUF]; /* string buffer for the value part in pszArg */
-  char *pszUnit             ;
-  int   iLen, iVlen, iVal   ;
-  int   iVlen_max           ;
+  char   szUnit[CTRL_FILE_BUF];
+  int    iLen, iVlen, iVal    ;
+  int    iVlen_max            ;
+  double dNum;
 
-  /*--- Get the lengths for the argument ---------------------------*/
-  if ((iLen=strlen(pszArg))>=CTRL_FILE_BUF            ) {return -2;}
-  iVlen_max=sprintf(szVal,"%d",INT_MAX);
+  /*--- Check the lengths of the argument --------------------------*/
+  if (strlen(pszArg)>=CTRL_FILE_BUF) {return -2;}
 
-  /*--- Try to interpret the argument as "<value>"+"unit" ----------*/
-  for (iVlen=0; iVlen<iLen; iVlen++) {
-    if (pszArg[iVlen]<'0' || pszArg[iVlen]>'9'){break;}
-    szVal[iVlen] = pszArg[iVlen];
+  /*--- Try to interpret the argument as "<value>"[+"unit"] --------*/
+  switch (sscanf(pszArg, "%lf%s", &dNum, szUnit)) {
+    case   2:                      break;
+    case   1: strcpy(szUnit, "s"); break;
+    default : return -2;
   }
-  szVal[iVlen] = '\0';
-  if (iVlen==0 || iVlen>iVlen_max                     ) {return -2;}
-  if (sscanf(szVal,"%d",&iVal) != 1                   ) {return -2;}
-  if ((strlen(szVal)==iVlen_max) && (iVal<(INT_MAX/2))) {return -2;}
-  pszUnit = pszArg + iVlen;
+  if (dNum < 0                     ) {return -2;}
 
   /* as a second value */
-  if (strcmp(pszUnit, "s"  )==0) {return (int64_t)iVal*1000000000;}
+  if (strcmp(szUnit, "s" )==0) {
+    if (dNum > ((double)INT_MAX             )) {return -2;}
+    return       (int64_t)(dNum * 1000000000);
+  }
 
   /* as a millisecond value */
-  if (strlen(pszUnit)==0 || strcmp(pszUnit, "ms")==0) {
-                                  return (int64_t)iVal*1000000;   }
+  if (strcmp(szUnit, "ms")==0) {
+    if (dNum > ((double)INT_MAX *       1000)) {return -2;}
+    return       (int64_t)(dNum *    1000000);
+  }
 
   /* as a microsecond value */
-  if (strcmp(pszUnit, "us" )==0) {return (int64_t)iVal*1000;      }
+  if (strcmp(szUnit, "us")==0) {
+    if (dNum > ((double)INT_MAX *    1000000)) {return -2;}
+    return       (int64_t)(dNum *       1000);
+  }
 
   /* as a nanosecond value */
-  if (strcmp(pszUnit, "ns" )==0) {return (int64_t)iVal;           }
+  if (strcmp(szUnit, "ns")==0) {
+    if (dNum > ((double)INT_MAX * 1000000000)) {return -2;}
+    return       (int64_t)(dNum *          1);
+  }
 
   /* as a bps value (1charater=8bit) */
-  if (strcmp(pszUnit, "bps")==0) {
-    return (iVal!=0) ? ( 80000000000LL/(int64_t)iVal+5)/10 : -1;
+  if (strcmp(szUnit, "bps")==0) {
+    if (dNum >  8000000000LL) {return -2;}
+    return (dNum!=0) ? (int64_t)( 8000000000LL/dNum) : -1;
+  }
+  if (strcmp(szUnit, "kbps")==0) {
+    if (dNum >     8000000  ) {return -2;}
+    return (dNum!=0) ? (int64_t)(    8000000  /dNum) : -1;
+  }
+  if (strcmp(szUnit, "Mbps")==0) {
+    if (dNum >        8000  ) {return -2;}
+    return (dNum!=0) ? (int64_t)(       8000  /dNum) : -1;
+  }
+  if (strcmp(szUnit, "Gbps")==0) {
+    if (dNum >           8  ) {return -2;}
+    return (dNum!=0) ? (int64_t)(          8  /dNum) : -1;
   }
 
   /* as a cps value (1charater=10bit) */
-  if (strcmp(pszUnit, "cps")==0) {
-    return (iVal!=0) ? (100000000000LL/(int64_t)iVal+5)/10 : -1;
+  if (strcmp(szUnit, "cps")==0) {
+    if (dNum > 10000000000LL) {return -2;}
+    return (dNum!=0) ? (int64_t)(10000000000LL/dNum) : -1;
   }
 
   /* as a % value (only "0%" or "100%") */
-  if (strcmp(pszUnit, "%")==0)   {
+  if (strcmp(szUnit, "%")==0)   {
     switch (iVal) {
       case   0: return -1;
       case 100: return  0;
