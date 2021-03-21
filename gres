@@ -40,7 +40,7 @@
 #      $ gres -- '-R' '-r' *
 #
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-05-06
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2021-03-21
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -86,7 +86,7 @@ print_usage_and_exit () {
 	          -R, -r, --recursive (compatible with the same options of grep)
 	              Read all files under each directory, recursively
 	          --  Finish recognizing the following arguments as options
-	Version : 2020-05-06 22:42:19 JST
+	Version : 2021-03-21 23:50:18 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -311,7 +311,7 @@ esac
 
 case "$optR" in
   0) (cat ${1+"$@"}; echo '')                             |
-     "$CMDSED" $opt4sed "s/$pat/$sub/g"                   |
+     "$CMDSED" $opt4sed "s/$pat4sed/$sub4sed/g"           |
      awk 'BEGIN{ORS=""; OFS="";                           #
                 getline line;                             #
                 print line;                               #
@@ -320,7 +320,7 @@ case "$optR" in
   *) find "$@" -type f                                    |
      xargs cat                                            |
      (cat; echo '')                                       |
-     "$CMDSED" $opt4sed "s/$pat/$sub/g"                   |
+     "$CMDSED" $opt4sed "s/$pat4sed/$sub4sed/g"           |
      awk 'BEGIN{ORS=""; OFS="";                           #
                 getline line;                             #
                 print line;                               #
