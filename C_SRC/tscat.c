@@ -50,7 +50,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-05-06
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2021-03-22
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -105,6 +105,7 @@
 void get_time_data_arrived(int iFd, struct timespec *ptsTime);
 int  read_1st_field_as_a_timestamp(FILE *fp, char *pszTime);
 int  read_and_write_a_line(FILE *fp);
+int  skip_over_a_line(FILE *fp);
 int  parse_calendartime(char* pszTime, struct timespec *ptsTime);
 int  parse_unixtime(char* pszTime, struct timespec *ptsTime);
 void spend_my_spare_time(struct timespec *ptsTo, struct timespec *ptsOffset);
@@ -168,7 +169,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2020-05-06 22:42:19 JST\n"
+    "Version : 2021-03-22 12:31:01 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -185,7 +186,7 @@ void warning(const char* szFormat, ...) {
   va_list va;
   va_start(va, szFormat);
   fprintf(stderr,"%s: ",gpszCmdname);
-  vfprintf(stderr,szFormat,va);
+  vfprintf(stderr, szFormat, va);
   va_end(va);
   return;
 }
@@ -195,7 +196,7 @@ void error_exit(int iErrno, const char* szFormat, ...) {
   va_list va;
   va_start(va, szFormat);
   fprintf(stderr,"%s: ",gpszCmdname);
-  vfprintf(stderr,szFormat,va);
+  vfprintf(stderr, szFormat, va);
   va_end(va);
   exit(iErrno);
 }
@@ -287,7 +288,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
     pszFilename = pszPath                ;
     while ((iFd=open(pszPath, O_RDONLY)) < 0) {
       iRet = 1;
-      warning("%s: %s\n",pszFilename,strerror(errno));
+      warning("%s: %s\n", pszFilename, strerror(errno));
       iFileno++;
       break;
     }
@@ -308,9 +309,24 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                  case  1: /* read successfully */
                           if (! parse_calendartime(szTime, &tsTime)) {
                             warning("%s: %s: Invalid calendar-time, "
-                                    "abandon this file\n",pszFilename,szTime);
+                                    "skip this line\n", pszFilename, szTime);
                             iRet = 1;
-                            goto CLOSE_THISFILE;
+                            switch (skip_over_a_line(fp)) {
+                              case  1: /* expected LF */
+                                       break;
+                              case -1: /* expected EOF */
+                                       goto CLOSE_THISFILE;
+                              case -2: /* file access error */
+                                       warning("%s: File access error, "
+                                               "skip it\n", pszFilename);
+                                       goto CLOSE_THISFILE;
+                                       break;
+                              default: /* bug of system error */
+                                       error_exit(1,"Unexpected error at %d\n",
+                                                  __LINE__);
+                                       break;
+                            }
+                            break;
                           }
                           spend_my_spare_time(&tsTime, NULL);
                           switch (read_and_write_a_line(fp)) {
@@ -320,7 +336,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                      goto CLOSE_THISFILE;
                             case -2: /* file access error */
                                      warning("%s: File access error, "
-                                             "skip it\n",pszFilename);
+                                             "skip it\n", pszFilename);
                                      iRet = 1;
                                      goto CLOSE_THISFILE;
                                      break;
@@ -331,12 +347,12 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           }
                           break;
                  case  0: /* unexpected LF */
-                          warning("%s: Invalid timestamp field found, abandon "
-                                  "this file.\n", pszFilename);
+                          warning("%s: %s: Invalid timestamp field found, "
+                                  "skip this line.\n", pszFilename, szTime);
                           iRet = 1;
-                          goto CLOSE_THISFILE;
+                          break;
                  case -2: /* unexpected EOF */
-                          warning("%s: Came to EOF suddenly\n",pszFilename);
+                          warning("%s: Came to EOF suddenly\n", pszFilename);
                           iRet = 1;
                  case -1: /*   expected EOF */
                           goto CLOSE_THISFILE;
@@ -357,9 +373,24 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                  case  1: /* read successfully */
                           if (! parse_unixtime(szTime, &tsTime)) {
                             warning("%s: %s: Invalid UNIX-time, "
-                                    "abandon this file\n",pszFilename,szTime);
+                                    "skip this line\n", pszFilename, szTime);
                             iRet = 1;
-                            goto CLOSE_THISFILE;
+                            switch (skip_over_a_line(fp)) {
+                              case  1: /* expected LF */
+                                       break;
+                              case -1: /* expected EOF */
+                                       goto CLOSE_THISFILE;
+                              case -2: /* file access error */
+                                       warning("%s: File access error, "
+                                               "skip it\n", pszFilename);
+                                       goto CLOSE_THISFILE;
+                                       break;
+                              default: /* bug of system error */
+                                       error_exit(1,"Unexpected error at %d\n",
+                                                  __LINE__);
+                                       break;
+                            }
+                            break;
                           }
                           spend_my_spare_time(&tsTime, NULL);
                           switch (read_and_write_a_line(fp)) {
@@ -369,7 +400,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                      goto CLOSE_THISFILE;
                             case -2: /* file access error */
                                      warning("%s: File access error, "
-                                             "skip it\n",pszFilename);
+                                             "skip it\n", pszFilename);
                                      iRet = 1;
                                      goto CLOSE_THISFILE;
                                      break;
@@ -380,12 +411,12 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           }
                           break;
                  case  0: /* unexpected LF */
-                          warning("%s: Invalid timestamp field found, abandon "
-                                  "this file.\n", pszFilename);
+                          warning("%s: %s: Invalid timestamp field found, "
+                                  "skip this line.\n", pszFilename, szTime);
                           iRet = 1;
-                          goto CLOSE_THISFILE;
+                          break;
                  case -2: /* unexpected EOF */
-                          warning("%s: Came to EOF suddenly\n",pszFilename);
+                          warning("%s: Came to EOF suddenly\n", pszFilename);
                           iRet = 1;
                  case -1: /*   expected EOF */
                           goto CLOSE_THISFILE;
@@ -406,9 +437,24 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                  case  1: /* read successfully */
                           if (! parse_unixtime(szTime, &tsTime)) {
                             warning("%s: %s: Invalid number of seconds, "
-                                    "abandon this file\n",pszFilename,szTime);
+                                    "skip this line\n", pszFilename, szTime);
                             iRet = 1;
-                            goto CLOSE_THISFILE;
+                            switch (skip_over_a_line(fp)) {
+                              case  1: /* expected LF */
+                                       break;
+                              case -1: /* expected EOF */
+                                       goto CLOSE_THISFILE;
+                              case -2: /* file access error */
+                                       warning("%s: File access error, "
+                                               "skip it\n", pszFilename);
+                                       goto CLOSE_THISFILE;
+                                       break;
+                              default: /* bug of system error */
+                                       error_exit(1,"Unexpected error at %d\n",
+                                                  __LINE__);
+                                       break;
+                            }
+                            break;
                           }
                           if (iGotOffset<2) {
                             /* tsOffset = gtsZero - tsTime */
@@ -431,7 +477,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                      goto CLOSE_THISFILE;
                             case -2: /* file access error */
                                      warning("%s: File access error, "
-                                             "skip it\n",pszFilename);
+                                             "skip it\n", pszFilename);
                                      iRet = 1;
                                      goto CLOSE_THISFILE;
                                      break;
@@ -442,12 +488,12 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           }
                           break;
                  case  0: /* unexpected LF */
-                          warning("%s: Invalid timestamp field found, abandon "
-                                  "this file.\n", pszFilename);
+                          warning("%s: %s: Invalid timestamp field found, "
+                                  "skip this line.\n", pszFilename, szTime);
                           iRet = 1;
-                          goto CLOSE_THISFILE;
+                          break;
                  case -2: /* unexpected EOF */
-                          warning("%s: Came to EOF suddenly\n",pszFilename);
+                          warning("%s: Came to EOF suddenly\n", pszFilename);
                           iRet = 1;
                  case -1: /*   expected EOF */
                           goto CLOSE_THISFILE;
@@ -472,9 +518,24 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                  case  1: /* read successfully */
                           if (! parse_calendartime(szTime, &tsTime)) {
                             warning("%s: %s: Invalid calendar-time, "
-                                    "abandon this file\n",pszFilename,szTime);
+                                    "skip this line\n", pszFilename, szTime);
                             iRet = 1;
-                            goto CLOSE_THISFILE;
+                            switch (skip_over_a_line(fp)) {
+                              case  1: /* expected LF */
+                                       break;
+                              case -1: /* expected EOF */
+                                       goto CLOSE_THISFILE;
+                              case -2: /* file access error */
+                                       warning("%s: File access error, "
+                                               "skip it\n", pszFilename);
+                                       goto CLOSE_THISFILE;
+                                       break;
+                              default: /* bug of system error */
+                                       error_exit(1,"Unexpected error at %d\n",
+                                                  __LINE__);
+                                       break;
+                            }
+                            break;
                           }
                           if (iGotOffset==1) {
                             /* tsOffset = gtsZero - tsTime */
@@ -497,7 +558,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                      goto CLOSE_THISFILE;
                             case -2: /* file access error */
                                      warning("%s: File access error, "
-                                             "skip it\n",pszFilename);
+                                             "skip it\n", pszFilename);
                                      iRet = 1;
                                      goto CLOSE_THISFILE;
                                      break;
@@ -508,12 +569,12 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           }
                           break;
                  case  0: /* unexpected LF */
-                          warning("%s: Invalid timestamp field found, abandon "
-                                  "this file.\n", pszFilename);
+                          warning("%s: %s: Invalid timestamp field found, "
+                                  "skip this line.\n", pszFilename, szTime);
                           iRet = 1;
-                          goto CLOSE_THISFILE;
+                          break;
                  case -2: /* unexpected EOF */
-                          warning("%s: Came to EOF suddenly\n",pszFilename);
+                          warning("%s: Came to EOF suddenly\n", pszFilename);
                           iRet = 1;
                  case -1: /*   expected EOF */
                           goto CLOSE_THISFILE;
@@ -538,9 +599,24 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                  case  1: /* read successfully */
                           if (! parse_unixtime(szTime, &tsTime)) {
                             warning("%s: %s: Invalid timestamp, "
-                                    "abandon this file\n",pszFilename,szTime);
+                                    "skip this line\n", pszFilename, szTime);
                             iRet = 1;
-                            goto CLOSE_THISFILE;
+                            switch (skip_over_a_line(fp)) {
+                              case  1: /* expected LF */
+                                       break;
+                              case -1: /* expected EOF */
+                                       goto CLOSE_THISFILE;
+                              case -2: /* file access error */
+                                       warning("%s: File access error, "
+                                               "skip it\n", pszFilename);
+                                       goto CLOSE_THISFILE;
+                                       break;
+                              default: /* bug of system error */
+                                       error_exit(1,"Unexpected error at %d\n",
+                                                  __LINE__);
+                                       break;
+                            }
+                            break;
                           }
                           if (iGotOffset==1) {
                             /* tsOffset = gtsZero - tsTime */
@@ -563,7 +639,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                      goto CLOSE_THISFILE;
                             case -2: /* file access error */
                                      warning("%s: File access error, "
-                                             "skip it\n",pszFilename);
+                                             "skip it\n", pszFilename);
                                      iRet = 1;
                                      goto CLOSE_THISFILE;
                                      break;
@@ -574,12 +650,12 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                           }
                           break;
                  case  0: /* unexpected LF */
-                          warning("%s: Invalid timestamp field found, abandon "
-                                  "this file.\n", pszFilename);
+                          warning("%s: %s: Invalid timestamp field found, "
+                                  "skip this file.\n", pszFilename, szTime);
                           iRet = 1;
-                          goto CLOSE_THISFILE;
+                          break;
                  case -2: /* unexpected EOF */
-                          warning("%s: Came to EOF suddenly\n",pszFilename);
+                          warning("%s: Came to EOF suddenly\n", pszFilename);
                           iRet = 1;
                  case -1: /*   expected EOF */
                           goto CLOSE_THISFILE;
@@ -725,6 +801,34 @@ int read_and_write_a_line(FILE *fp) {
                    error_exit(errno,"stdout write error #2: %s\n",
                               strerror(errno));
                  }
+                 break;
+    }
+  }
+}
+
+/*=== Read and throw away one line ===================================
+ * [in] fp    : Filehandle for read
+ * [ret] == 1 : Finished reading/writing due to '\n', which is the last
+ *              char of the file
+ *       ==-1 : Finished reading due to the end of file
+ *       ==-2 : Finished reading due to a file reading error
+ *       ==-3 : Finished reading due to a system error              */
+int skip_over_a_line(FILE *fp) {
+
+  /*--- Variables --------------------------------------------------*/
+  int        iChar;
+
+  /*--- Reading and writing a line ---------------------------------*/
+  while (1) {
+    iChar = getc(fp);
+    switch (iChar) {
+      case EOF :
+                 if (feof(  fp)) {return -1;}
+                 if (ferror(fp)) {return -2;}
+                 else            {return -3;}
+      case '\n':
+                 return 1;
+      default  :
                  break;
     }
   }
