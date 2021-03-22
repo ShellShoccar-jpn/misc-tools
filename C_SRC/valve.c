@@ -235,7 +235,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2021-03-22 02:20:40 JST\n"
+    "Version : 2021-03-22 09:34:47 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -531,8 +531,6 @@ int64_t parse_periodictime(char *pszArg) {
 
   /*--- Variables --------------------------------------------------*/
   char   szUnit[CTRL_FILE_BUF];
-  int    iLen, iVlen, iVal    ;
-  int    iVlen_max            ;
   double dNum;
 
   /*--- Check the lengths of the argument --------------------------*/
@@ -596,11 +594,9 @@ int64_t parse_periodictime(char *pszArg) {
 
   /* as a % value (only "0%" or "100%") */
   if (strcmp(szUnit, "%")==0)   {
-    switch (iVal) {
-      case   0: return -1;
-      case 100: return  0;
-      default : return -2;
-    }
+    if      (dNum==100) {return  0;}
+    else if (dNum==  0) {return -1;}
+    else                {return -2;}
   }
 
   /*--- Otherwise, it is not a value -------------------------------*/
