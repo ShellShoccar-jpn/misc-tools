@@ -2,9 +2,17 @@
 #
 # TYPELINER - Make a Line of a Bunch of Key Types
 #
-# USAGE   : typeliner [-d]
-# Options : -d ... Ignore [CTRL]+[D]. It means that the EOT (0x04) will
-#                  be treated as a ordinal character.
+# USAGE   : typeliner [options]
+# Options : -1 ....... Get only one bunch and exit immediately.
+#                      It is equivalent to the option "-n 1."
+#           -d ....... Ignore [CTRL]+[D]. It means that the EOT (0x04)
+#                      will be treated as an ordinal character.
+#           -n num ... Get only <num> bunches and exit immediately.
+#                      (num<0) means getting bunches infinitely.
+#                      This option works only when STDIN is connected
+#                      to a terminal.
+#           -t str ... Replace the terminator after a bunch with <str>.
+#                      Default is "\n."
 # Retuen  : 0 only when finished successfully
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
@@ -30,6 +38,7 @@
 /*=== Initial Setting ==============================================*/
 /*--- macro constants ----------------------------------------------*/
 #define BLKSIZE 8192
+#define TRMSIZE  128
 /*--- headers ------------------------------------------------------*/
 #include <errno.h>
 #include <stdarg.h>
@@ -50,10 +59,18 @@ int            giVerbose;         /* greater number, more verbosely */
 void print_usage_and_exit(void) {
   fprintf(stderr,
     "USAGE   : %s [options]\n"
-    "Options : -d ... Ignore [CTRL]+[D]. It means that the EOT (0x04) will\n"
-    "                 be treated as a ordinal character.\n"
+    "Options : -1 ....... Get only one bunch and exit immediately.\n"
+    "                     It is equivalent to the option \"-n 1.\"\n"
+    "          -d ....... Ignore [CTRL]+[D]. It means that the EOT (0x04)\n"
+    "                     will be treated as an ordinal character.\n"
+    "          -n num ... Get only <num> bunches and exit immediately.\n"
+    "                     (num<0) means getting bunches infinitely.\n"
+    "                     This option works only when STDIN is connected\n"
+    "                     to a terminal.\n"
+    "          -t str ... Replace the terminator after a bunch with <str>.\n"
+    "                     Default is \"\n.\"\n"
     "Retuen  : 0 only when finished successfully\n"
-    "Version : 2022-07-03 03:38:57 JST\n"
+    "Version : 2022-07-03 18:27:18 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -87,7 +104,7 @@ void exit_trap(void) {
   if (tcsetattr(STDIN_FILENO, TCSANOW, &gstTerms1st) < 0) {
     error_exit(errno,"tcsetattr()#%d: %s\n", __LINE__, strerror(errno));
   }
-  if (giVerbose>0) {warning("The terminal attributes recovered.\n");}
+  if (giVerbose>1) {warning("The terminal attributes recovered.\n");}
 }
 
 
@@ -98,10 +115,9 @@ void exit_trap(void) {
 /*=== Initialization ===============================================*/
 int main(int argc, char *argv[]) {
 /*--- Variables ----------------------------------------------------*/
-int            iIgnCtrlD;
+int            iIgnCtrlD, iNumofbunches, iSize_trm;
 int            iSize_r, iSize_w, iOffset, iRemain, i;
-int            iLast;
-const char     szLf[1] = {'\n'};
+char           szTrm[TRMSIZE];
 struct stat    stStat;
 struct termios stTerms;
 /*--- Initialize ---------------------------------------------------*/
@@ -112,20 +128,33 @@ for (i=0; *(gpszCmdname+i)!='\0'; i++) {
 
 /*=== Parse arguments ==============================================*/
 /*--- Set default parameters of the arguments ----------------------*/
-iIgnCtrlD = 0;
+iIgnCtrlD     =  0;
+iNumofbunches = -1;
+strcpy(szTrm,"\n");
+iSize_trm     =  strlen(szTrm);
 /*--- Parse options which start by "-" -----------------------------*/
-while ((i=getopt(argc, argv, "dv")) != -1) {
+while ((i=getopt(argc, argv, "1dn:t:v")) != -1) {
   switch (i) {
-    case 'd': iIgnCtrlD = 1;  break;
-    case 'v': giVerbose++;    break;
+    case '1': iNumofbunches = 1;                 break;
+    case 'd': iIgnCtrlD     = 1;                 break;
+    case 'n': if(sscanf(optarg,"%d",&iNumofbunches)!=1){print_usage_and_exit();}
+                                                 break;
+    case 't': i = strlen(optarg);
+              if (i>=TRMSIZE) {
+                error_exit(1,"<str> of the -t option must be within %d.",
+                           TRMSIZE-1                                     );
+              }
+              strcpy(szTrm,optarg); iSize_trm=i; break;
+    case 'v': giVerbose++;                       break;
     default : print_usage_and_exit();
   }
 }
 argc -= optind-1;
 argv += optind  ;
-if (giVerbose>0) {warning("verbose mode (level %d)\n",giVerbose);}
+if (giVerbose>1) {warning("verbose mode (level %d)\n",giVerbose);}
 if (giVerbose>0 && iIgnCtrlD) {warning("[CTRL]+[D] will be ignored.\n");}
 if (argc>1) {print_usage_and_exit();}
+if (iNumofbunches==0) {return 0;}
 
 /*=== Behave the same as the cat command if STDIN is a regular file =*/
 if ((i=fstat(STDIN_FILENO,&stStat)) < 0) {
@@ -166,10 +195,10 @@ if (isatty(STDIN_FILENO) == 1) {
 }
 
 /*=== Main loop ====================================================*/
-iLast = 0;
+iNumofbunches--;
 while ((iSize_r=(int)read(STDIN_FILENO,gszBuf,BLKSIZE+1))>0) {
   /*--- If EOT follows the data, make this turn last ---------------*/
-  if ((!iIgnCtrlD) && (gszBuf[iSize_r-1]==0x04)) {iLast=1; iSize_r--;}
+  if ((!iIgnCtrlD) && (gszBuf[iSize_r-1]==0x04)) {iNumofbunches=0; iSize_r--;}
   /*--- Write the data into STDOUT ---------------------------------*/
   iRemain=iSize_r;
   for (iOffset=0; iRemain>0; iRemain-=iSize_w) {
@@ -180,11 +209,18 @@ while ((iSize_r=(int)read(STDIN_FILENO,gszBuf,BLKSIZE+1))>0) {
   }
   /*--- Insert the LF if the non-full and non-LF-terminated --------*/
   if ((iSize_r>0) && (iSize_r<=BLKSIZE) && (gszBuf[iSize_r-1]!='\n')) {
-    while ((i=(int)write(STDOUT_FILENO,szLf,1))==0);
-    if (i<0) {error_exit(errno,"write()#5d: %s\n", __LINE__, strerror(errno));}
+    iRemain=iSize_trm;
+    for (iOffset=0; iRemain>0; iRemain-=iSize_w) {
+      if ((iSize_w=(int)write(STDOUT_FILENO,szTrm+iOffset,iRemain))<0) {
+        error_exit(errno,"write()#%d: %s\n", __LINE__, strerror(errno));
+      }
+      iOffset+=iSize_w;
+    }
   }
   /*--- last turn if requested -------------------------------------*/
-  if (iLast>0) {break;}
+  if      (iNumofbunches<0) {                 continue;}
+  else if (iNumofbunches>0) {iNumofbunches--; continue;}
+  else                      {                 break   ;}
 }
 if (i<0) {error_exit(errno,"read()#%d: %s\n", __LINE__, strerror(errno));}
 
