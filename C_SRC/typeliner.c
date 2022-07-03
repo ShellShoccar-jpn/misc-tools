@@ -18,7 +18,7 @@
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2022-07-03
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2022-07-04
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -46,7 +46,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
 /*--- global variables ---------------------------------------------*/
@@ -72,7 +71,7 @@ void print_usage_and_exit(void) {
     "          -t str ... Replace the terminator after a bunch with <str>.\n"
     "                     Default is \"\n.\"\n"
     "Retuen  : 0 only when finished successfully\n"
-    "Version : 2022-07-03 21:26:25 JST\n"
+    "Version : 2022-07-04 00:41:46 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -120,7 +119,6 @@ int main(int argc, char *argv[]) {
 int            iIgnCtrlD, iNumofbunches, iSize_trm, iEchomode;
 char           szTrm[TRMSIZE];
 int            iSize_r, iSize_w, iOffset, iRemain, i;
-struct stat    stStat;
 struct termios stTerms;
 /*--- Initialize ---------------------------------------------------*/
 gpszCmdname = argv[0];
@@ -161,12 +159,9 @@ if (argc>1) {print_usage_and_exit();}
 if (iNumofbunches==0) {return 0;}
 
 /*=== Behave the same as the cat command if STDIN is a regular file =*/
-if ((i=fstat(STDIN_FILENO,&stStat)) < 0) {
-  error_exit(errno,"fstat()#%d: %s\n", __LINE__, strerror(errno));
-}
-if S_ISREG(stStat.st_mode) {
+if (isatty(STDIN_FILENO)==0) {
   if (giVerbose>0) {
-    warning("STDIN is connected to a regular file.\n"                 );
+    warning("STDIN is not connected to a terminal.\n"                 );
     warning("This command will work at the same as the cat command.\n");
   }
   while ((iRemain=(int)read(STDIN_FILENO,gszBuf,BLKSIZE))>0) {
@@ -177,26 +172,22 @@ if S_ISREG(stStat.st_mode) {
       iOffset+=iSize_w;
     }
   }
-  if (i<0) {error_exit(errno,"read()#%d: %s\n", __LINE__, strerror(errno));}
+  if (iRemain<0) {error_exit(errno,"read()#%d: %s\n",__LINE__,strerror(errno));}
   return 0;
 }
 
-/*=== Disable ICANON for STDIN if it is a terminal =================*/
-if (isatty(STDIN_FILENO) == 1) {
-  if (tcgetattr(STDIN_FILENO, &gstTerms1st) < 0) {
-    error_exit(errno,"tcgetattr()#%d: %s\n", __LINE__, strerror(errno));
-  }
-  if (atexit(exit_trap)!=0) {
-    error_exit(255,"atexit()#%d: Cannot register\n", __LINE__);
-  }
-  memcpy(&stTerms, &gstTerms1st, sizeof(struct termios));
-  stTerms.c_lflag &= ~ICANON;
-  if (iEchomode==0) {stTerms.c_lflag &= ~ECHO;}
-  if (tcsetattr(STDIN_FILENO, TCSANOW, &stTerms)     < 0) {
-    error_exit(errno,"tcsetattr()#%d: %s\n", __LINE__, strerror(errno));
-  }
-} else if (giVerbose>0)        {
-  warning("STDIN is not a terminal. The terminal attributes will be kept.\n");
+/*=== Disable ICANON and also disable ECHO if "-e" is not set ======*/
+if (tcgetattr(STDIN_FILENO, &gstTerms1st) < 0) {
+  error_exit(errno,"tcgetattr()#%d: %s\n", __LINE__, strerror(errno));
+}
+if (atexit(exit_trap)!=0) {
+  error_exit(255,"atexit()#%d: Cannot register\n", __LINE__);
+}
+memcpy(&stTerms, &gstTerms1st, sizeof(struct termios));
+stTerms.c_lflag &= ~ICANON;
+if (iEchomode==0) {stTerms.c_lflag &= ~ECHO;}
+if (tcsetattr(STDIN_FILENO, TCSANOW, &stTerms)     < 0) {
+  error_exit(errno,"tcsetattr()#%d: %s\n", __LINE__, strerror(errno));
 }
 
 /*=== Main loop ====================================================*/
