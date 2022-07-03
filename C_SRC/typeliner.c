@@ -7,6 +7,7 @@
 #                      It is equivalent to the option "-n 1."
 #           -d ....... Ignore [CTRL]+[D]. It means that the EOT (0x04)
 #                      will be treated as an ordinal character.
+#           -e ....... Enable echo. You can see the letters you typed.
 #           -n num ... Get only <num> bunches and exit immediately.
 #                      (num<0) means getting bunches infinitely.
 #                      This option works only when STDIN is connected
@@ -63,6 +64,7 @@ void print_usage_and_exit(void) {
     "                     It is equivalent to the option \"-n 1.\"\n"
     "          -d ....... Ignore [CTRL]+[D]. It means that the EOT (0x04)\n"
     "                     will be treated as an ordinal character.\n"
+    "          -e ....... Enable echo. You can see the letters you typed.\n"
     "          -n num ... Get only <num> bunches and exit immediately.\n"
     "                     (num<0) means getting bunches infinitely.\n"
     "                     This option works only when STDIN is connected\n"
@@ -70,7 +72,7 @@ void print_usage_and_exit(void) {
     "          -t str ... Replace the terminator after a bunch with <str>.\n"
     "                     Default is \"\n.\"\n"
     "Retuen  : 0 only when finished successfully\n"
-    "Version : 2022-07-03 20:10:30 JST\n"
+    "Version : 2022-07-03 21:26:25 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -115,9 +117,9 @@ void exit_trap(void) {
 /*=== Initialization ===============================================*/
 int main(int argc, char *argv[]) {
 /*--- Variables ----------------------------------------------------*/
-int            iIgnCtrlD, iNumofbunches, iSize_trm;
-int            iSize_r, iSize_w, iOffset, iRemain, i;
+int            iIgnCtrlD, iNumofbunches, iSize_trm, iEchomode;
 char           szTrm[TRMSIZE];
+int            iSize_r, iSize_w, iOffset, iRemain, i;
 struct stat    stStat;
 struct termios stTerms;
 /*--- Initialize ---------------------------------------------------*/
@@ -129,14 +131,16 @@ for (i=0; *(gpszCmdname+i)!='\0'; i++) {
 /*=== Parse arguments ==============================================*/
 /*--- Set default parameters of the arguments ----------------------*/
 iIgnCtrlD     =  0;
+iEchomode     =  0;
 iNumofbunches = -1;
 strcpy(szTrm,"\n");
 iSize_trm     =  strlen(szTrm);
 /*--- Parse options which start by "-" -----------------------------*/
-while ((i=getopt(argc, argv, "1dn:t:v")) != -1) {
+while ((i=getopt(argc, argv, "1den:t:v")) != -1) {
   switch (i) {
     case '1': iNumofbunches = 1;                 break;
     case 'd': iIgnCtrlD     = 1;                 break;
+    case 'e': iEchomode     = 1;                 break;
     case 'n': if(sscanf(optarg,"%d",&iNumofbunches)!=1){print_usage_and_exit();}
                                                  break;
     case 't': i = strlen(optarg);
@@ -186,7 +190,8 @@ if (isatty(STDIN_FILENO) == 1) {
     error_exit(255,"atexit()#%d: Cannot register\n", __LINE__);
   }
   memcpy(&stTerms, &gstTerms1st, sizeof(struct termios));
-  stTerms.c_lflag &= ~( ICANON | ECHO );
+  stTerms.c_lflag &= ~ICANON;
+  if (iEchomode==0) {stTerms.c_lflag &= ~ECHO;}
   if (tcsetattr(STDIN_FILENO, TCSANOW, &stTerms)     < 0) {
     error_exit(errno,"tcsetattr()#%d: %s\n", __LINE__, strerror(errno));
   }
