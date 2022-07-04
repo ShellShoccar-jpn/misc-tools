@@ -71,7 +71,7 @@ void print_usage_and_exit(void) {
     "          -t str ... Replace the terminator after a bunch with <str>.\n"
     "                     Default is \"\n.\"\n"
     "Retuen  : 0 only when finished successfully\n"
-    "Version : 2022-07-04 00:41:46 JST\n"
+    "Version : 2022-07-04 14:08:45 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -158,7 +158,7 @@ if (giVerbose>0 && iIgnCtrlD) {warning("[CTRL]+[D] will be ignored.\n");}
 if (argc>1) {print_usage_and_exit();}
 if (iNumofbunches==0) {return 0;}
 
-/*=== Behave the same as the cat command if STDIN is a regular file =*/
+/*=== Do the same as the cat command if STDIN isn't connected a terminal */
 if (isatty(STDIN_FILENO)==0) {
   if (giVerbose>0) {
     warning("STDIN is not connected to a terminal.\n"                 );
@@ -218,7 +218,7 @@ while ((iSize_r=(int)read(STDIN_FILENO,gszBuf,BLKSIZE+1))>0) {
   else if (iNumofbunches>0) {iNumofbunches--; continue;}
   else                      {                 break   ;}
 }
-if (i<0) {error_exit(errno,"read()#%d: %s\n", __LINE__, strerror(errno));}
+if (iSize_r<0) {error_exit(errno,"read()#%d: %s\n", __LINE__, strerror(errno));}
 
 /*=== Finish normally ==============================================*/
 return 0;}
