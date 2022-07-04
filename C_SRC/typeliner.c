@@ -71,7 +71,7 @@ void print_usage_and_exit(void) {
     "          -t str ... Replace the terminator after a bunch with <str>.\n"
     "                     Default is \"\n.\"\n"
     "Retuen  : 0 only when finished successfully\n"
-    "Version : 2022-07-04 14:08:45 JST\n"
+    "Version : 2022-07-04 14:14:28 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -134,7 +134,7 @@ iNumofbunches = -1;
 strcpy(szTrm,"\n");
 iSize_trm     =  strlen(szTrm);
 /*--- Parse options which start by "-" -----------------------------*/
-while ((i=getopt(argc, argv, "1den:t:v")) != -1) {
+while ((i=getopt(argc, argv, "1den:t:vh")) != -1) {
   switch (i) {
     case '1': iNumofbunches = 1;                 break;
     case 'd': iIgnCtrlD     = 1;                 break;
