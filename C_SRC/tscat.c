@@ -2,7 +2,7 @@
 #
 # TSCAT - A "cat" Command Which Can Reprodude the Timing of Flow
 #
-# USAGE   : tscat [-c|-e|-z] [-Z] [-u] [-p n] [file ...]
+# USAGE   : tscat [-c|-e|-z] [-Z] [-u] [-y] [-p n] [file ...]
 # Args    : file ........ Filepath to be send ("-" means STDIN)
 #                         The file MUST be a textfile and MUST have
 #                         a timestamp at the first field to make the
@@ -35,6 +35,13 @@
 #                         five seconds, the second line is sent.
 #           -u .......... Set the date in UTC when -c option is set
 #                         (same as that of date command)
+#           -y .......... "Typing mode": Do not output the LF character
+#                         at the end of each line in the input file unless
+#                         the line has no other letters. This mode is
+#                         useful to resconstruct the timing of key typing
+#                         recorded by as in the following.
+#                           $ typeliner -e | linets -c3 > mytyping.txt
+#                           $ tscat -cZ mytyping.txt
 #           [The following option is for professional]
 #           -p n ........ Process priority setting [0-3] (if possible)
 #                          0: Normal process
@@ -50,7 +57,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2021-03-22
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2022-07-10
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -112,9 +119,10 @@ void spend_my_spare_time(struct timespec *ptsTo, struct timespec *ptsOffset);
 int  change_to_rtprocess(int iPrio);
 
 /*--- global variables ---------------------------------------------*/
-char*           gpszCmdname; /* The name of this command                    */
-int             giVerbose;   /* speaks more verbosely by the greater number */
-struct timespec gtsZero;     /* The zero-point time                         */
+char*           gpszCmdname;  /* The name of this command                    */
+int             giTypingmode; /* Typing mode by option -y is on if >0        */
+int             giVerbose;    /* speaks more verbosely by the greater number */
+struct timespec gtsZero;      /* The zero-point time                         */
 
 /*=== Define the functions for printing usage and error ============*/
 
@@ -122,9 +130,9 @@ struct timespec gtsZero;     /* The zero-point time                         */
 void print_usage_and_exit(void) {
   fprintf(stderr,
 #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
-    "USAGE   : %s [-c|-e|-z] [-Z] [-p n] [file ...]\n"
+    "USAGE   : %s [-c|-e|-z] [-Z] [-u] [-y] [-p n] [file ...]\n"
 #else
-    "USAGE   : %s [-c|-e|-z] [-Z] [file ...]\n"
+    "USAGE   : %s [-c|-e|-z] [-Z] [-u] [-y] [file ...]\n"
 #endif
     "Args    : file ........ Filepath to be send (\"-\" means STDIN)\n"
     "                        The file MUST be a textfile and MUST have\n"
@@ -158,6 +166,13 @@ void print_usage_and_exit(void) {
     "                        five seconds, the second line is sent.\n"
     "          -u .......... Set the date in UTC when -c option is set\n"
     "                        (same as that of date command)\n"
+    "          -y .......... \"Typing mode\": Do not output the LF character\n"
+    "                        at the end of each line in the input file unless\n"
+    "                        the line has no other letters. This mode is\n"
+    "                        useful to resconstruct the timing of key typing\n"
+    "                        recorded by as in the following.\n"
+    "                          $ typeliner -e | linets -c3 > mytyping.txt\n"
+    "                          $ tscat -cZ mytyping.txt\n"
 #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
     "          [The following option is for professional]\n"
     "          -p n ........ Process priority setting [0-3] (if possible)\n"
@@ -169,7 +184,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2021-03-22 12:31:01 JST\n"
+    "Version : 2022-07-10 22:14:54 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -241,17 +256,19 @@ setlocale(LC_CTYPE, "");
 /*=== Parse arguments ==============================================*/
 
 /*--- Set default parameters of the arguments ----------------------*/
-iMode     = 0; /* 0:"-c"(default) 1:"-e" 2:"-z" 4:"-cZ" 5:"-eZ" 6:"-zZ" */
-iPrio     = 1;
-giVerbose = 0;
+iMode        = 0; /* 0:"-c"(default) 1:"-e" 2:"-z" 4:"-cZ" 5:"-eZ" 6:"-zZ" */
+giTypingmode = 0;
+iPrio        = 1;
+giVerbose    = 0;
 /*--- Parse options which start by "-" -----------------------------*/
-while ((i=getopt(argc, argv, "cep:uvhZz")) != -1) {
+while ((i=getopt(argc, argv, "cep:uyvhZz")) != -1) {
   switch (i) {
     case 'c': iMode&=4; iMode+=0;            break;
     case 'e': iMode&=4; iMode+=1;            break;
     case 'z': iMode&=4; iMode+=2;            break;
     case 'Z': iMode&=3; iMode+=4;            break;
     case 'u': (void)setenv("TZ", "UTC0", 1); break;
+    case 'y': giTypingmode=1;                break;
     #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
       case 'p': if (sscanf(optarg,"%d",&iPrio) != 1) {print_usage_and_exit();}
                                                break;
@@ -266,7 +283,7 @@ argv += optind  ;
 if (giVerbose>0) {warning("verbose mode (level %d)\n",giVerbose);}
 
 /*=== Switch buffer mode ===========================================*/
-if (setvbuf(stdout,NULL,_IOLBF,0)!=0) {
+if (setvbuf(stdout,NULL,(giTypingmode>0)?_IONBF:_IOLBF,0)!=0) {
   error_exit(255,"Failed to switch to line-buffered mode\n");
 }
 
@@ -782,7 +799,52 @@ int read_and_write_a_line(FILE *fp) {
   /*--- Variables --------------------------------------------------*/
   int        iChar;
 
-  /*--- Reading and writing a line ---------------------------------*/
+  /*--- Reading and writing a line (normal mode) -------------------*/
+  if (! giTypingmode) {
+    while (1) {
+      iChar = getc(fp);
+      switch (iChar) {
+        case EOF :
+                   if (feof(  fp)) {return -1;}
+                   if (ferror(fp)) {return -2;}
+                   else            {return -3;}
+        case '\n':
+                   if (putchar('\n' )==EOF) {
+                     error_exit(errno,"stdout write error #1: %s\n",
+                                strerror(errno));
+                   }
+                   return 1;
+        default  :
+                   if (putchar(iChar)==EOF) {
+                     error_exit(errno,"stdout write error #2: %s\n",
+                                strerror(errno));
+                   }
+                   break;
+      }
+    }
+    return -3;
+  }
+
+  /*--- Reading and writing a line (typing mode) -------------------*/
+  iChar = getc(fp);
+  switch (iChar) {
+    case EOF :
+               if (feof(  fp)) {return -1;}
+               if (ferror(fp)) {return -2;}
+               else            {return -3;}
+    case '\n':
+               if (putchar('\n' )==EOF) {
+                 error_exit(errno,"stdout write error #3: %s\n",
+                            strerror(errno));
+               }
+               return 1;
+    default  :
+               if (putchar(iChar)==EOF) {
+                 error_exit(errno,"stdout write error #4: %s\n",
+                            strerror(errno));
+               }
+               break;
+  }
   while (1) {
     iChar = getc(fp);
     switch (iChar) {
@@ -791,14 +853,10 @@ int read_and_write_a_line(FILE *fp) {
                  if (ferror(fp)) {return -2;}
                  else            {return -3;}
       case '\n':
-                 if (putchar('\n' )==EOF) {
-                   error_exit(errno,"stdout write error #1: %s\n",
-                              strerror(errno));
-                 }
                  return 1;
       default  :
                  if (putchar(iChar)==EOF) {
-                   error_exit(errno,"stdout write error #2: %s\n",
+                   error_exit(errno,"stdout write error #5: %s\n",
                               strerror(errno));
                  }
                  break;
