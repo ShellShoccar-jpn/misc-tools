@@ -41,7 +41,7 @@
 #                         useful to resconstruct the timing of key typing
 #                         recorded by as in the following.
 #                           $ typeliner -e | linets -c3 > mytyping.txt
-#                           $ tscat -cZ mytyping.txt
+#                           $ tscat -ycZ mytyping.txt
 #           [The following option is for professional]
 #           -p n ........ Process priority setting [0-3] (if possible)
 #                          0: Normal process
@@ -172,7 +172,7 @@ void print_usage_and_exit(void) {
     "                        useful to resconstruct the timing of key typing\n"
     "                        recorded by as in the following.\n"
     "                          $ typeliner -e | linets -c3 > mytyping.txt\n"
-    "                          $ tscat -cZ mytyping.txt\n"
+    "                          $ tscat -ycZ mytyping.txt\n"
 #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
     "          [The following option is for professional]\n"
     "          -p n ........ Process priority setting [0-3] (if possible)\n"
@@ -184,7 +184,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2022-07-10 22:14:54 JST\n"
+    "Version : 2022-07-10 23:27:04 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
