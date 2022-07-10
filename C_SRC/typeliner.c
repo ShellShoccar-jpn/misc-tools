@@ -18,7 +18,7 @@
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2022-07-10
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2022-07-11
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -71,7 +71,7 @@ void print_usage_and_exit(void) {
     "          -t str ... Replace the terminator after a bunch with <str>.\n"
     "                     Default is \"\n.\"\n"
     "Retuen  : 0 only when finished successfully\n"
-    "Version : 2022-07-10 23:05:25 JST\n"
+    "Version : 2022-07-11 01:37:02 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -203,8 +203,9 @@ while ((iSize_r=(int)read(STDIN_FILENO,gszBuf,BLKSIZE+1))>0) {
     }
     iOffset+=iSize_w;
   }
-  /*--- Insert the LF if the non-full ------------------------------*/
-  if ((iSize_r>0) && (iSize_r<=BLKSIZE)) {
+  /*--- Insert the LF if the non-full and non-LF-terminated --------*/
+  if ( (iSize_r==1                     && gszBuf[        0]!='\n') ||
+       (iSize_r> 0 && iSize_r<=BLKSIZE && gszBuf[iSize_r-1]!='\n')   ) {
     iRemain=iSize_trm;
     for (iOffset=0; iRemain>0; iRemain-=iSize_w) {
       if ((iSize_w=(int)write(STDOUT_FILENO,szTrm+iOffset,iRemain))<0) {
