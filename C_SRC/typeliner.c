@@ -18,7 +18,7 @@
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2022-07-12
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2022-07-13
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -73,7 +73,7 @@ void print_usage_and_exit(void) {
     "          -t str ... Replace the terminator after a bunch with <str>.\n"
     "                     Default is \"\n.\"\n"
     "Retuen  : 0 only when finished successfully\n"
-    "Version : 2022-07-12 01:35:48 JST\n"
+    "Version : 2022-07-13 12:39:48 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -112,6 +112,11 @@ void exit_trap(void) {
 /*--- exit trap (interrupted) --------------------------------------*/
 void interrupted_trap(int iSig, siginfo_t *siInfo, void *pct) {
   if (giVerbose>1) {warning("Interrupted by signal %d\n", iSig);}
+  if (iSig==SIGTSTP) {
+    warning(
+      "Exit immediately because Ctrl-Z could break the terminal setting.\n"
+    );
+  }
   exit(128+iSig); /* This func calls exit_trap() before exit */
 }
 
@@ -193,10 +198,11 @@ if (atexit(exit_trap)!=0) {
 memset(&gsaExit, 0, sizeof(gsaExit));
 gsaExit.sa_sigaction = interrupted_trap;
 gsaExit.sa_flags     = SA_SIGINFO;
-sigemptyset(&gsaExit.sa_mask);
-sigaddset(&gsaExit.sa_mask, SIGHUP ); sigaddset(&gsaExit.sa_mask, SIGINT );
-sigaddset(&gsaExit.sa_mask, SIGQUIT); sigaddset(&gsaExit.sa_mask, SIGPIPE);
-sigaddset(&gsaExit.sa_mask, SIGALRM); sigaddset(&gsaExit.sa_mask, SIGTERM);
+sigemptyset(&gsaExit.sa_mask);        sigaddset(&gsaExit.sa_mask, SIGHUP );
+sigaddset(&gsaExit.sa_mask, SIGINT ); sigaddset(&gsaExit.sa_mask, SIGQUIT);
+sigaddset(&gsaExit.sa_mask, SIGPIPE); sigaddset(&gsaExit.sa_mask, SIGALRM);
+sigaddset(&gsaExit.sa_mask, SIGTERM); sigaddset(&gsaExit.sa_mask, SIGTSTP);
+
 if (sigaction(SIGHUP ,&gsaExit,NULL) != 0)
   error_exit(errno,"sigaction()#%d: %s\n", __LINE__, strerror(errno));
 if (sigaction(SIGINT ,&gsaExit,NULL) != 0)
@@ -208,6 +214,8 @@ if (sigaction(SIGPIPE,&gsaExit,NULL) != 0)
 if (sigaction(SIGALRM,&gsaExit,NULL) != 0)
   error_exit(errno,"sigaction()#%d: %s\n", __LINE__, strerror(errno));
 if (sigaction(SIGTERM,&gsaExit,NULL) != 0)
+  error_exit(errno,"sigaction()#%d: %s\n", __LINE__, strerror(errno));
+if (sigaction(SIGTSTP,&gsaExit,NULL) != 0)
   error_exit(errno,"sigaction()#%d: %s\n", __LINE__, strerror(errno));
 memcpy(&stTerms, &gstTerms1st, sizeof(struct termios));
 stTerms.c_lflag &= ~ICANON;
