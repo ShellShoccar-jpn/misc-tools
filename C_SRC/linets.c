@@ -146,7 +146,7 @@ void print_usage_and_exit(void) {
     "          -u ........ Set the date in UTC when -c option is set\n"
     "                      (same as that of date command)\n"
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2022-07-18 20:25:43 JST\n"
+    "Version : 2022-07-18 22:14:22 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -221,7 +221,7 @@ while ((i=getopt(argc, argv, "0369cezZduvh")) != -1) {
     case 'c': giFmtType   = 'c'; iFirstline='c'; break;
     case 'e': giFmtType   = 'e'; iFirstline='e'; break;
     case 'Z': giFmtType   = 'Z'; iFirstline='Z'; break;
-    case 'z': giFmtType   = 'z'; iFirstline= 0 ; break;
+    case 'z': giFmtType   = 'z'; iFirstline='z'; break;
     case 'd': giDeltaMode =  1 ;                 break;
     case 'u': (void)setenv("TZ", "UTC0", 1);     break;
     case 'v': giVerbose++      ;                 break;
@@ -272,6 +272,9 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
     switch(iFirstline) {
       case 'c': iRet_r1l=read_c1st_1line(fp); iFirstline=0;               break;
       case 'e': iRet_r1l=read_e1st_1line(fp); iFirstline=0;               break;
+      case 'z': gtsPrev.tv_sec =gtsZero.tv_sec;
+                gtsPrev.tv_nsec=gtsZero.tv_nsec;
+                iRet_r1l=0;                   iFirstline=0;               break;
       case 'Z': iRet_r1l=read_Z1st_1line(fp); iFirstline=0;giFmtType='z'; break;
       default : iRet_r1l=0;
     }
@@ -526,50 +529,84 @@ void print_cur_timestamp(void) {
   /*--- Variables --------------------------------------------------*/
   tmsp        tsNow          ; /* Current time but substructed by gtsZero */
   tmsp        tsDiff         ;
+  tmsp        ts             ;
   struct tm  *ptm            ;
   char        szBuf[LINE_BUF];
+  char        szDec[LINE_BUF]; /* for the Decimal part */
 
   /*--- Get the current time ---------------------------------------*/
   if (clock_gettime(CLOCK_REALTIME,&tsNow) != 0) {
     error_exit(errno,"clock_gettime()#1: %s\n",strerror(errno));
   }
 
-  /*--- Print the current timestamp ("YYYYMMDDhhmmss" part) --------*/
+  /*--- Print the current timestamp --------------------------------*/
   switch (giFmtType) {
     case 'c':
-              ptm = localtime(&tsNow.tv_sec);
+              ts.tv_sec=tsNow.tv_sec; ts.tv_nsec=tsNow.tv_nsec;
+              switch (giTimeResol) {
+                case 0 : if (ts.tv_nsec>=500000000L) {ts.tv_sec++;ts.tv_nsec=0;}
+                         szDec[0]=0;
+                         break;
+                case 3 : if (ts.tv_nsec>=999500000L) {ts.tv_sec++;ts.tv_nsec=0;}
+                         snprintf(szDec,LINE_BUF,".%03ld",ts.tv_nsec/1000000);
+                         break;
+                case 6 : if (ts.tv_nsec>=999999500L) {ts.tv_sec++;ts.tv_nsec=0;}
+                         snprintf(szDec,LINE_BUF,".%06ld",ts.tv_nsec/   1000);
+                         break;
+                default: snprintf(szDec,LINE_BUF,".%09ld",ts.tv_nsec        );
+                         break;
+              }
+              ptm = localtime(&ts.tv_sec);
               if (ptm==NULL) {error_exit(255,"localtime(): returned NULL\n");}
-              printf("%04d%02d%02d%02d%02d%02d",
+              printf("%04d%02d%02d%02d%02d%02d%s ",
                 ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
-                ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec  );
+                ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec , szDec);
               break;
     case 'e':
-              ptm = localtime(&tsNow.tv_sec);
+              ts.tv_sec=tsNow.tv_sec; ts.tv_nsec=tsNow.tv_nsec;
+              switch (giTimeResol) {
+                case 0 : if (ts.tv_nsec>=500000000L) {ts.tv_sec++;ts.tv_nsec=0;}
+                         szDec[0]=0;
+                         break;
+                case 3 : if (ts.tv_nsec>=999500000L) {ts.tv_sec++;ts.tv_nsec=0;}
+                         snprintf(szDec,LINE_BUF,".%03ld",ts.tv_nsec/1000000);
+                         break;
+                case 6 : if (ts.tv_nsec>=999999500L) {ts.tv_sec++;ts.tv_nsec=0;}
+                         snprintf(szDec,LINE_BUF,".%06ld",ts.tv_nsec/   1000);
+                         break;
+                default: snprintf(szDec,LINE_BUF,".%09ld",ts.tv_nsec        );
+                         break;
+              }
+              ptm = localtime(&ts.tv_sec);
               strftime(szBuf, LINE_BUF, "%s", ptm);
-              printf("%s", szBuf);
+              printf("%s%s ", szBuf, szDec);
               break;
     case 'z':
               if ((tsNow.tv_nsec - gtsZero.tv_nsec) < 0) {
-                tsNow.tv_sec  = tsNow.tv_sec  - gtsZero.tv_sec  -          1;
-                tsNow.tv_nsec = tsNow.tv_nsec - gtsZero.tv_nsec + 1000000000;
+                ts.tv_sec  = tsNow.tv_sec  - gtsZero.tv_sec  -          1;
+                ts.tv_nsec = tsNow.tv_nsec - gtsZero.tv_nsec + 1000000000;
               } else {
-                tsNow.tv_sec  = tsNow.tv_sec  - gtsZero.tv_sec ;
-                tsNow.tv_nsec = tsNow.tv_nsec - gtsZero.tv_nsec;
+                ts.tv_sec  = tsNow.tv_sec  - gtsZero.tv_sec ;
+                ts.tv_nsec = tsNow.tv_nsec - gtsZero.tv_nsec;
               }
-              ptm = localtime(&tsNow.tv_sec);
+              switch (giTimeResol) {
+                case 0 : if (ts.tv_nsec>=500000000L) {ts.tv_sec++;ts.tv_nsec=0;}
+                         szDec[0]=0;
+                         break;
+                case 3 : if (ts.tv_nsec>=999500000L) {ts.tv_sec++;ts.tv_nsec=0;}
+                         snprintf(szDec,LINE_BUF,".%03ld",ts.tv_nsec/1000000);
+                         break;
+                case 6 : if (ts.tv_nsec>=999999500L) {ts.tv_sec++;ts.tv_nsec=0;}
+                         snprintf(szDec,LINE_BUF,".%06ld",ts.tv_nsec/   1000);
+                         break;
+                default: snprintf(szDec,LINE_BUF,".%09ld",ts.tv_nsec        );
+                         break;
+              }
+              ptm = localtime(&ts.tv_sec);
               strftime(szBuf, LINE_BUF, "%s", ptm);
-              printf("%s", szBuf);
+              printf("%s%s ", szBuf, szDec);
               break;
     default : error_exit(255,"print_cur_timestamp(): Unknown format\n");
-  }
-
-  /*--- Print the current timestamp (".n" part) --------------------*/
-  switch (giTimeResol) {
-    case 0 : putchar(' ')                                          ; break;
-    case 3 : printf(".%03d " , (int)(tsNow.tv_nsec+500000)/1000000); break;
-    case 6 : printf(".%06d " , (int)(tsNow.tv_nsec+   500)/   1000); break;
-    case 9 : printf(".%09ld ",       tsNow.tv_nsec                ); break;
-    default: error_exit(255,"print_cur_timestamp(): Unknown resolution\n");
   }
 
   /*--- Print the delta-t if required ------------------------------*/
@@ -582,19 +619,22 @@ void print_cur_timestamp(void) {
       tsDiff.tv_nsec = tsNow.tv_nsec - gtsPrev.tv_nsec;
     }
     gtsPrev.tv_sec=tsNow.tv_sec; gtsPrev.tv_nsec=tsNow.tv_nsec;
+    switch (giTimeResol) {
+      case 0 : if(tsDiff.tv_nsec>=500000000L){tsDiff.tv_sec++;tsDiff.tv_nsec=0;}
+               szDec[0]=0;
+               break;
+      case 3 : if(tsDiff.tv_nsec>=999500000L){tsDiff.tv_sec++;tsDiff.tv_nsec=0;}
+               snprintf(szDec,LINE_BUF,".%03ld",tsDiff.tv_nsec/1000000);
+               break;
+      case 6 : if(tsDiff.tv_nsec>=999999500L){tsDiff.tv_sec++;tsDiff.tv_nsec=0;}
+               snprintf(szDec,LINE_BUF,".%06ld",tsDiff.tv_nsec/   1000);
+               break;
+      default: snprintf(szDec,LINE_BUF,".%09ld",tsDiff.tv_nsec        );
+               break;
+    }
     ptm = localtime(&tsDiff.tv_sec);
     strftime(szBuf, LINE_BUF, "%s", ptm);
-    printf("%s", szBuf);
-    if (tsDiff.tv_nsec==0) {
-      putchar(' ');
-    } else                 {
-      switch (giTimeResol) {
-        case 0: putchar(' ')                                           ; break;
-        case 3: printf(".%03d " , (int)(tsDiff.tv_nsec+500000)/1000000); break;
-        case 6: printf(".%06d " , (int)(tsDiff.tv_nsec+   500)/   1000); break;
-        case 9: printf(".%09ld ",       tsDiff.tv_nsec                ); break;
-      }
-    }
+    printf("%s%s ", szBuf, szDec);
   }
 
   /*--- Finish -----------------------------------------------------*/
