@@ -146,7 +146,7 @@ void print_usage_and_exit(void) {
     "          -u ........ Set the date in UTC when -c option is set\n"
     "                      (same as that of date command)\n"
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2022-07-18 22:14:22 JST\n"
+    "Version : 2022-07-18 23:34:16 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -490,7 +490,12 @@ int read_Z1st_1line(FILE *fp) {
     error_exit(errno,"read_Z1st_1line(): clock_gettime(): %s\n",
                      strerror(errno)                            );
   }
-  if (giDeltaMode) {printf("0 0 ");} else {printf("0 ");}
+  if (giDeltaMode) {
+    printf("0 0 ");
+    gtsPrev.tv_sec=gtsZero.tv_sec; gtsPrev.tv_nsec=gtsZero.tv_nsec;
+  } else           {
+    printf("0 ");
+  }
   while (putchar(iChar)==EOF) {
     if (errno == EINTR) {continue;}
     error_exit(errno,"read_Z1st_1line(): putchar() #1: %s\n",strerror(errno));
