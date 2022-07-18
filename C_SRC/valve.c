@@ -2,8 +2,8 @@
 #
 # VALVE - Adjust the UNIX Pipe Streaming Speed
 #
-# USAGE   : valve [-c|-l] [-r|-s] [-p n] periodictime [file ...]
-#           valve [-c|-l] [-r|-s] [-p n] controlfile [file ...]
+# USAGE   : valve [-c|-l] [-r|-s] [-p n] periodictime [file [...]]
+#           valve [-c|-l] [-r|-s] [-p n] controlfile [file [...]]
 # Args    : periodictime  Periodic time from start sending the current
 #                         block (means a character or a line) to start
 #                         sending the next block.
@@ -76,7 +76,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2021-03-22
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2022-07-19
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -165,11 +165,11 @@ int      giVerbose;       /* speaks more verbosely by the greater number     */
 void print_usage_and_exit(void) {
   fprintf(stderr,
 #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
-    "USAGE   : %s [-c|-l] [-r|-s] [-p n] periodictime [file ...]\n"
-    "          %s [-c|-l] [-r|-s] [-p n] controlfile [file ...]\n"
+    "USAGE   : %s [-c|-l] [-r|-s] [-p n] periodictime [file [...]]\n"
+    "          %s [-c|-l] [-r|-s] [-p n] controlfile [file [...]]\n"
 #else
-    "USAGE   : %s [-c|-l] [-r|-s] periodictime [file ...]\n"
-    "          %s [-c|-l] [-r|-s] controlfile [file ...]\n"
+    "USAGE   : %s [-c|-l] [-r|-s] periodictime [file [...]]\n"
+    "          %s [-c|-l] [-r|-s] controlfile [file [...]]\n"
 #endif
     "Args    : periodictime  Periodic time from start sending the current\n"
     "                        block (means a character or a line) to start\n"
@@ -235,7 +235,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2021-03-22 09:34:47 JST\n"
+    "Version : 2022-07-19 01:21:22 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
