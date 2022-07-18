@@ -2,7 +2,7 @@
 #
 # PTW - Pseudo Terminal Wrapper
 #
-# USAGE   : ptw [-f] command [argument ...]
+# USAGE   : ptw [-f] command [argument [...]]
 # Options : -f ... Forcibly wrap the command in a PTY even though the
 #                  command is placed at the end of the pipeline.
 #                  Originally, it isn't necessary to use a PTY because
@@ -14,7 +14,7 @@
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-19
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2022-07-19
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -77,7 +77,7 @@ struct termios gstTermm;  /* stdin terimios for master                       */
 /*--- exit with usage ----------------------------------------------*/
 void print_usage_and_exit(void) {
   fprintf(stderr,
-    "USAGE   : %s [-f] command [argument ...]\n"
+    "USAGE   : %s [-f] command [argument [...]]\n"
     "Options : -f ... Forcibly wrap the command in a PTY even though the\n"
     "                 command is placed at the end of the pipeline.\n"
     "                 Originally, it isn't necessary to use a PTY because\n"
@@ -86,7 +86,7 @@ void print_usage_and_exit(void) {
     "Retuen  : The return value will be decided by the wrapped command\n"
     "          when PTY wrapping has succeed. However, return a non-zero\n"
     "          number by this wrapper when failed.\n"
-    "Version : 2020-03-19 12:18:14 JST\n"
+    "Version : 2022-07-19 04:33:38 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
