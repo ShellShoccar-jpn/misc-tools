@@ -8,9 +8,9 @@
 #                       non-integer number here.
 # Retuen  : Return 0 only when succeeded to sleep
 #
-# How to compile : cc -o __CMDNAME__ __SRCNAME__
+# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-19
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2022-07-19
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -44,7 +44,7 @@ void print_usage_and_exit(void) {
     "                      give not only an integer number but also a\n"
     "                      non-integer number here.\n"
     "Retuen  : Return 0 only when succeeded to sleep\n"
-    "Version : 2020-03-19 12:18:14 JST\n"
+    "Version : 2022-07-19 10:17:54 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
