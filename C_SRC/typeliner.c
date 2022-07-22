@@ -5,7 +5,7 @@
 # USAGE   : typeliner [options]
 # Options : -1 ....... Get only one bunch and exit immediately.
 #                      It is equivalent to the option "-n 1."
-#           -d ....... Ignore [CTRL]+[D]. It means that the EOT (0x04)
+#           -d ....... Ignore [Ctrl]+[D]. It means that the EOT (0x04)
 #                      will be treated as an ordinal character.
 #           -e ....... Enable echo. You can see the letters you typed.
 #           -n num ... Get only <num> bunches and exit immediately.
@@ -18,7 +18,7 @@
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2022-07-13
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2022-07-22
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -63,7 +63,7 @@ void print_usage_and_exit(void) {
     "USAGE   : %s [options]\n"
     "Options : -1 ....... Get only one bunch and exit immediately.\n"
     "                     It is equivalent to the option \"-n 1.\"\n"
-    "          -d ....... Ignore [CTRL]+[D]. It means that the EOT (0x04)\n"
+    "          -d ....... Ignore [Ctrl]+[D]. It means that the EOT (0x04)\n"
     "                     will be treated as an ordinal character.\n"
     "          -e ....... Enable echo. You can see the letters you typed.\n"
     "          -n num ... Get only <num> bunches and exit immediately.\n"
@@ -73,7 +73,7 @@ void print_usage_and_exit(void) {
     "          -t str ... Replace the terminator after a bunch with <str>.\n"
     "                     Default is \"\n.\"\n"
     "Retuen  : 0 only when finished successfully\n"
-    "Version : 2022-07-13 12:39:48 JST\n"
+    "Version : 2022-07-22 20:44:39 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -166,7 +166,7 @@ while ((i=getopt(argc, argv, "1den:t:vh")) != -1) {
 argc -= optind-1;
 argv += optind  ;
 if (giVerbose>1) {warning("verbose mode (level %d)\n",giVerbose);}
-if (giVerbose>0 && iIgnCtrlD) {warning("[CTRL]+[D] will be ignored.\n");}
+if (giVerbose>0 && iIgnCtrlD) {warning("[Ctrl]+[D] will be ignored.\n");}
 if (argc>1) {print_usage_and_exit();}
 if (iNumofbunches==0) {return 0;}
 
