@@ -108,7 +108,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written Shell-Shoccar Japan (@shellshoccarjpn) on 2022-07-11
+# Written Shell-Shoccar Japan (@shellshoccarjpn) on 2022-08-04
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -292,7 +292,7 @@ void print_usage_and_exit(void) {
 #endif
     "Retuen  : Return 0 only when finished successfully\n"
     "\n"
-    "Version : 2022-07-11 16:12:50 JST\n"
+    "Version : 2022-08-04 21:15:13 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -341,9 +341,9 @@ tmsp       tsRep;           /* Time to report at exiting          */
 char*      pszArg;          /* String to parsr an argument        */
 struct tm* ptm;             /* a pointer of "tm" structure        */
 char       szTs[LINE_BUF];  /* timestamp to be reported           */
-char       szTs1[LINE_BUF]; /* timestamp (year - sec)             */
-char       szTs2[LINE_BUF]; /* timestamp (under sec)              */
-char       szTs3[LINE_BUF]; /* timestamp (timezone)               */
+char       szTim[LINE_BUF]; /* timestamp (year - sec)             */
+char       szDec[LINE_BUF]; /* timestamp (under sec)              */
+char       szTmz[LINE_BUF]; /* timestamp (timezone)               */
 
 /*--- Initialize ---------------------------------------------------*/
 if (clock_gettime(CLOCK_REALTIME,&tsT0) != 0) {
@@ -437,48 +437,81 @@ if (gi8Intv>0) {
 
 /*=== Make the timestamp ===========================================*/
 
-/*--- "YYYYMMDDhhmmss" or Unixtime-second part) --------------------*/
+/*--- Make ---------------------------------------------------------*/
 switch (giFmtType) {
   case 'c':
+            switch (giTimeResol) {
+              case 0 : if (tsRep.tv_nsec>=500000000L) {tsRep.tv_sec++ ;
+                                                       tsRep.tv_nsec=0;}
+                       szDec[0]=0;
+                       break;
+              case 3 : if (tsRep.tv_nsec>=999500000L) {tsRep.tv_sec++ ;
+                                                       tsRep.tv_nsec=0;}
+                       snprintf(szDec,LINE_BUF,".%03ld",tsRep.tv_nsec/1000000);
+                       break;
+              case 6 : if (tsRep.tv_nsec>=999999500L) {tsRep.tv_sec++ ;
+                                                       tsRep.tv_nsec=0;}
+                       snprintf(szDec,LINE_BUF,".%06ld",tsRep.tv_nsec/   1000);
+                       break;
+              default: snprintf(szDec,LINE_BUF,".%09ld",tsRep.tv_nsec        );
+                       break;
+            }
             ptm = localtime(&tsRep.tv_sec);
             if (ptm==NULL) {error_exit(255,"localtime(): returned NULL\n");}
-            sprintf(szTs1, "%04d%02d%02d%02d%02d%02d",
+            snprintf(szTs , LINE_BUF, "%04d%02d%02d%02d%02d%02d%s",
               ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
-              ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec  );
-            szTs3[0]=0;
+              ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec , szDec);
             break;
   case 'e':
-            ptm = localtime(&tsRep.tv_sec);
-            strftime(szTs1, LINE_BUF, "%s", ptm);
-            szTs3[0]=0;
-            break;
-  case 'I':
+            switch (giTimeResol) {
+              case 0 : if (tsRep.tv_nsec>=500000000L) {tsRep.tv_sec++ ;
+                                                       tsRep.tv_nsec=0;}
+                       szDec[0]=0;
+                       break;
+              case 3 : if (tsRep.tv_nsec>=999500000L) {tsRep.tv_sec++ ;
+                                                       tsRep.tv_nsec=0;}
+                       snprintf(szDec,LINE_BUF,".%03ld",tsRep.tv_nsec/1000000);
+                       break;
+              case 6 : if (tsRep.tv_nsec>=999999500L) {tsRep.tv_sec++ ;
+                                                       tsRep.tv_nsec=0;}
+                       snprintf(szDec,LINE_BUF,".%06ld",tsRep.tv_nsec/   1000);
+                       break;
+              default: snprintf(szDec,LINE_BUF,".%09ld",tsRep.tv_nsec        );
+                       break;
+            }
             ptm = localtime(&tsRep.tv_sec);
             if (ptm==NULL) {error_exit(255,"localtime(): returned NULL\n");}
-            sprintf(szTs1, "%04d-%02d-%02dT%02d:%02d:%02d",
+            strftime(szTim, LINE_BUF, "%s", ptm);
+            snprintf(szTs , LINE_BUF, "%s%s", szTim, szDec);
+            break;
+  case 'I':
+            switch (giTimeResol) {
+              case 0 : if (tsRep.tv_nsec>=500000000L) {tsRep.tv_sec++ ;
+                                                       tsRep.tv_nsec=0;}
+                       szDec[0]=0;
+                       break;
+              case 3 : if (tsRep.tv_nsec>=999500000L) {tsRep.tv_sec++ ;
+                                                       tsRep.tv_nsec=0;}
+                       snprintf(szDec,LINE_BUF,",%03ld",tsRep.tv_nsec/1000000);
+                       break;
+              case 6 : if (tsRep.tv_nsec>=999999500L) {tsRep.tv_sec++ ;
+                                                       tsRep.tv_nsec=0;}
+                       snprintf(szDec,LINE_BUF,",%06ld",tsRep.tv_nsec/   1000);
+                       break;
+              default: snprintf(szDec,LINE_BUF,",%09ld",tsRep.tv_nsec        );
+                       break;
+            }
+            ptm = localtime(&tsRep.tv_sec);
+            if (ptm==NULL) {error_exit(255,"localtime(): returned NULL\n");}
+            sprintf(szTim, "%04d-%02d-%02dT%02d:%02d:%02d",
               ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
               ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec  );
-            strftime(szTs3, 6, "%z", ptm);
-            szTs3[6]=0; szTs3[5]=szTs3[4]; szTs3[4]=szTs3[3]; szTs3[3]=':';
+            strftime(szTmz, 6, "%z", ptm);
+            szTmz[6]=0; szTmz[5]=szTmz[4]; szTmz[4]=szTmz[3]; szTmz[3]=':';
+            snprintf(szTs , LINE_BUF, "%s%s%s", szTim, szDec, szTmz);
             break;
   default : error_exit(255,"Unknown \"giFmtType\"\n");
 }
-
-/*--- ".n" part ----------------------------------------------------*/
-switch (giTimeResol) {
-  case 0 : szTs2[0]=0                                                   ; break;
-  case 3 : sprintf(szTs2, ".%03d" , (int)(tsRep.tv_nsec+500000)/1000000);
-           if (giFmtType=='I') {szTs2[0]=',';}                            break;
-  case 6 : sprintf(szTs2, ".%06d" , (int)(tsRep.tv_nsec+   500)/   1000);
-           if (giFmtType=='I') {szTs2[0]=',';}                            break;
-  case 9 : sprintf(szTs2, ".%09ld",       tsRep.tv_nsec                );
-           if (giFmtType=='I') {szTs2[0]=',';}                            break;
-  default: error_exit(255,"Unknown \"giTimeResol\"\n");
-}
-
-/*--- Concatenate all of the three parts ---------------------------*/
-snprintf(szTs, sizeof(szTs), "%s%s%s", szTs1, szTs2, szTs3);
-szTs[sizeof(szTs)-1]='\0';
 
 /*=== Sleep until the time to exit =================================*/
 switch (clock_nanosleep(CLOCK_REALTIME,TIMER_ABSTIME,&tsT0,NULL)) {
