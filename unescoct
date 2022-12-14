@@ -64,7 +64,7 @@ awk 'BEGIN {                                                    #
            if (match(line,/\\[0-9][0-9][0-9]/)) {               #
              print substr(line, 1, RSTART-1);                   #
              o=substr(line,RSTART+1,3);                         #
-             n=substr(o,1,1)*64+substr(o,2,1)*64+substr(o,3,1); #
+             n=substr(o,1,1)*64+substr(o,2,1)*8+substr(o,3,1);  #
              printf("%c",n);                                    #
              line=substr(line,RSTART+4);                        #
            } else {                                             #
