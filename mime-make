@@ -102,7 +102,7 @@ print_usage_and_exit () {
 	                (default is --crlf when form-mode, --lf when mail-mode)
 	  --b64/--raw : switch about applying or not Base64 to the <file> of (c)-(f)
 	                (default is --raw)
-	Version : 2024-01-03 00:58:37 JST
+	Version : 2024-01-03 01:23:04 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -1156,7 +1156,7 @@ validate_and_normalize_file_str() {
 # Parse Arguments
 ######################################################################
 
-# === Parse the -m option and only generate a mime boundary string if exists
+# === Parse the -m option and only generate a mime boundary string if it exists
 case "${1:-}" in
   '-m'|'--generatemimeboundary') echo "MimeBoundary-$(randstr 57)"; exit 0;;
 esac
@@ -1186,7 +1186,7 @@ while :; do
      *)                                          break   ;;
   esac
 done
-case $mime_b_is_set in 0) mime_b="MimeBoundary-$(randstr 61)";; esac
+case $mime_b_is_set in 0) mime_b="MimeBoundary-$(randstr 57)";; esac
 
 
 ######################################################################
