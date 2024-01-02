@@ -7,7 +7,7 @@
 # USAGE: mime-make <-m|--generatemimeboundary>
 #        mime-make [options] <arg_group#1> [<arg_group#2> ...]
 #
-# * Only generate MIME boundary string if -m option is specified.
+# * Only generate MIME boundary string if the -m option is specified.
 # * One of the <arg_group>s consists of one of the following formats.
 #   For HTML form-mode:
 #   (a) -T  <name> <value>
@@ -28,7 +28,7 @@
 #   (j) -At  <type_str>                <file>
 #   (k) -Atf <type_str> <filename_str> <file>
 #       mail-attached-filepart is read from <file>. (default is standard input)
-#       (every parameter is same as in (c)-(f))
+#       (every parameter is the same as in (c)-(f))
 #   OPTIONS:
 #   --bo/--wh   : When output, data is body-only or with header (Content-Type)
 #                 (default is --bo)
@@ -41,14 +41,14 @@
 # Return: $?=0 (when all of the arguments are valid)
 #         stdout : generated MIME formatted data
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-05-06
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-01-03
 #
 # This is a public-domain software (CC0). It means that all of the
-# people can use this for any purposes with no restrictions at all.
-# By the way, We are fed up with the side effects which are brought
+# people can use this for any purpose with no restrictions at all.
+# By the way, We are fed up with the side effects that are brought
 # about by the major licenses.
 #
-# The latest version is distributed at the following page.
+# The latest version is distributed on the following page.
 # https://github.com/ShellShoccar-jpn/misc-tools
 #
 ######################################################################
@@ -72,7 +72,7 @@ print_usage_and_exit () {
 	USAGE: ${0##*/} <-m|--generatemimeboundary>
 	       ${0##*/} [options] <arg_group#1> [<arg_group#2> ...]
 
-	* Only generate MIME boundary string if -m option is specified.
+	* Only generate the MIME boundary string if the -m option is specified.
 	* One of the <arg_group>s consists of one of the following formats.
 	  For HTML form-mode:
 	  (a) -T  <name> <value>
@@ -93,7 +93,7 @@ print_usage_and_exit () {
 	  (j) -At  <type_str>                <file>
 	  (k) -Atf <type_str> <filename_str> <file>
 	      mail-attached-filepart is read from <file>. (default is standard input)
-	      (every parameter is same as in (c)-(f))
+	      (every parameter is the same as in (c)-(f))
 	  OPTIONS:
 	  --bo/--wh   : When output, data is body-only or with header (Content-Type)
 	                (default is --bo)
@@ -102,7 +102,7 @@ print_usage_and_exit () {
 	                (default is --crlf when form-mode, --lf when mail-mode)
 	  --b64/--raw : switch about applying or not Base64 to the <file> of (c)-(f)
 	                (default is --raw)
-	Version : 2020-05-06 22:42:19 JST
+	Version : 2024-01-03 00:58:37 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -123,7 +123,7 @@ LFs=$(printf '\n_'); LFs=${LFs%_} # Use as a "\n" in s-command of sed
 # Register Functions
 ######################################################################
 
-# === which command also works on Just a POSIX environment ($1:command name)
+# === Which command also works on Just a POSIX environment ($1:command name)
 which which >/dev/null 2>&1 || {
   which() {
     command -v "$1" 2>/dev/null | grep '^/' || {
@@ -181,7 +181,7 @@ randstr() {
          tail -c $1                                   )
 }
 
-# === Escape the string in header if necessary ($1:string for in-header)
+# === Escape the string in the header if necessary ($1:string for in-header)
 escape_for_header_string() {
   printf '%s\n' "$1"                  |
   awk 'index($0,"=?")>0    {exit 1;}  # # when contain "=?"
@@ -311,7 +311,7 @@ else
   }
 fi
 
-# === Decide "type" from the file extention ==========================
+# === Decide "type" from the file extension ==========================
 decide_type() {
   printf '%s\n' "$1" | awk '
   BEGIN{
@@ -1158,7 +1158,7 @@ validate_and_normalize_file_str() {
 
 # === Parse the -m option and only generate a mime boundary string if exists
 case "${1:-}" in
-  '-m'|'--generatemimeboundary') echo "MimeBoundary-$(randstr 61)"; exit 0;;
+  '-m'|'--generatemimeboundary') echo "MimeBoundary-$(randstr 57)"; exit 0;;
 esac
 
 # === Decide that line-feed default whether --crlf or --lf ===========
@@ -1169,7 +1169,7 @@ case "$s" in
      *) print_usage_and_exit             ;;
 esac
 
-# === Parse and validate the some kinds of options ===================
+# === Parse and validate some kinds of options =======================
 header=0
 base64=0
 mime_b_is_set=0
