@@ -4,12 +4,17 @@
 #
 # URLENCODE - URL Encoder on the Basis of RFC 3986
 #
-# USAGE: urlencode [-r|--raw] <file> ...
-#        -r ...... RAW MODE : when this option is set, all of " " are
-#                  replaced with "%20" instead of "+".
-#        --raw ... same as the "-r" option
+# Usage   : urlencode [-r|--raw] <file> ...
+# Args    : <file> ...... Text file for URL encoding
+# Options : -r ...... RAW MODE : when this option is set, all of " " are
+#                     replaced with "%20" instead of "+".
+#           --raw ... same as the "-r" option
+# Environs: LINE_BUFFERED
+#             =yes ........ Line-buffered mode if possible
+#             =forcible ... Line-buffered mode or exit if impossible
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-05-06
+#
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2022-02-08
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -27,7 +32,7 @@
 ######################################################################
 
 # === Initialize shell environment ===================================
-set -eu
+set -u
 umask 0022
 export LC_ALL=C
 export PATH="$(command -p getconf PATH 2>/dev/null)${PATH+:}${PATH-}"
@@ -35,13 +40,16 @@ case $PATH in :*) PATH=${PATH#?};; esac
 export UNIX_STD=2003  # to make HP-UX conform to POSIX
 
 # === Define the functions for printing usage ========================
-print_usage_and_exit () {
+print_usage_and_exit() {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [-r|--raw] <file> ...
 	Args    : <file> ...... Text file for URL encoding
 	Options : -r, --raw ... RAW MODE :
 	                        " " will not be converted into "+" but "%20"
-	Version : 2020-05-06 22:42:19 JST
+	Environs: LINE_BUFFERED
+	            =yes ........ Line-buffered mode if possible
+	            =forcible ... Line-buffered mode or exit if impossible
+	Version : 2022-02-08 19:51:45 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -72,6 +80,24 @@ esac
 
 
 ######################################################################
+# Switch to the line-buffered mode if required
+######################################################################
+awkfl=''
+case "${LINE_BUFFERED:-}" in
+             [Ff][Oo][Rr][Cc][EeIi]*|2) lbm=2;;
+  [Tt][Rr][Uu][Ee]|[Yy][Ee][Ss]|[Yy]|1) lbm=1;;
+                                     *) lbm=0;;
+esac
+case $lbm in [!0]*)
+  s=$(awk -W interactive 'BEGIN{}' 2>&1)
+  case "$?$s" in
+  '0') alias awk='awk -W interactive';;
+    *) awkfl='system("");'           ;;
+  esac
+;; esac
+
+
+######################################################################
 # Main
 ######################################################################
 
@@ -93,7 +119,7 @@ BEGIN {                                                          #
     for (i=1; i<=length(line); i++) {                            #
       print c2p[substr(line,i,1)];                               #
     }                                                            #
-    print "\n";                                                  #
+    print "\n";'"$awkfl"'                                        #
   }                                                              #
 }'                                                               |
 awk '                                                            #
@@ -103,7 +129,7 @@ BEGIN{                                                           #
   getline line;                                                  #
   print line;                                                    #
   while (getline line) {                                         #
-    print "\n",line;                                             #
+    print "\n",line;'"$awkfl"'                                   #
   }                                                              #
 }                                                                #
 '
