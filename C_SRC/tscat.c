@@ -2,7 +2,7 @@
 #
 # TSCAT - A "cat" Command Which Can Reprodude the Timing of Flow
 #
-# USAGE   : tscat [-c|-e|-z] [-Z] [-u] [-y] [-p n] [file [...]]
+# USAGE   : tscat [-c|-e|-z] [-Z] [-k] [-u] [-y] [-p n] [file [...]]
 # Args    : file ........ Filepath to be send ("-" means STDIN)
 #                         The file MUST be a textfile and MUST have
 #                         a timestamp at the first field to make the
@@ -33,6 +33,8 @@
 #                         "-c" option is given. In this case, the first
 #                         line is sent to stdout immediately, and after
 #                         five seconds, the second line is sent.
+#           -k .......... Keep the timestamp at the head of each line
+#                         when outputting the line to the stdout.
 #           -u .......... Set the date in UTC when -c option is set
 #                         (same as that of date command)
 #           -y .......... "Typing mode": Do not output the LF character
@@ -51,13 +53,13 @@
 #                          3: Strongest realtime process of this host
 #                         Larger numbers maybe require a privileged user,
 #                         but if failed, it will try the smaller numbers.
-# Retuen  : Return 0 only when finished successfully
+# Return  : Return 0 only when finished successfully
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2022-07-19
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-06-04 
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -65,7 +67,7 @@
 # about by the major licenses.
 #
 # The latest version is distributed at the following page.
-# https://github.com/ShellShoccar-jpn/misc-tools
+# https://github.com/ShellShoccar-jpn/tokideli
 #
 ####################################################################*/
 
@@ -130,9 +132,9 @@ struct timespec gtsZero;      /* The zero-point time                         */
 void print_usage_and_exit(void) {
   fprintf(stderr,
 #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
-    "USAGE   : %s [-c|-e|-z] [-Z] [-u] [-y] [-p n] [file [...]]\n"
+    "USAGE   : %s [-c|-e|-z] [-Z] [-k] [-u] [-y] [-p n] [file [...]]\n"
 #else
-    "USAGE   : %s [-c|-e|-z] [-Z] [-u] [-y] [file [...]]\n"
+    "USAGE   : %s [-c|-e|-z] [-Z] [-k] [-u] [-y] [file [...]]\n"
 #endif
     "Args    : file ........ Filepath to be send (\"-\" means STDIN)\n"
     "                        The file MUST be a textfile and MUST have\n"
@@ -164,6 +166,8 @@ void print_usage_and_exit(void) {
     "                        \"-c\" option is given. In this case, the first\n"
     "                        line is sent to stdout immediately, and after\n"
     "                        five seconds, the second line is sent.\n"
+    "          -k .......... Keep the timestamp at the head of each line\n"
+    "                        when outputting the line to the stdout.\n"
     "          -u .......... Set the date in UTC when -c option is set\n"
     "                        (same as that of date command)\n"
     "          -y .......... \"Typing mode\": Do not output the LF character\n"
@@ -184,14 +188,14 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2022-07-19 04:33:38 JST\n"
+    "Version : 2024-06-04 02:50:16 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
     "This is public domain software. (CC0)\n"
     "\n"
     "The latest version is distributed at the following page.\n"
-    "https://github.com/ShellShoccar-jpn/misc-tools\n"
+    "https://github.com/ShellShoccar-jpn/tokideli\n"
     ,gpszCmdname);
   exit(1);
 }
@@ -227,10 +231,11 @@ int main(int argc, char *argv[]) {
 /*--- Variables ----------------------------------------------------*/
 int      iMode;           /* 0:"-c"  1:"-e"  2:"-z",
                              4:"-cZ" 5:"-eZ" 6:"-zZ"                     */
+int      iKeepTs;         /* -k option flag (0>:Keep timestamps, =0:Drop)*/
 int      iPrio;           /* -p option number (default 1)                */
 int      iRet;            /* return code                                 */
 int      iGotOffset;      /* 0:NotYet 1:GetZeroPoint 2:Done              */
-char     szTime[33];      /* Buffer for the 1st field of lines           */
+char     szTime[34];      /* Buffer for the 1st field of lines           */
 struct timespec tsTime;   /* Parsed time for the 1st field               */
 struct timespec tsOffset; /* Zero-point time to adjust the 1st field one */
 char    *pszPath;         /* filepath on arguments                       */
@@ -257,16 +262,18 @@ setlocale(LC_CTYPE, "");
 
 /*--- Set default parameters of the arguments ----------------------*/
 iMode        = 0; /* 0:"-c"(default) 1:"-e" 2:"-z" 4:"-cZ" 5:"-eZ" 6:"-zZ" */
+iKeepTs      = 0; /* 0>:Keep timestamps, =0:Drop(default) */
 giTypingmode = 0;
 iPrio        = 1;
 giVerbose    = 0;
 /*--- Parse options which start by "-" -----------------------------*/
-while ((i=getopt(argc, argv, "cep:uyvhZz")) != -1) {
+while ((i=getopt(argc, argv, "cep:kuyvhZz")) != -1) {
   switch (i) {
     case 'c': iMode&=4; iMode+=0;            break;
     case 'e': iMode&=4; iMode+=1;            break;
     case 'z': iMode&=4; iMode+=2;            break;
     case 'Z': iMode&=3; iMode+=4;            break;
+    case 'k': iKeepTs=1;                     break;
     case 'u': (void)setenv("TZ", "UTC0", 1); break;
     case 'y': giTypingmode=1;                break;
     #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
@@ -346,6 +353,12 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                             break;
                           }
                           spend_my_spare_time(&tsTime, NULL);
+                          if (iKeepTs) {
+                            if (fputs(szTime, stdout)==EOF) {
+                              error_exit(errno,"stdout write error #m1: %s\n",
+                                         strerror(errno));
+                            }
+                          }
                           switch (read_and_write_a_line(fp)) {
                             case  1: /* expected LF */
                                      break;
@@ -410,6 +423,12 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                             break;
                           }
                           spend_my_spare_time(&tsTime, NULL);
+                          if (iKeepTs) {
+                            if (fputs(szTime, stdout)==EOF) {
+                              error_exit(errno,"stdout write error #m2: %s\n",
+                                         strerror(errno));
+                            }
+                          }
                           switch (read_and_write_a_line(fp)) {
                             case  1: /* expected LF */
                                      break;
@@ -474,19 +493,18 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                             break;
                           }
                           if (iGotOffset<2) {
-                            /* tsOffset = gtsZero - tsTime */
-                            if ((gtsZero.tv_nsec - tsTime.tv_nsec) < 0) {
-                              tsOffset.tv_sec  = gtsZero.tv_sec 
-                                                 - tsTime.tv_sec  -          1;
-                              tsOffset.tv_nsec = gtsZero.tv_nsec
-                                                 - tsTime.tv_nsec + 1000000000;
-                            } else {
-                              tsOffset.tv_sec  = gtsZero.tv_sec -tsTime.tv_sec ;
-                              tsOffset.tv_nsec = gtsZero.tv_nsec-tsTime.tv_nsec;
-                            }
+                            /* tsOffset = gtsZero */
+                            tsOffset.tv_sec  = gtsZero.tv_sec ;
+                            tsOffset.tv_nsec = gtsZero.tv_nsec;
                             iGotOffset=2;
                           }
                           spend_my_spare_time(&tsTime, &tsOffset);
+                          if (iKeepTs) {
+                            if (fputs(szTime, stdout)==EOF) {
+                              error_exit(errno,"stdout write error #m3: %s\n",
+                                         strerror(errno));
+                            }
+                          }
                           switch (read_and_write_a_line(fp)) {
                             case  1: /* expected LF */
                                      break;
@@ -568,6 +586,12 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                             iGotOffset=2;
                           }
                           spend_my_spare_time(&tsTime, &tsOffset);
+                          if (iKeepTs) {
+                            if (fputs(szTime, stdout)==EOF) {
+                              error_exit(errno,"stdout write error #m4: %s\n",
+                                         strerror(errno));
+                            }
+                          }
                           switch (read_and_write_a_line(fp)) {
                             case  1: /* expected LF */
                                      break;
@@ -649,6 +673,12 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                             iGotOffset=2;
                           }
                           spend_my_spare_time(&tsTime, &tsOffset);
+                          if (iKeepTs) {
+                            if (fputs(szTime, stdout)==EOF) {
+                              error_exit(errno,"stdout write error #m5: %s\n",
+                                         strerror(errno));
+                            }
+                          }
                           switch (read_and_write_a_line(fp)) {
                             case  1: /* expected LF */
                                      break;
@@ -737,8 +767,8 @@ void get_time_data_arrived(int iFd, struct timespec *ptsTime) {
 /*=== Read and write only one line having a timestamp ================
  * [in] fp      : Filehandle for read
  *      pszTime : Pointer for the string buffer to get the timestamp on
- *                the 1st field
- *                (Size of the buffer you give MUST BE 33 BYTES or more!)
+ *                the 1st field with a white space (if it exists)
+ *                (Size of the buffer you give MUST BE 34 BYTES or more!)
  * [ret] == 0 : Finished reading due to '\n'
  *       == 1 : Finished reading successfully, you may use the result in
  *              the buffer
@@ -758,7 +788,8 @@ int read_1st_field_as_a_timestamp(FILE *fp, char *pszTime) {
     switch (iChar) {
       case ' ' :
       case '\t':
-                 pszTime[iTslen]=0;
+                 pszTime[iTslen  ]=iChar;
+                 pszTime[iTslen+1]=    0;
                  return 1;
       case EOF :
                  if         (feof(  fp)) {
@@ -781,7 +812,7 @@ int read_1st_field_as_a_timestamp(FILE *fp, char *pszTime) {
       case '\n':
                  return 0;
       default  :
-                 if (iTslen>31) {                                 continue;}
+                 if (iTslen>32) {                                 continue;}
                  else           {pszTime[iTslen]=iChar; iTslen++; continue;}
     }
   }
@@ -810,13 +841,13 @@ int read_and_write_a_line(FILE *fp) {
                    else            {return -3;}
         case '\n':
                    if (putchar('\n' )==EOF) {
-                     error_exit(errno,"stdout write error #1: %s\n",
+                     error_exit(errno,"stdout write error #f1: %s\n",
                                 strerror(errno));
                    }
                    return 1;
         default  :
                    if (putchar(iChar)==EOF) {
-                     error_exit(errno,"stdout write error #2: %s\n",
+                     error_exit(errno,"stdout write error #f2: %s\n",
                                 strerror(errno));
                    }
                    break;
@@ -834,13 +865,13 @@ int read_and_write_a_line(FILE *fp) {
                else            {return -3;}
     case '\n':
                if (putchar('\n' )==EOF) {
-                 error_exit(errno,"stdout write error #3: %s\n",
+                 error_exit(errno,"stdout write error #f3: %s\n",
                             strerror(errno));
                }
                return 1;
     default  :
                if (putchar(iChar)==EOF) {
-                 error_exit(errno,"stdout write error #4: %s\n",
+                 error_exit(errno,"stdout write error #f4: %s\n",
                             strerror(errno));
                }
                break;
@@ -856,7 +887,7 @@ int read_and_write_a_line(FILE *fp) {
                  return 1;
       default  :
                  if (putchar(iChar)==EOF) {
-                   error_exit(errno,"stdout write error #5: %s\n",
+                   error_exit(errno,"stdout write error #f5: %s\n",
                               strerror(errno));
                  }
                  break;
@@ -910,9 +941,9 @@ int parse_calendartime(char* pszTime, struct timespec *ptsTime) {
   /*--- Separate pszTime into date and nanoseconds -----------------*/
   for (i=0; i<20; i++) {
     c = pszTime[i];
-    if      (('0'<=c) && (c<='9')) {szDate[i]=c;                       }
-    else if (c=='.'              ) {szDate[i]=0; iStatus=2; i++; break;}
-    else if (c==0                ) {szDate[i]=0; iStatus=1;      break;}
+    if      ('0'<=c && c<='9'         ) {szDate[i]=c;                       }
+    else if (c=='.'                   ) {szDate[i]=0; iStatus=2; i++; break;}
+    else if (c==0 || c=='\t' || c==' ') {szDate[i]=0; iStatus=1;      break;}
     else                           {if (giVerbose>0) {
                                       warning("%c: Unexpected chr. in "
                                               "the integer part\n",c);
@@ -936,8 +967,8 @@ int parse_calendartime(char* pszTime, struct timespec *ptsTime) {
              k=0;
              for (; i<j; i++) {
                c = pszTime[i];
-               if      (('0'<=c) && (c<='9')) {szNsec[k]=c; k++;}
-               else if (c==0                ) {break;           }
+               if      ('0'<=c && c<='9'         ) {szNsec[k]=c; k++;}
+               else if (c==0 || c=='\t' || c==' ') {break;           }
                else                           {
                  if (giVerbose>0) {
                    warning("%c: Unexpected chr. in the decimal part\n",c);
@@ -992,9 +1023,9 @@ int parse_unixtime(char* pszTime, struct timespec *ptsTime) {
   /*--- Separate pszTime into seconds and nanoseconds --------------*/
   for (i=0; i<19; i++) {
     c = pszTime[i];
-    if      (('0'<=c) && (c<='9')) {szSec[i]=c;                       }
-    else if (c=='.'              ) {szSec[i]=0; iStatus=2; i++; break;}
-    else if (c==0                ) {szSec[i]=0; iStatus=1;      break;}
+    if      ('0'<=c && c<='9'         ) {szSec[i]=c;                       }
+    else if (c=='.'                   ) {szSec[i]=0; iStatus=2; i++; break;}
+    else if (c==0 || c=='\t' || c==' ') {szSec[i]=0; iStatus=1;      break;}
     else                           {if (giVerbose>0) {
                                       warning("%c: Unexpected chr. in "
                                               "the integer part\n",c);
@@ -1018,8 +1049,8 @@ int parse_unixtime(char* pszTime, struct timespec *ptsTime) {
              k=0;
              for (; i<j; i++) {
                c = pszTime[i];
-               if      (('0'<=c) && (c<='9')) {szNsec[k]=c; k++;}
-               else if (c==0                ) {break;           }
+               if      ('0'<=c && c<='9'         ) {szNsec[k]=c; k++;}
+               else if (c==0 || c=='\t' || c==' ') {break;           }
                else                           {
                  if (giVerbose>0) {
                    warning("%c: Unexpected chr. in the decimal part\n",c);
