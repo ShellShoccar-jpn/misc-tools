@@ -15,7 +15,7 @@
 #           -c compiler  Set the compiler command to "compiler"
 # Ret     : $?=0 (when all of the options are valid)
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-03-19
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-06-23
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -23,7 +23,7 @@
 # about by the major licenses.
 #
 # The latest version is distributed at the following page.
-# https://github.com/ShellShoccar-jpn/misc-tools
+# https://github.com/ShellShoccar-jpn/tokideli
 #
 ######################################################################
 
@@ -53,7 +53,7 @@ print_usage_and_exit () {
 	                       the base directory of the relative path is
 	                       regarded as the directory which MAKE.sh is in.
 	          -c compiler  Set the compiler command to "compiler"
-	Version : 2020-03-19 12:18:14 JST
+	Version : 2024-06-23 13:28:01 JST
 	USAGE
   exit 1
 }

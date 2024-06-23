@@ -76,7 +76,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2022-07-19
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-06-23
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -84,7 +84,7 @@
 # about by the major licenses.
 #
 # The latest version is distributed at the following page.
-# https://github.com/ShellShoccar-jpn/misc-tools
+# https://github.com/ShellShoccar-jpn/tokideli
 #
 ####################################################################*/
 
@@ -235,14 +235,14 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2022-07-19 01:21:22 JST\n"
+    "Version : 2024-06-23 13:28:01 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
     "This is public domain software. (CC0)\n"
     "\n"
     "The latest version is distributed at the following page.\n"
-    "https://github.com/ShellShoccar-jpn/misc-tools\n"
+    "https://github.com/ShellShoccar-jpn/tokideli\n"
     ,gpszCmdname,gpszCmdname);
   exit(1);
 }

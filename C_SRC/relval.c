@@ -85,7 +85,7 @@
 # about by the major licenses.
 #
 # The latest version is distributed at the following page.
-# https://github.com/ShellShoccar-jpn/misc-tools
+# https://github.com/ShellShoccar-jpn/tokideli
 #
 ####################################################################*/
 
@@ -219,7 +219,7 @@ void print_usage_and_exit(void) {
     "No rights reserved. This is public domain software. (CC0)\n"
     "\n"
     "The latest version is distributed at the following page.\n"
-    "https://github.com/ShellShoccar-jpn/misc-tools\n"
+    "https://github.com/ShellShoccar-jpn/tokideli\n"
     ,gpszCmdname);
   exit(1);
 }
