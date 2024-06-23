@@ -77,7 +77,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-06-19
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-06-23
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -212,7 +212,7 @@ void print_usage_and_exit(void) {
     "                         * When you set another type of string, this\n"
     "                           command regards it as a filename.\n"
     "\n"
-    "Version : 2024-06-19 10:50:00 JST\n"
+    "Version : 2024-06-23 15:46:48 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "USP-NCNT prj. / Shell-Shoccar Japan (@shellshoccarjpn),\n"
@@ -264,6 +264,7 @@ int      iRet;            /* return code                            */
 int      iUnstamped;      /* 0:"-k" 1:default stop outputting time  */
 int64_t  i8Duration;      /* the time to reset iMaxlines            */
 char     szTime[34];      /* Buffer for the 1st field of lines      */
+char     szDummy[2];      /* A dummy str (used in sscanf())         */
 char*    psz;             /* all-purpose char pointer               */
 char*    pszDrainname;    /* Filename for Drain                     */
 char*    pszFilename;     /* filepath (for message)                 */
@@ -303,7 +304,7 @@ while((i=getopt(argc, argv, "cezukd:hv")) != -1) {
     case 'z': iMode=2;                       break;
     case 'u': (void)setenv("TZ", "UTC0", 1); break;
     case 'k': iUnstamped=0;                  break;
-    case 'd': if (sscanf(optarg,"%d",&iDrainFd) != 1) {iDrainFd=-1;}
+    case 'd': if (sscanf(optarg,"%d%1s",&iDrainFd,szDummy) != 1) {iDrainFd=-1;}
               if (iDrainFd>=0) {pszDrainname=NULL;} else {pszDrainname=optarg;}
               break;
     case 'v': giVerbose++; break;

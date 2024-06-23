@@ -108,7 +108,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written Shell-Shoccar Japan (@shellshoccarjpn) on 2022-08-04
+# Written Shell-Shoccar Japan (@shellshoccarjpn) on 2024-06-23
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -116,7 +116,7 @@
 # about by the major licenses.
 #
 # The latest version is distributed at the following page.
-# https://github.com/ShellShoccar-jpn/misc-tools
+# https://github.com/ShellShoccar-jpn/tokideli
 #
 ####################################################################*/
 
@@ -145,7 +145,7 @@
 
 /*--- macro constants ----------------------------------------------*/
 /* Buffer size for a line-string */
-#define LINE_BUF         80
+#define LINE_BUF        100
 
 /*--- macro func1: Calculate additon for time(timespec) + nanosec(int64_t)
  * [in]  (struct timespec)ts : time for the augend and it will be
@@ -292,14 +292,14 @@ void print_usage_and_exit(void) {
 #endif
     "Retuen  : Return 0 only when finished successfully\n"
     "\n"
-    "Version : 2022-08-04 21:15:13 JST\n"
+    "Version : 2024-06-23 13:28:01 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
     "This is public domain software. (CC0)\n"
     "\n"
     "The latest version is distributed at the following page.\n"
-    "https://github.com/ShellShoccar-jpn/misc-tools\n"
+    "https://github.com/ShellShoccar-jpn/tokideli\n"
     ,gpszCmdname ,gpszCmdname);
   exit(1);
 }
@@ -341,9 +341,9 @@ tmsp       tsRep;           /* Time to report at exiting          */
 char*      pszArg;          /* String to parsr an argument        */
 struct tm* ptm;             /* a pointer of "tm" structure        */
 char       szTs[LINE_BUF];  /* timestamp to be reported           */
-char       szTim[LINE_BUF]; /* timestamp (year - sec)             */
-char       szDec[LINE_BUF]; /* timestamp (under sec)              */
-char       szTmz[LINE_BUF]; /* timestamp (timezone)               */
+char       szTim[72];       /* timestamp (year - sec)             */
+char       szDec[21];       /* timestamp (under sec)              */
+char       szTmz[ 7];       /* timestamp (timezone)               */
 
 /*--- Initialize ---------------------------------------------------*/
 if (clock_gettime(CLOCK_REALTIME,&tsT0) != 0) {
@@ -447,13 +447,13 @@ switch (giFmtType) {
                        break;
               case 3 : if (tsRep.tv_nsec>=999500000L) {tsRep.tv_sec++ ;
                                                        tsRep.tv_nsec=0;}
-                       snprintf(szDec,LINE_BUF,".%03ld",tsRep.tv_nsec/1000000);
+                       snprintf(szDec,21,".%03ld",tsRep.tv_nsec/1000000);
                        break;
               case 6 : if (tsRep.tv_nsec>=999999500L) {tsRep.tv_sec++ ;
                                                        tsRep.tv_nsec=0;}
-                       snprintf(szDec,LINE_BUF,".%06ld",tsRep.tv_nsec/   1000);
+                       snprintf(szDec,21,".%06ld",tsRep.tv_nsec/   1000);
                        break;
-              default: snprintf(szDec,LINE_BUF,".%09ld",tsRep.tv_nsec        );
+              default: snprintf(szDec,21,".%09ld",tsRep.tv_nsec        );
                        break;
             }
             ptm = localtime(&tsRep.tv_sec);
@@ -470,18 +470,18 @@ switch (giFmtType) {
                        break;
               case 3 : if (tsRep.tv_nsec>=999500000L) {tsRep.tv_sec++ ;
                                                        tsRep.tv_nsec=0;}
-                       snprintf(szDec,LINE_BUF,".%03ld",tsRep.tv_nsec/1000000);
+                       snprintf(szDec,21,".%03ld",tsRep.tv_nsec/1000000);
                        break;
               case 6 : if (tsRep.tv_nsec>=999999500L) {tsRep.tv_sec++ ;
                                                        tsRep.tv_nsec=0;}
-                       snprintf(szDec,LINE_BUF,".%06ld",tsRep.tv_nsec/   1000);
+                       snprintf(szDec,21,".%06ld",tsRep.tv_nsec/   1000);
                        break;
-              default: snprintf(szDec,LINE_BUF,".%09ld",tsRep.tv_nsec        );
+              default: snprintf(szDec,21,".%09ld",tsRep.tv_nsec        );
                        break;
             }
             ptm = localtime(&tsRep.tv_sec);
             if (ptm==NULL) {error_exit(255,"localtime(): returned NULL\n");}
-            strftime(szTim, LINE_BUF, "%s", ptm);
+            strftime(szTim,       20, "%s"  , ptm         );
             snprintf(szTs , LINE_BUF, "%s%s", szTim, szDec);
             break;
   case 'I':
@@ -492,18 +492,18 @@ switch (giFmtType) {
                        break;
               case 3 : if (tsRep.tv_nsec>=999500000L) {tsRep.tv_sec++ ;
                                                        tsRep.tv_nsec=0;}
-                       snprintf(szDec,LINE_BUF,",%03ld",tsRep.tv_nsec/1000000);
+                       snprintf(szDec,21,",%03ld",tsRep.tv_nsec/1000000);
                        break;
               case 6 : if (tsRep.tv_nsec>=999999500L) {tsRep.tv_sec++ ;
                                                        tsRep.tv_nsec=0;}
-                       snprintf(szDec,LINE_BUF,",%06ld",tsRep.tv_nsec/   1000);
+                       snprintf(szDec,21,",%06ld",tsRep.tv_nsec/   1000);
                        break;
-              default: snprintf(szDec,LINE_BUF,",%09ld",tsRep.tv_nsec        );
+              default: snprintf(szDec,21,",%09ld",tsRep.tv_nsec        );
                        break;
             }
             ptm = localtime(&tsRep.tv_sec);
             if (ptm==NULL) {error_exit(255,"localtime(): returned NULL\n");}
-            sprintf(szTim, "%04d-%02d-%02dT%02d:%02d:%02d",
+            snprintf(szTim, 72, "%04d-%02d-%02dT%02d:%02d:%02d",
               ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
               ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec  );
             strftime(szTmz, 6, "%z", ptm);
@@ -546,7 +546,7 @@ int64_t parse_duration(char *pszArg) {
   double dNum;
 
   /*--- Check the lengths of the argument --------------------------*/
-  if (strlen(pszArg)>=LINE_BUF) {return -2;}
+  if (strlen(pszArg)>32) {return -2;}
 
   /*--- Try to interpret the argument as "<value>"[+"unit"] --------*/
   switch (sscanf(pszArg, "%lf%s", &dNum, szUnit)) {
