@@ -7,7 +7,7 @@
 # USAGE: mkcookie [options] [<name>=<value>]
 #
 # * <name>=<value>:
-#   - Cookie varriable name and value
+#   - Cookie variable name and value
 #   - If it is not given, try to get from STDIN "<name> <value>"
 #     (not use "=").  You can give two or more variables by every pair
 #     is in every line
@@ -26,12 +26,17 @@
 #     for HTTPS(SSL,TLS) restriction
 #     "Y" is always ON.
 #     "N" is always OFF.
-#     "A" is for auto detection (default), with checking the HTTPS
+#     "A" is for auto-detection (default), with checking the HTTPS
 #          enviornmnent variable.
 #   - -h <"Y"|"N">
 #     for JavaScript restriction (HttpOnly)
 #     "Y" is HttpOnly ON.
 #     "N" is HttpOnly OFF (default).
+#   - -m <"S"|"L"|"N">
+#     for CSRF control
+#     "S" means "Strict."
+#     "L" means "Lax."
+#     "N" means "None."
 # * NOTE:
 #   - The cookie string is started with <LF> for more usefulness. If you
 #     do not want the <LF> on the head, you can write the following.
@@ -43,14 +48,14 @@
 # Return: $?=0 (when all of the options are valid)
 #         stdout : HTTP Cookie string
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-05-06
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-08-14
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
 # By the way, We are fed up with the side effects which are brought
 # about by the major licenses.
 #
-# The latest version is distributed at the following page.
+# The latest version is distributed on the following page.
 # https://github.com/ShellShoccar-jpn/misc-tools
 #
 ######################################################################
@@ -72,7 +77,7 @@ export UNIX_STD=2003  # to make HP-UX conform to POSIX
 print_usage_and_exit () {
   cat <<-USAGE 1>&2
 	Usage   : ${0##*/} [options] [<name>=<value>]
-	Args    : [<name>=<value>] ... Cookie varriable name and value
+	Args    : [<name>=<value>] ... Cookie variable name and value
 	                               If it is not given, try to get from
 	                               STDIN "<name> <value>" (not use "=").
 	                               You can give two or more variables
@@ -85,11 +90,15 @@ print_usage_and_exit () {
 	          -s <"Y"|"N"|"A"> ... for HTTPS(SSL,TLS) restriction
 	                               "Y" is always ON.
 	                               "N" is always OFF.
-	                               "A" is for auto detection (default).
+	                               "A" is for auto-detection (default).
 	          -h <"Y"|"N"> ....... for JavaScript restriction (HttpOnly)
 	                               "Y" is HttpOnly ON.
 	                               "N" is HttpOnly OFF (default).
-	Version : 2020-05-06 22:42:19 JST
+	          -m <"S"|"L"|"N"> ... for CSRF control
+	                               "S" means "Strict."
+	                               "L" means "Lax."
+	                               "N" means "None."
+	Version : 2024-08-14 23:29:14 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -108,6 +117,7 @@ optp=''
 optd=''
 opts=''
 opth=''
+optm=''
 #
 # --- get them -------------------------------------------------------
 optmode=''
@@ -117,7 +127,7 @@ case $# in [!0]*)
     i=$((i+1))
     if [ -z "$optmode" ]; then
       case "$arg" in
-        -[epdsh]*)
+        -[epdshm]*)
           ret=$(printf '%s\n' "${arg#-}"                            |
                 awk '{opt     = substr($0,1,1);                     #
                       opt_str = (length($0)>1) ? substr($0,2) : ""; #
@@ -159,6 +169,13 @@ case $# in [!0]*)
               optmode='h'
             fi
           fi
+          if [ "$ret1" = 'm' ]; then
+            if [ -n "$ret2" ]; then
+              optm=$ret2
+            else
+              optmode='m'
+            fi
+          fi
           ;;
         *)
           if printf '%s' "$arg" | grep '^[^;.[:blank:]=]\{1,\}=.*$' >/dev/null; then
@@ -182,6 +199,9 @@ case $# in [!0]*)
       optmode=''
     elif [ "$optmode" = 'h' ]; then
       opth=$arg
+      optmode=''
+    elif [ "$optmode" = 'm' ]; then
+      optm=$arg
       optmode=''
     else
       print_usage_and_exit
@@ -235,6 +255,10 @@ case "$opth" in '') ;;
   *) httponly=$(printf '%s' "$opth" | tr -Cd 'A-Za-z'     )
      case "$httponly" in "$opth") :;; *) print_usage_and_exit;; esac;;
 esac
+case "$optm" in '') ;;
+  *) samesite=$(printf '%s' "$optm" | tr -Cd 'A-Za-z'     )
+     case "$samesite" in "$optm") :;; *) print_usage_and_exit;; esac;;
+esac
 
 
 ######################################################################
@@ -274,6 +298,10 @@ path="${path:-}" awk '                                                         #
       addvar = addvar "; Secure";                                              #
     }                                                                          #
     if (match("'"${httponly:-}"'",/^[Yy]/)) { addvar = addvar "; HttpOnly"; }  #
+    s = "'"${samesite:-L}"'";                                                  #
+    if        (match(s,/^[Ss]/)) {addvar = addvar "; SameSite=Strict";         #
+    } else if (match(s,/^[Nn]/)) {addvar = addvar "; SameSite=None"  ;         #
+    } else                       {addvar = addvar "; SameSite=Lax"   ;}        #
   }                                                                            #
   {                                                                            #
     pos = index($0," ");                                                       #
