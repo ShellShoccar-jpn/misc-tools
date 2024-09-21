@@ -1,6 +1,6 @@
 /*####################################################################
 #
-# VALVE - Adjust the UNIX Pipe Streaming Speed
+# VALVE - Adjust the Data Transfer Rate in the UNIX Pipeline
 #
 # USAGE   : valve [-c|-l] [-r|-s] [-p n] periodictime [file [...]]
 #           valve [-c|-l] [-r|-s] [-p n] controlfile [file [...]]
@@ -12,7 +12,7 @@
 #                         like '100ms'. Available units are 's', 'ms',
 #                         'us', 'ns'.
 #                         You can also specify it by the units/words.
-#                          - speed  : '[kMG]bps' (regards as 1chr= 8bit)
+#                          - rate   : '[kMG]bps' (regards as 1chr= 8bit)
 #                                     'cps' (regards as 1chr=10bit)
 #                          - output : '0%'   (completely shut the value)
 #                                     '100%' (completely open the value)
@@ -49,11 +49,11 @@
 #                         -s option will be disabled by this option.
 #           -s .......... Strict mode
 #                         Recovering the lost time causes the maximum
-#                         instantaneous speed to be exeeded. It maybe
-#                         affect badly for devices which have little
-#                         buffer. So, this mode makes this command keep
-#                         strictly the maximum instantaneous speed limit
-#                         decided by periodictime.
+#                         instantaneous data-transfer rate to be exeeded.
+#                         It maybe affect badly for devices which have
+#                         little buffer. So, this mode makes this command
+#                         keep strictly the maximum instantaneous data-
+#                         transfer rate limit decided by periodictime.
 #                         -r option will be disabled by this option.
 #           -p n ........ Process priority setting [0-3] (if possible)
 #                          0: Normal process
@@ -76,7 +76,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-06-23
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-09-20
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -154,7 +154,6 @@ void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct);
 char*    gpszCmdname;     /* The name of this command                        */
 int64_t  gi8Peritime;     /* Periodic time in nanosecond (-1 means infinity) */
 int      giFd_ctrlfile;   /* File descriptor of the control file             */
-struct sigaction gsaIgnr; /* for ignoring signals during signal handlers     */
 struct sigaction gsaAlrm; /* for signal trap definition (action)             */
 int      giRecovery;      /* 0:normal 1:Recovery mode                        */
 int      giVerbose;       /* speaks more verbosely by the greater number     */
@@ -179,7 +178,7 @@ void print_usage_and_exit(void) {
     "                        like '100ms'. Available units are 's', 'ms',\n"
     "                        'us', 'ns'.\n"
     "                        You can also specify it by the units/words.\n"
-    "                         - speed  : '[kMG]bps' (regards as 1chr= 8bit)\n"
+    "                         - rate   : '[kMG]bps' (regards as 1chr= 8bit)\n"
     "                                    'cps' (regards as 1chr=10bit)\n"
     "                         - output : '0%%'   (completely shut the value)\n"
     "                                    '100%%' (completely open the value)\n"
@@ -219,11 +218,11 @@ void print_usage_and_exit(void) {
     "                        -s option will be disabled by this option.\n"
     "          -s .......... Strict mode\n"
     "                        Recovering the lost time causes the maximum\n"
-    "                        instantaneous speed to be exeeded. It maybe\n"
-    "                        affect badly for devices which have little\n"
-    "                        buffer. So, this mode makes this command keep\n"
-    "                        strictly the maximum instantaneous speed limit\n"
-    "                        decided by periodictime.\n"
+    "                        instantaneous data-transfer rate to be exeeded.\n"
+    "                        It maybe affect badly for devices which have\n"
+    "                        little buffer. So, this mode makes this command\n"
+    "                        keep strictly the maximum instantaneous data-\n"
+    "                        transfer rate limit decided by periodictime.\n"
     "                        -r option will be disabled by this option.\n"
 #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
     "          -p n ........ Process priority setting [0-3] (if possible)\n"
@@ -235,7 +234,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2024-06-23 13:28:01 JST\n"
+    "Version : 2024-09-20 19:28:33 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -283,6 +282,7 @@ int      iRet_r1l;        /* return value by read_1line()          */
 char    *pszPath;         /* filepath on arguments                 */
 char    *pszFilename;     /* filepath (for message)                */
 int      iFileno;         /* file# of filepath                     */
+int      iFileno_opened;  /* number of the files opened successfully*/
 int      iFd;             /* file descriptor                       */
 FILE    *fp;              /* file handle                           */
 struct timespec ts1st;    /* the time when the 1st char was got
@@ -365,12 +365,11 @@ if (gi8Peritime <= -2) {
     }
 
     /* Register the signal trap */
-    memset(&gsaIgnr, 0, sizeof(gsaIgnr));
-    gsaIgnr.sa_handler   = SIG_IGN;
-    gsaIgnr.sa_flags     = SA_NODEFER;
     memset(&gsaAlrm, 0, sizeof(gsaAlrm));
+    sigemptyset(&gsaAlrm.sa_mask);
+    sigaddset(&gsaAlrm.sa_mask, SIG_FOR_ME);
     gsaAlrm.sa_sigaction = update_periodic_time_type_r;
-    gsaAlrm.sa_flags     = SA_SIGINFO;
+    gsaAlrm.sa_flags     = SA_SIGINFO | SA_RESTART;
     if (sigaction(SIG_FOR_ME,&gsaAlrm,NULL) != 0) {
       error_exit(errno,"sigaction() in main() #a: %s\n",strerror(errno));
     }
@@ -383,12 +382,11 @@ if (gi8Peritime <= -2) {
     }
 
     /* Register the signal trap */
-    memset(&gsaIgnr, 0, sizeof(gsaIgnr));
-    gsaIgnr.sa_handler   = SIG_IGN;
-    gsaIgnr.sa_flags     = SA_NODEFER;
     memset(&gsaAlrm, 0, sizeof(gsaAlrm));
+    sigemptyset(&gsaAlrm.sa_mask);
+    sigaddset(&gsaAlrm.sa_mask, SIG_FOR_ME);
     gsaAlrm.sa_sigaction = update_periodic_time_type_c;
-    gsaAlrm.sa_flags     = SA_SIGINFO;
+    gsaAlrm.sa_flags     = SA_SIGINFO | SA_RESTART;
     if (sigaction(SIG_FOR_ME,&gsaAlrm,NULL) != 0) {
       error_exit(errno,"sigaction() in main() #b: %s\n",strerror(errno));
     }
@@ -447,11 +445,12 @@ switch (iUnit) {
 if (change_to_rtprocess(iPrio)==-1) {print_usage_and_exit();}
 
 /*=== Each file loop ===============================================*/
-iRet         =  0;
-iFileno      =  0;
-iFd          = -1;
-iRet_r1l     =  0;
-ts1st.tv_nsec= -1; /* -1 means that a valid time is not in yet */
+iRet          =  0;
+iFileno       =  0;
+iFd           = -1;
+iRet_r1l      =  0;
+ts1st.tv_nsec = -1; /* -1 means that a valid time is not in yet */
+iFileno_opened=  0;
 while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
 
   /*--- Open one of the input files --------------------------------*/
@@ -461,7 +460,6 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
   } else                                            {
     pszFilename = pszPath                ;
     while ((iFd=open(pszPath, O_RDONLY)) < 0) {
-      if (errno == EINTR) {continue;}
       iRet = 1;
       warning("%s: %s\n",pszFilename,strerror(errno));
       iFileno++;
@@ -475,14 +473,15 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
   } else                   {
     fp = fdopen(iFd, "r");
   }
+  iFileno_opened++;
 
   /*--- Reading and writing loop -----------------------------------*/
+  if (iFileno_opened==1 && gi8Peritime==-1) {spend_my_spare_time(NULL);}
   switch (iUnit) {
     case 0:
               while ((i=getc(fp)) != EOF) {
                 spend_my_spare_time(NULL);
                 while (putchar(i)==EOF) {
-                  if (errno == EINTR) {continue;}
                   error_exit(errno,"main() #C1: %s\n",strerror(errno));
                 }
               }
@@ -699,7 +698,6 @@ int read_1line(FILE *fp, struct timespec *ptsGet1stchar) {
                   return(EOF);
       case '\n':
                   while (putchar('\n' )==EOF) {
-                    if (errno == EINTR) {continue;}
                     error_exit(errno,"putchar() #R1L-1: %s\n",strerror(errno));
                   }
                   iNextchar = getc(fp);
@@ -707,7 +705,6 @@ int read_1line(FILE *fp, struct timespec *ptsGet1stchar) {
                   else                {        return 1;}
       default:
                   while (putchar(iChar)==EOF) {
-                    if (errno == EINTR) {continue;}
                     error_exit(errno,"putchar() #R1L-2: %s\n",strerror(errno));
                   }
     }
@@ -867,13 +864,6 @@ void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct) {
   int     i                   ;
   int64_t i8                  ;
 
-  /*--- Ignore multi calling ---------------------------------------*/
-  if (iSig > 0) {
-    if (sigaction(SIG_FOR_ME,&gsaIgnr,NULL) != 0) {
-      error_exit(errno,"sigaction() in the trap #R1: %s\n",strerror(errno));
-    }
-  }
-
   while (1) {
 
     /*--- Try to read the time -------------------------------------*/
@@ -914,13 +904,6 @@ void update_periodic_time_type_c(int iSig, siginfo_t *siInfo, void *pct) {
   int         iOverflow;
   int         iDoBufClr;
   int64_t     i8       ;
-
-  /*--- Ignore multi calling ---------------------------------------*/
-  if (iSig > 0) {
-    if (sigaction(SIG_FOR_ME,&gsaIgnr,NULL) != 0) {
-      error_exit(errno,"sigaction() in the trap #C1: %s\n",strerror(errno));
-    }
-  }
 
   while (1) {
 
