@@ -21,12 +21,21 @@
 #                         of by argument. The word you can specify in
 #                         this file is completely the same as the argu-
 #                         ment.
-#                         However, you can re-specify the time by over-
-#                         writing the file. This command will read the
-#                         new periodic time in 0.1 second after that.
-#                         If you want to make this command read it im-
-#                         mediately, send SIGHUP. (On macOS and OpenBSD,
-#                         SIGALRM is used for it)
+#                         However, you can replace the time by over-
+#                         writing the file. You can use a regular file,
+#                         a fifo file, or a character special file. The
+#                         latter two types are better because the UNIX
+#                         compatible programs have to poll the regular
+#                         file periodically to confirm whether its
+#                         content has been updated. So, this command
+#                         also accesses the controlfile every 0.1
+#                         second if the controlfile is a regular file.
+#                         If you want to notify me of the update im-
+#                         mediately, send me the SIGHUP. Finally, you
+#                         always have to overwrite the new parameter
+#                         at the top of the file. Do not use the append
+#                         mode because this command read the parameter
+#                         from the top.
 #           file ........ Filepath to be send ("-" means STDIN)
 # Options : -c .......... (Default) Changes the periodic unit to
 #                         character. This option defines that the
@@ -65,9 +74,9 @@
 #                         but if failed, it will try the smaller numbers.
 # Retuen  : Return 0 only when finished successfully
 #
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt
+# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -pthread -lrt
 #                  (if it doesn't work)
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
+# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -pthread
 #
 # Note    : [What's "#ifndef NOTTY" for?]
 #             That is to avoid any unknown side effects by supporting
@@ -76,7 +85,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-09-20
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-09-23
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -109,6 +118,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
 #include <locale.h>
 #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
@@ -120,7 +130,6 @@
 /* Interval time for looking at the file which Preriodic time is written */
 #define FREAD_ITRVL_SEC  0
 #define FREAD_ITRVL_USEC 100000
-#define FREAD_ITRVL_NSEC 100000000
 /* Buffer size for the control file */
 #define CTRL_FILE_BUF 64
 /* If you set the following definition to 2 or more, recovery mode will be
@@ -134,25 +143,24 @@
 #else
   #define CLOCK_FOR_ME CLOCK_MONOTONIC
 #endif
-#if !defined(__APPLE__) && !defined(__OpenBSD__)
-  #define SIG_FOR_ME SIGHUP
-#else
-  #define SIG_FOR_ME SIGALRM
-#endif
 
 /*--- prototype functions ------------------------------------------*/
+void* param_updater(void* pvArgs);
 int64_t parse_periodictime(char *pszArg);
 int change_to_rtprocess(int iPrio);
 void spend_my_spare_time(struct timespec *ptsPrev);
 int read_1line(FILE *fp, struct timespec *ptsGet1stchar);
+void do_nothing(int iSig, siginfo_t *siInfo, void *pct);
 void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct);
 #ifndef NOTTY
-  void update_periodic_time_type_c(int iSig, siginfo_t *siInfo, void *pct);
+  void update_periodic_time_type_c(void);
 #endif
 
 /*--- global variables ---------------------------------------------*/
 char*    gpszCmdname;     /* The name of this command                        */
+pthread_t gtMain;         /* main thread ID                                  */
 int64_t  gi8Peritime;     /* Periodic time in nanosecond (-1 means infinity) */
+struct stat gstCtrlfile;  /* stat for the control file                       */
 int      giFd_ctrlfile;   /* File descriptor of the control file             */
 struct sigaction gsaAlrm; /* for signal trap definition (action)             */
 int      giRecovery;      /* 0:normal 1:Recovery mode                        */
@@ -190,12 +198,21 @@ void print_usage_and_exit(void) {
     "                        of by argument. The word you can specify in\n"
     "                        this file is completely the same as the argu-\n"
     "                        ment.\n"
-    "                        However, you can re-specify the time by over-\n"
-    "                        writing the file. This command will read the\n"
-    "                        new periodic time in 0.1 second after that.\n"
-    "                        If you want to make this command read it im-\n"
-    "                        mediately, send SIGHUP. (On macOS and OpenBSD,\n"
-    "                        SIGALRM is used for it)\n"
+    "                        However, you can replace the time by over-\n"
+    "                        writing the file. You can use a regular file,\n"
+    "                        a fifo file, or a character special file. The\n"
+    "                        latter two types are better because the UNIX\n"
+    "                        compatible programs have to poll the regular\n"
+    "                        file periodically to confirm whether its\n"
+    "                        content has been updated. So, this command\n"
+    "                        also accesses the controlfile every 0.1\n"
+    "                        second if the controlfile is a regular file.\n"
+    "                        If you want to notify me of the update im-\n"
+    "                        mediately, send me the SIGHUP. Finally, you\n"
+    "                        always have to overwrite the new parameter\n"
+    "                        at the top of the file. Do not use the append\n"
+    "                        mode because this command read the parameter\n"
+    "                        from the top.\n"
     "          file ........ Filepath to be send (\"-\" means STDIN)\n"
     "Options : -c .......... (Default) Changes the periodic unit to\n"
     "                        character. This option defines that the\n"
@@ -234,7 +251,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2024-09-20 19:28:33 JST\n"
+    "Version : 2024-09-23 18:30:46 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -275,27 +292,22 @@ void error_exit(int iErrno, const char* szFormat, ...) {
 int main(int argc, char *argv[]) {
 
 /*--- Variables ----------------------------------------------------*/
-int      iUnit;           /* 0:character 1:line 2-:undefined       */
-int      iPrio;           /* -p option number (default 1)          */
-int      iRet;            /* return code                           */
-int      iRet_r1l;        /* return value by read_1line()          */
-char    *pszPath;         /* filepath on arguments                 */
-char    *pszFilename;     /* filepath (for message)                */
-int      iFileno;         /* file# of filepath                     */
+sigset_t ssMask;          /* blocking signal list for the main thread*/
+int      iUnit;           /* 0:character 1:line 2-:undefined        */
+int      iPrio;           /* -p option number (default 1)           */
+struct sigaction saHup;   /* for signal trap definition (action)    */
+pthread_t tSub;           /* subthread ID                           */
+int      iRet;            /* return code                            */
+int      iRet_r1l;        /* return value by read_1line()           */
+char    *pszPath;         /* filepath on arguments                  */
+char    *pszFilename;     /* filepath (for message)                 */
+int      iFileno;         /* file# of filepath                      */
 int      iFileno_opened;  /* number of the files opened successfully*/
-int      iFd;             /* file descriptor                       */
-FILE    *fp;              /* file handle                           */
+int      iFd;             /* file descriptor                        */
+FILE    *fp;              /* file handle                            */
 struct timespec ts1st;    /* the time when the 1st char was got
-                             (only for line mode)                  */
-int      i;               /* all-purpose int                       */
-#if !defined(__APPLE__) && !defined(__OpenBSD__)
-  struct itimerspec itInt;  /* for signal trap definition (interval) */
-  struct sigevent   seInf;  /* for interval event definition         */
-  timer_t           trId;   /* signal timer ID                       */
-#else
-  struct itimerval  itInt;  /* for signal trap definition (interval) */
-#endif
-struct stat stCtrlfile;   /* stat for the control file             */
+                             (only for line mode)                   */
+int      i;               /* all-purpose int                        */
 
 /*--- Initialize ---------------------------------------------------*/
 gpszCmdname = argv[0];
@@ -341,85 +353,38 @@ if (giVerbose>0) {warning("verbose mode (level %d)\n",giVerbose);}
 if (argc < 2         ) {print_usage_and_exit();}
 gi8Peritime = parse_periodictime(argv[0]);
 if (gi8Peritime <= -2) {
-  /* Make sure that the control file has an acceptable type */
-  if ((i=stat(argv[0],&stCtrlfile)) < 0) {
-    error_exit(errno,"%s: %s\n",argv[0],strerror(errno));  
-  }
-  switch (stCtrlfile.st_mode & S_IFMT) {
-    case S_IFREG : break;
-#ifndef NOTTY
-    case S_IFCHR : break;
-    case S_IFIFO : break;
-#endif
-    default      : error_exit(255,"%s: Unsupported file type\n",argv[0]);
-  }
-
-  /* set the first parameter, which is "0%" */
+  /* Set the initial parameter, which is "0%" */
   gi8Peritime = -1;
-
-  /* (a) for a regular file */
-  if ((stCtrlfile.st_mode & S_IFREG) == S_IFREG) {
-    /* Open the file */
-    if ((giFd_ctrlfile=open(argv[0],O_RDONLY)) < 0){
-      error_exit(errno,"%s: %s\n",argv[0],strerror(errno));
-    }
-
-    /* Register the signal trap */
-    memset(&gsaAlrm, 0, sizeof(gsaAlrm));
-    sigemptyset(&gsaAlrm.sa_mask);
-    sigaddset(&gsaAlrm.sa_mask, SIG_FOR_ME);
-    gsaAlrm.sa_sigaction = update_periodic_time_type_r;
-    gsaAlrm.sa_flags     = SA_SIGINFO | SA_RESTART;
-    if (sigaction(SIG_FOR_ME,&gsaAlrm,NULL) != 0) {
-      error_exit(errno,"sigaction() in main() #a: %s\n",strerror(errno));
-    }
-#ifndef NOTTY
-  } else {
-  /* (b) for a character special file or a named pipe */
-    /* Open the file */
-    if ((giFd_ctrlfile=open(argv[0],O_RDONLY | O_NONBLOCK )) < 0){
-      error_exit(errno,"%s: %s\n",argv[0],strerror(errno));
-    }
-
-    /* Register the signal trap */
-    memset(&gsaAlrm, 0, sizeof(gsaAlrm));
-    sigemptyset(&gsaAlrm.sa_mask);
-    sigaddset(&gsaAlrm.sa_mask, SIG_FOR_ME);
-    gsaAlrm.sa_sigaction = update_periodic_time_type_c;
-    gsaAlrm.sa_flags     = SA_SIGINFO | SA_RESTART;
-    if (sigaction(SIG_FOR_ME,&gsaAlrm,NULL) != 0) {
-      error_exit(errno,"sigaction() in main() #b: %s\n",strerror(errno));
-    }
-#endif
+  /* If the argument might be a control file, start the subthread */
+  if (stat(argv[0],&gstCtrlfile) < 0) {
+    error_exit(errno,"%s: %s\n",argv[0],strerror(errno));
   }
-
-  /* Start sending signal pulses to the signal trap */
-  #if !defined(__APPLE__) && !defined(__OpenBSD__)
-    memset(&seInf, 0, sizeof(seInf));
-    seInf.sigev_value.sival_int  = 0;
-    seInf.sigev_notify           = SIGEV_SIGNAL;
-    seInf.sigev_signo            = SIG_FOR_ME;
-    if (timer_create(CLOCK_FOR_ME, &seInf, &trId)) {
-      error_exit(errno,"timer_create(): %s\n" ,strerror(errno));
+  /* Set sig-blocking only if the subthread will use SIGALRM */
+  if (gstCtrlfile.st_mode & S_IFREG) {
+    if (sigemptyset(&ssMask) != 0) {
+      error_exit(errno,"sigemptyset() in main(): %s\n",strerror(errno));
     }
-    memset(&itInt, 0, sizeof(itInt));
-    itInt.it_value.tv_sec     = FREAD_ITRVL_SEC;
-    itInt.it_value.tv_nsec    = FREAD_ITRVL_NSEC;
-    itInt.it_interval.tv_sec  = FREAD_ITRVL_SEC;
-    itInt.it_interval.tv_nsec = FREAD_ITRVL_NSEC;
-    if (timer_settime(trId,0,&itInt,NULL)) {
-      error_exit(errno,"timer_settime(): %s\n",strerror(errno));
+    if (sigaddset(&ssMask,SIGALRM) != 0) {
+      error_exit(errno,"sigaddset() in main(): %s\n",strerror(errno));
     }
-  #else
-    memset(&itInt, 0, sizeof(itInt));
-    itInt.it_interval.tv_sec  = FREAD_ITRVL_SEC;
-    itInt.it_interval.tv_usec = FREAD_ITRVL_USEC;
-    itInt.it_value.tv_sec     = FREAD_ITRVL_SEC;
-    itInt.it_value.tv_usec    = FREAD_ITRVL_USEC;
-    if (setitimer(ITIMER_REAL,&itInt,NULL)) {
-      error_exit(errno,"setitimer(): %s\n"    ,strerror(errno));
+    if ((i=pthread_sigmask(SIG_BLOCK,&ssMask,NULL)) != 0) {
+      error_exit(i,"pthread_sigmask() in main(): %s\n",strerror(i));
     }
-  #endif
+  }
+  /* Register a SIGHUP handler to apply the new gi8Peritime  */
+  memset(&saHup, 0, sizeof(saHup));
+  sigemptyset(&saHup.sa_mask);
+  sigaddset(&saHup.sa_mask, SIGHUP);
+  saHup.sa_sigaction = do_nothing;
+  saHup.sa_flags     = SA_SIGINFO | SA_RESTART;
+  if (sigaction(SIGHUP,&saHup,NULL) != 0) {
+    error_exit(errno,"sigaction() in main(): %s\n",strerror(errno));
+  }
+  /* Start the subthread */
+  gtMain = pthread_self();
+  if ((i=pthread_create(&tSub,NULL,&param_updater,(void*)argv[0])) != 0) {
+    error_exit(i,"pthread_create() in main(): %s\n",strerror(i));
+  }
 }
 argc--;
 argv++;
@@ -515,6 +480,93 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
 
 /*=== Finish normally ==============================================*/
 return(iRet);}
+
+
+
+/*####################################################################
+# Subthread (Parameter Updater)
+####################################################################*/
+
+/*=== Initialization ===============================================*/
+void* param_updater(void* pvArgs) {
+
+/*--- Variables ----------------------------------------------------*/
+char*  pszCtrlfile;
+sigset_t ssMask;           /* unblocking signal list                */
+int    i;                  /* all-purpose int                       */
+struct itimerval  itInt;   /* for signal trap definition (interval) */
+
+/*=== Validate the control file ====================================*/
+if (! pvArgs) {error_exit(255,"line #%d: Fatal error\n",__LINE__);}
+pszCtrlfile = (char*)pvArgs;
+/* Make sure that the control file has an acceptable type */
+switch (gstCtrlfile.st_mode & S_IFMT) {
+  case S_IFREG : break;
+#ifndef NOTTY
+  case S_IFCHR : break;
+  case S_IFIFO : break;
+#endif
+  default      : error_exit(255,"%s: Unsupported file type\n",pszCtrlfile);
+}
+
+/*=== The routine when the control file is a regular file ==========*/
+if (gstCtrlfile.st_mode & S_IFREG) {
+
+  /*--- Unblock the signal mask ------------------------------------*/
+  if (sigemptyset(&ssMask) != 0) {
+    error_exit(errno,"sigemptyset() in param_updater(): %s\n",strerror(errno));
+  }
+  if (sigaddset(&ssMask,SIGALRM) != 0) {
+    error_exit(errno,"sigaddset() in param_updater(): %s\n",strerror(errno));
+  }
+  if ((i=pthread_sigmask(SIG_UNBLOCK,&ssMask,NULL)) != 0) {
+    error_exit(i,"pthread_sigmask() in param_updater(): %s\n",strerror(i));
+  }
+
+  /*--- Open the file ----------------------------------------------*/
+  if ((giFd_ctrlfile=open(pszCtrlfile,O_RDONLY)) < 0){
+    error_exit(errno,"%s: %s\n",pszCtrlfile,strerror(errno));
+  }
+
+  /*--- Register the signal handler --------------------------------*/
+  memset(&gsaAlrm, 0, sizeof(gsaAlrm));
+  sigemptyset(&gsaAlrm.sa_mask);
+  sigaddset(&gsaAlrm.sa_mask, SIGALRM);
+  gsaAlrm.sa_sigaction = update_periodic_time_type_r;
+  gsaAlrm.sa_flags     = SA_SIGINFO | SA_RESTART;
+  if (sigaction(SIGALRM,&gsaAlrm,NULL) != 0) {
+    error_exit(errno,"sigaction() in param_updater(): %s\n",strerror(errno));
+  }
+
+  /*--- Register a signal pulse and start it -----------------------*/
+  memset(&itInt, 0, sizeof(itInt));
+  itInt.it_interval.tv_sec  = FREAD_ITRVL_SEC;
+  itInt.it_interval.tv_usec = FREAD_ITRVL_USEC;
+  itInt.it_value.tv_sec     = FREAD_ITRVL_SEC;
+  itInt.it_value.tv_usec    = FREAD_ITRVL_USEC;
+  if (setitimer(ITIMER_REAL,&itInt,NULL)) {
+    error_exit(errno,"setitimer(): %s\n"    ,strerror(errno));
+  }
+
+  /*--- Sleep infinitely -------------------------------------------*/
+  while(1) {pause();}
+
+/*=== The routine when the control file is a character special file */
+#ifndef NOTTY
+} else {
+  /*--- Open the file ----------------------------------------------*/
+  if ((giFd_ctrlfile=open(pszCtrlfile,O_RDONLY)) < 0) {
+    error_exit(errno,"%s: %s\n",pszCtrlfile,strerror(errno));
+  }
+
+  /*--- Read the file and update the parameter continuously --------*/
+  update_periodic_time_type_c();
+#endif
+}
+
+/*=== End of the subthread (does not come here) ====================*/
+return NULL;}
+
 
 
 
@@ -852,10 +904,22 @@ top:
   return;
 }
 
+/*=== SIGNALTRAP : Do nothing ========================================
+ * This function does nothing. However, it works effectively when you
+ * want to interrupt the system calls and function using them and make
+ * them stop with errno=EINTR.
+ * For this command, it is useful to make the nanosleep() stop sleeping
+ * and re-sleep for the new duration.                               */
+void do_nothing(int iSig, siginfo_t *siInfo, void *pct) {
+  if (giVerbose>0) {warning("gi8Peritime=%ld\n",gi8Peritime);}
+  return;
+}
+
 /*=== SIGNALTRAP : Try to update "gi8Peritime" for a regular file ====
  * [in] gi8Peritime   : (must be defined as a global variable)
  *      giFd_ctrlfile : File descriptor for the file which the periodic
- *                      time is written                             */
+ *                      time is written
+ *      gtMain        : The main thread ID                          */
 void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct) {
 
   /*--- Variables --------------------------------------------------*/
@@ -873,77 +937,77 @@ void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct) {
     szBuf[i]='\0';
     i8 = parse_periodictime(szBuf);
     if (i8 <= -2                                            ) {break;}
+    if (gi8Peritime == i8                                   ) {break;}
 
     /*--- Update the periodic time ---------------------------------*/
     gi8Peritime = i8;
+    if (pthread_kill(gtMain, SIGHUP) != 0) {
+      error_exit(errno,"pthread_kill() in type_r(): %s\n",strerror(errno));
+    }
 
   break;}
 
   /*--- Restore the signal action ----------------------------------*/
   if (iSig > 0) {
-    if (sigaction(SIG_FOR_ME,&gsaAlrm,NULL) != 0) {
-      error_exit(errno,"sigaction() in the trap #R2: %s\n",strerror(errno));
+    if (sigaction(SIGALRM,&gsaAlrm,NULL) != 0) {
+      error_exit(errno,"sigaction() in type_r(): %s\n",strerror(errno));
     }
   }
 }
 
 #ifndef NOTTY
-/*=== SIGNALTRAP : Try to update "gi8Peritime" for a char-sp/FIFO file
+/*=== Try to update "gi8Peritime" for a char-sp/FIFO file
  * [in] gi8Peritime   : (must be defined as a global variable)
  *      giFd_ctrlfile : File descriptor for the file which the periodic
- *                      time is written                                   */
-void update_periodic_time_type_c(int iSig, siginfo_t *siInfo, void *pct) {
+ *                      time is written
+ *      gtMain        : The main thread ID                          */
+void update_periodic_time_type_c(void) {
 
   /*--- Variables --------------------------------------------------*/
-  static char szCmdbuf[CTRL_FILE_BUF] = {0};
-  static char iCmdbuflen              =  0 ;
-  char        szBuf[CTRL_FILE_BUF];
-  int         iLen     ;
-  int         i        ;
-  int         iEntkeyed;  /* 1 means enter key has pressed */
-  int         iOverflow;
-  int         iDoBufClr;
-  int64_t     i8       ;
+  char    szBuf[CTRL_FILE_BUF];
+  char    szCmdbuf[CTRL_FILE_BUF];
+  int     iLen      ;
+  int     iCmdbuflen;
+  int     iEntkeyed ;  /* >0 means the enter key has pressed */
+  int     iOverflow ;  /* >0 means the source string is too long */
+  int64_t i8        ;
+  int     i         ;
+
+  /*--- Initialize -------------------------------------------------*/
+  szCmdbuf[0]='\0'; iCmdbuflen=0;
 
   while (1) {
-
     /*--- Read out the source string of the periodic time ----------*/
-    iDoBufClr=0;
     iOverflow=0;
     while ((iLen=read(giFd_ctrlfile,szBuf,CTRL_FILE_BUF-1))==CTRL_FILE_BUF-1) {
       /*Read away the buffer and quit if the string in the buffer is too large*/
       iOverflow=1;
     }
-    if (iOverflow) {iDoBufClr=1; break;}
-    if (iLen < 0 ) {iDoBufClr=1; break;} /* some error */
-    iEntkeyed = 0;
-    for (i=0;i<iLen;i++) {if(szBuf[i]=='\n'){iEntkeyed=1;break;}}
+    if (iOverflow) {szCmdbuf[0]='\0'; iCmdbuflen=0; continue;}
+    if (iLen < 0 ) {szCmdbuf[0]='\0'; iCmdbuflen=0; continue;} /* some error */
+    iEntkeyed=0;
+    for (i=0;i<iLen;i++) {if(szBuf[i]=='\n'){iEntkeyed=1; break;}}
     szBuf[i]='\0';
     strncat(szCmdbuf, szBuf, CTRL_FILE_BUF-iCmdbuflen-1);
     iCmdbuflen = strlen(szCmdbuf);
     if (iCmdbuflen >= CTRL_FILE_BUF-1) {
       /*Throw away the buffer and quit if the command string is too large*/
-      iDoBufClr=1;;
-      break;
+      szCmdbuf[0]='\0'; iCmdbuflen=0; continue;
     }
-    if (iEntkeyed == 0) {break;}
+    if (iEntkeyed == 0) {continue;}
 
     /*--- Try to read the time ---------------------------------------*/
     i8 = parse_periodictime(szCmdbuf);
-    if (i8 <= -2) {iDoBufClr=1; break;} /*Invalid periodic time*/
+    if (i8 <= -2) {
+      szCmdbuf[0]='\0'; iCmdbuflen=0; continue; /* Invalid periodic time */
+    }
 
     /*--- Update the periodic time -----------------------------------*/
-    gi8Peritime = i8  ;
-    iDoBufClr=1;
-
-  break;}
-  if (iDoBufClr) {szCmdbuf[0]='\0'; iCmdbuflen=0;}
-
-  /*--- Restore the signal action ----------------------------------*/
-  if (iSig > 0) {
-    if (sigaction(SIG_FOR_ME,&gsaAlrm,NULL) != 0) {
-      error_exit(errno,"sigaction() in the trap #C2: %s\n",strerror(errno));
+    gi8Peritime = i8;
+    if (pthread_kill(gtMain, SIGHUP) != 0) {
+      error_exit(errno,"pthread_kill() in type_c(): %s\n",strerror(errno));
     }
+    szCmdbuf[0]='\0'; iCmdbuflen=0;
   }
 }
 #endif
