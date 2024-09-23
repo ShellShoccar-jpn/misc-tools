@@ -85,7 +85,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-09-23
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-09-24
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -127,9 +127,12 @@
 #endif
 
 /*--- macro constants ----------------------------------------------*/
-/* Interval time for looking at the file which Preriodic time is written */
+/* Interval time of looking at the parameter on the control file */
 #define FREAD_ITRVL_SEC  0
 #define FREAD_ITRVL_USEC 100000
+/* Time to retry the applying the new parameter to the main thread */
+#define RETRY_APPLY_SEC  0
+#define RETRY_APPLY_NSEC 500000000
 /* Buffer size for the control file */
 #define CTRL_FILE_BUF 64
 /* If you set the following definition to 2 or more, recovery mode will be
@@ -160,6 +163,7 @@ void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct);
 char*    gpszCmdname;     /* The name of this command                        */
 pthread_t gtMain;         /* main thread ID                                  */
 int64_t  gi8Peritime;     /* Periodic time in nanosecond (-1 means infinity) */
+int      giPtApplied;     /* gi8Peritime is 0:"not applied yet" 1:"applied"  */
 struct stat gstCtrlfile;  /* stat for the control file                       */
 int      giFd_ctrlfile;   /* File descriptor of the control file             */
 struct sigaction gsaAlrm; /* for signal trap definition (action)             */
@@ -251,7 +255,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2024-09-23 18:30:46 JST\n"
+    "Version : 2024-09-24 00:36:43 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -351,6 +355,7 @@ if (giVerbose>0) {warning("verbose mode (level %d)\n",giVerbose);}
 
 /*--- Parse the periodic time ----------------------------------------*/
 if (argc < 2         ) {print_usage_and_exit();}
+giPtApplied = 0;
 gi8Peritime = parse_periodictime(argv[0]);
 if (gi8Peritime <= -2) {
   /* Set the initial parameter, which is "0%" */
@@ -362,28 +367,46 @@ if (gi8Peritime <= -2) {
   /* Set sig-blocking only if the subthread will use SIGALRM */
   if (gstCtrlfile.st_mode & S_IFREG) {
     if (sigemptyset(&ssMask) != 0) {
-      error_exit(errno,"sigemptyset() in main(): %s\n",strerror(errno));
+      error_exit(errno,"sigemptyset() #1 in main(): %s\n",strerror(errno));
     }
     if (sigaddset(&ssMask,SIGALRM) != 0) {
-      error_exit(errno,"sigaddset() in main(): %s\n",strerror(errno));
+      error_exit(errno,"sigaddset() #1 in main(): %s\n",strerror(errno));
     }
     if ((i=pthread_sigmask(SIG_BLOCK,&ssMask,NULL)) != 0) {
-      error_exit(i,"pthread_sigmask() in main(): %s\n",strerror(i));
+      error_exit(i,"pthread_sigmask() #1 in main(): %s\n",strerror(i));
     }
   }
-  /* Register a SIGHUP handler to apply the new gi8Peritime  */
-  memset(&saHup, 0, sizeof(saHup));
-  sigemptyset(&saHup.sa_mask);
-  sigaddset(&saHup.sa_mask, SIGHUP);
-  saHup.sa_sigaction = do_nothing;
-  saHup.sa_flags     = SA_SIGINFO | SA_RESTART;
-  if (sigaction(SIGHUP,&saHup,NULL) != 0) {
-    error_exit(errno,"sigaction() in main(): %s\n",strerror(errno));
+  /* Block the SIGHUP temporarily before SIGHUP handler setting */
+  if (sigemptyset(&ssMask) != 0) {
+    error_exit(errno,"sigemptyset() #2 in main(): %s\n",strerror(errno));
+  }
+  if (sigaddset(&ssMask,SIGHUP) != 0) {
+    error_exit(errno,"sigaddset() #2 in main(): %s\n",strerror(errno));
+  }
+  if ((i=pthread_sigmask(SIG_BLOCK,&ssMask,NULL)) != 0) {
+    error_exit(i,"pthread_sigmask() #2 in main(): %s\n",strerror(i));
   }
   /* Start the subthread */
   gtMain = pthread_self();
   if ((i=pthread_create(&tSub,NULL,&param_updater,(void*)argv[0])) != 0) {
     error_exit(i,"pthread_create() in main(): %s\n",strerror(i));
+  }
+  /* Register a SIGHUP handler to apply the new gi8Peritime  */
+  memset(&saHup, 0, sizeof(saHup));
+  sigemptyset(&saHup.sa_mask);
+  saHup.sa_sigaction = do_nothing;
+  saHup.sa_flags     = SA_SIGINFO | SA_RESTART;
+  if (sigaction(SIGHUP,&saHup,NULL) != 0) {
+    error_exit(errno,"sigaction() in main(): %s\n",strerror(errno));
+  }
+  if (sigemptyset(&ssMask) != 0) {
+    error_exit(errno,"sigemptyset() #3 in main(): %s\n",strerror(errno));
+  }
+  if (sigaddset(&ssMask,SIGHUP) != 0) {
+    error_exit(errno,"sigaddset() #3 in main(): %s\n",strerror(errno));
+  }
+  if ((i=pthread_sigmask(SIG_UNBLOCK,&ssMask,NULL)) != 0) {
+    error_exit(i,"pthread_sigmask() #3 in main(): %s\n",strerror(i));
   }
 }
 argc--;
@@ -512,7 +535,7 @@ switch (gstCtrlfile.st_mode & S_IFMT) {
 /*=== The routine when the control file is a regular file ==========*/
 if (gstCtrlfile.st_mode & S_IFREG) {
 
-  /*--- Unblock the signal mask ------------------------------------*/
+  /*--- Unblock the SIGALRM ----------------------------------------*/
   if (sigemptyset(&ssMask) != 0) {
     error_exit(errno,"sigemptyset() in param_updater(): %s\n",strerror(errno));
   }
@@ -765,8 +788,10 @@ int read_1line(FILE *fp, struct timespec *ptsGet1stchar) {
 }
 
 /*=== Sleep until the next interval period ===========================
- * [in] gi8Peritime : Periodic time (-1 means infinity)
-        ptsPrev     : If not null, set it to tsPrev and exit immediately */
+ * [in]  gi8Peritime : Periodic time (-1 means infinity)
+         ptsPrev     : If not null, set it to tsPrev and exit immediately
+   [out] giPtApplied : This variable will be turned to 1 when the sleeping
+                       time has been calculated with the gi8Peritime */
 void spend_my_spare_time(struct timespec *ptsPrev) {
 
   /*--- Variables --------------------------------------------------*/
@@ -801,6 +826,7 @@ top:
   if (gi8Peritime<0) {
     tsDiff.tv_sec  = 86400;
     tsDiff.tv_nsec =     0;
+    giPtApplied    =     1;
     while (1) {
       if (nanosleep(&tsDiff,NULL) != 0) {
         if (errno != EINTR) {
@@ -818,6 +844,7 @@ top:
   ui8 = (uint64_t)tsPrev.tv_nsec + gi8Peritime;
   tsTo.tv_sec  = tsPrev.tv_sec + (time_t)(ui8/1000000000);
   tsTo.tv_nsec = (long)(ui8%1000000000);
+  giPtApplied  = 1;
 
   /*--- If the "tsTo" has been already past, return immediately without sleep */
   if (clock_gettime(CLOCK_FOR_ME,&tsNow) != 0) {
@@ -853,7 +880,10 @@ top:
 
   /*--- Sleep until the next interval period -----------------------*/
   if (nanosleep(&tsDiff,NULL) != 0) {
-    if (errno == EINTR) {goto top;} /* Go to "top" in case of a signal trap */
+    if (errno == EINTR) {
+      i8LastPeritime=gi8Peritime;
+      goto top; /* Go to "top" in case of a signal trap */
+    }
     error_exit(errno,"nanosleep() #2: %s\n",strerror(errno));
   }
 
@@ -916,10 +946,14 @@ void do_nothing(int iSig, siginfo_t *siInfo, void *pct) {
 }
 
 /*=== SIGNALTRAP : Try to update "gi8Peritime" for a regular file ====
- * [in] gi8Peritime   : (must be defined as a global variable)
- *      giFd_ctrlfile : File descriptor for the file which the periodic
- *                      time is written
- *      gtMain        : The main thread ID                          */
+ * [in]  gi8Peritime   : (must be defined as a global variable)
+ *       giFd_ctrlfile : File descriptor for the file which the periodic
+ *                       time is written
+ *       gtMain        : The main thread ID
+ *       giPtApplied   : This variable will be turned to 1 when the sleeping
+ *                       time has been calculated with the gi8Peritime
+ * [out] giPtApplied   : This function will set the variable to 0 after
+ *                       setting the new "gi8Peritime" value         */
 void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct) {
 
   /*--- Variables --------------------------------------------------*/
@@ -927,6 +961,7 @@ void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct) {
   int     iLen                ;
   int     i                   ;
   int64_t i8                  ;
+  struct timespec tsRety      ;
 
   while (1) {
 
@@ -937,13 +972,23 @@ void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct) {
     szBuf[i]='\0';
     i8 = parse_periodictime(szBuf);
     if (i8 <= -2                                            ) {break;}
-    if (gi8Peritime == i8                                   ) {break;}
+    if ((gi8Peritime==i8) && (giPtApplied==1)               ) {break;}
 
     /*--- Update the periodic time ---------------------------------*/
     gi8Peritime = i8;
-    if (pthread_kill(gtMain, SIGHUP) != 0) {
-      error_exit(errno,"pthread_kill() in type_r(): %s\n",strerror(errno));
-    }
+    giPtApplied =  0;
+    do {
+      if (pthread_kill(gtMain, SIGHUP) != 0) {
+        error_exit(errno,"pthread_kill() in type_r(): %s\n",strerror(errno));
+      }
+      tsRety.tv_sec  = RETRY_APPLY_SEC;   /* Try sleeping for a while to */
+      tsRety.tv_nsec = RETRY_APPLY_NSEC;  /* confirm the parameter has   */
+      if (nanosleep(&tsRety,NULL) != 0) { /* been applied                */
+        if (errno != EINTR) {
+          error_exit(errno,"nanosleep() in type_r: %s\n",strerror(errno));
+        }
+      }
+    } while (giPtApplied == 0);
 
   break;}
 
@@ -957,10 +1002,14 @@ void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct) {
 
 #ifndef NOTTY
 /*=== Try to update "gi8Peritime" for a char-sp/FIFO file
- * [in] gi8Peritime   : (must be defined as a global variable)
- *      giFd_ctrlfile : File descriptor for the file which the periodic
- *                      time is written
- *      gtMain        : The main thread ID                          */
+ * [in]  gi8Peritime   : (must be defined as a global variable)
+ *       giFd_ctrlfile : File descriptor for the file which the periodic
+ *                       time is written
+ *       gtMain        : The main thread ID
+ *       giPtApplied   : This variable will be turned to 1 when the sleeping
+ *                       time has been calculated with the gi8Peritime
+ * [out] giPtApplied   : This function will set the variable to 0 after
+ *                       setting the new "gi8Peritime" value         */
 void update_periodic_time_type_c(void) {
 
   /*--- Variables --------------------------------------------------*/
@@ -970,6 +1019,7 @@ void update_periodic_time_type_c(void) {
   int     iCmdbuflen;
   int     iEntkeyed ;  /* >0 means the enter key has pressed */
   int     iOverflow ;  /* >0 means the source string is too long */
+  struct timespec tsRety;
   int64_t i8        ;
   int     i         ;
 
@@ -998,15 +1048,28 @@ void update_periodic_time_type_c(void) {
 
     /*--- Try to read the time ---------------------------------------*/
     i8 = parse_periodictime(szCmdbuf);
-    if (i8 <= -2) {
+    if (i8 <= -2                             ) {
       szCmdbuf[0]='\0'; iCmdbuflen=0; continue; /* Invalid periodic time */
+    }
+    if ((gi8Peritime==i8) && (giPtApplied==1)) {
+      szCmdbuf[0]='\0'; iCmdbuflen=0; continue; /* Already applied */
     }
 
     /*--- Update the periodic time -----------------------------------*/
     gi8Peritime = i8;
-    if (pthread_kill(gtMain, SIGHUP) != 0) {
-      error_exit(errno,"pthread_kill() in type_c(): %s\n",strerror(errno));
-    }
+    giPtApplied =  0;
+    do {
+      if (pthread_kill(gtMain, SIGHUP) != 0) {
+        error_exit(errno,"pthread_kill() in type_c(): %s\n",strerror(errno));
+      }
+      tsRety.tv_sec  = RETRY_APPLY_SEC;   /* Try sleeping for a while to */
+      tsRety.tv_nsec = RETRY_APPLY_NSEC;  /* confirm the parameter has   */
+      if (nanosleep(&tsRety,NULL) != 0) { /* been applied                */
+        if (errno != EINTR) {
+          error_exit(errno,"nanosleep() in type_c: %s\n",strerror(errno));
+        }
+      }
+    } while (giPtApplied == 0);
     szCmdbuf[0]='\0'; iCmdbuflen=0;
   }
 }
