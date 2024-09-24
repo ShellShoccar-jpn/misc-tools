@@ -119,6 +119,7 @@
 #include <time.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <poll.h>
 #include <signal.h>
 #include <locale.h>
 #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
@@ -255,7 +256,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2024-09-25 01:28:21 JST\n"
+    "Version : 2024-09-25 02:47:46 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -1020,13 +1021,16 @@ void update_periodic_time_type_c(void) {
   char    szBuf1[CTRL_FILE_BUF*2+1]; /* 1st buffer                  */
   char    szCmdbuf[CTRL_FILE_BUF]  ; /* Buffer for the new parameter*/
   struct timespec tsRety           ; /* Retry timer to apply        */
+  struct pollfd fdsPoll[1]         ;
   char*   psz                      ;
   int64_t i8                       ;
   int     i, j                     ;
 
 
   /*--- Initialize -------------------------------------------------*/
-  szCmdbuf[0]='\0';
+  szCmdbuf[0]       = '\0'         ;
+  fdsPoll[0].fd     = giFd_ctrlfile;
+  fdsPoll[0].events = POLLIN       ;
 
   /*--- Begin of the infinite loop ---------------------------------*/
   while (1) {
@@ -1039,7 +1043,10 @@ void update_periodic_time_type_c(void) {
     iBuf0Lst=1-iBuf0Lst;
     iBuf0DatSiz[iBuf0Lst]=read(giFd_ctrlfile,cBuf0[iBuf0Lst],CTRL_FILE_BUF);
     iBuf0ReadTimes++;
-  } while (iBuf0DatSiz[iBuf0Lst]==CTRL_FILE_BUF);
+  } while ((i=poll(fdsPoll,1,0)) > 0);
+  if (i < 0) {
+    error_exit(errno,"select() in type_c(): %s\n",strerror(errno));
+  }
   if (iBuf0DatSiz[iBuf0Lst] < 0) {
     error_exit(errno,"read() in type_c(): %s\n",strerror(errno));
   }
