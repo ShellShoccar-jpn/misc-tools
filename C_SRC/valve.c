@@ -85,7 +85,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-09-24
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-09-25
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -255,7 +255,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2024-09-24 00:36:43 JST\n"
+    "Version : 2024-09-25 01:28:21 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -1013,49 +1013,80 @@ void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct) {
 void update_periodic_time_type_c(void) {
 
   /*--- Variables --------------------------------------------------*/
-  char    szBuf[CTRL_FILE_BUF];
-  char    szCmdbuf[CTRL_FILE_BUF];
-  int     iLen      ;
-  int     iCmdbuflen;
-  int     iEntkeyed ;  /* >0 means the enter key has pressed */
-  int     iOverflow ;  /* >0 means the source string is too long */
-  struct timespec tsRety;
-  int64_t i8        ;
-  int     i         ;
+  char    cBuf0[2][CTRL_FILE_BUF]  ; /* 0th buffers (two bunches)   */
+  int     iBuf0DatSiz[2]           ; /* Data sizes of the two       */
+  int     iBuf0Lst                 ; /* Which bunch was written last*/
+  int     iBuf0ReadTimes           ; /* Num of times of Buf0 writing*/
+  char    szBuf1[CTRL_FILE_BUF*2+1]; /* 1st buffer                  */
+  char    szCmdbuf[CTRL_FILE_BUF]  ; /* Buffer for the new parameter*/
+  struct timespec tsRety           ; /* Retry timer to apply        */
+  char*   psz                      ;
+  int64_t i8                       ;
+  int     i, j                     ;
+
 
   /*--- Initialize -------------------------------------------------*/
-  szCmdbuf[0]='\0'; iCmdbuflen=0;
+  szCmdbuf[0]='\0';
 
+  /*--- Begin of the infinite loop ---------------------------------*/
   while (1) {
-    /*--- Read out the source string of the periodic time ----------*/
-    iOverflow=0;
-    while ((iLen=read(giFd_ctrlfile,szBuf,CTRL_FILE_BUF-1))==CTRL_FILE_BUF-1) {
-      /*Read away the buffer and quit if the string in the buffer is too large*/
-      iOverflow=1;
-    }
-    if (iOverflow) {szCmdbuf[0]='\0'; iCmdbuflen=0; continue;}
-    if (iLen < 0 ) {szCmdbuf[0]='\0'; iCmdbuflen=0; continue;} /* some error */
-    iEntkeyed=0;
-    for (i=0;i<iLen;i++) {if(szBuf[i]=='\n'){iEntkeyed=1; break;}}
-    szBuf[i]='\0';
-    strncat(szCmdbuf, szBuf, CTRL_FILE_BUF-iCmdbuflen-1);
-    iCmdbuflen = strlen(szCmdbuf);
-    if (iCmdbuflen >= CTRL_FILE_BUF-1) {
-      /*Throw away the buffer and quit if the command string is too large*/
-      szCmdbuf[0]='\0'; iCmdbuflen=0; continue;
-    }
-    if (iEntkeyed == 0) {continue;}
 
-    /*--- Try to read the time ---------------------------------------*/
+  /*--- Read the ctrlfile and write the data into the Buf0          *
+   *    until the unread data does not remain              ---------*/
+  iBuf0DatSiz[0]=0; iBuf0DatSiz[1]=0;
+  iBuf0Lst      =1; iBuf0ReadTimes=0;
+  do {
+    iBuf0Lst=1-iBuf0Lst;
+    iBuf0DatSiz[iBuf0Lst]=read(giFd_ctrlfile,cBuf0[iBuf0Lst],CTRL_FILE_BUF);
+    iBuf0ReadTimes++;
+  } while (iBuf0DatSiz[iBuf0Lst]==CTRL_FILE_BUF);
+  if (iBuf0DatSiz[iBuf0Lst] < 0) {
+    error_exit(errno,"read() in type_c(): %s\n",strerror(errno));
+  }
+
+  /*--- Normalized the data in the Buf0 and write it into Buf1      *
+   *     1) Contatinate the two bunch of data in the Buf0           *
+   *        and write the data into the Buf1                        *
+   *     2) Replace all NULLs in the data on Buf1 with <0x20>       *
+   *     3) Make the data on the Buf1 a null-terminated string -----*/
+  psz       = szBuf1;
+  iBuf0Lst  = 1-iBuf0Lst;
+  memcpy(psz, cBuf0[iBuf0Lst], (size_t)iBuf0DatSiz[iBuf0Lst]);
+  psz      += iBuf0DatSiz[iBuf0Lst];
+  iBuf0Lst  = 1-iBuf0Lst;
+  memcpy(psz, cBuf0[iBuf0Lst], (size_t)iBuf0DatSiz[iBuf0Lst]);
+  psz      += iBuf0DatSiz[iBuf0Lst];
+  i = iBuf0DatSiz[0]+iBuf0DatSiz[1];
+  for (j=0; j<i; j++) {if(szBuf1[j]=='\0'){szBuf1[j]=' ';}}
+  szBuf1[i] = '\0';
+
+  /*--- ROUTINE A: For the string on the Buf1 is terminated '\n' ---*/
+  /*      - This kind of string means the user has finished typing  *
+   *        the new parameter and has pressed the enter key. So,    *
+   *        this command tries to notify the main thread of it.     */
+  if (szBuf1[i-1]=='\n') {
+    szBuf1[i-1]='\0';
+    for (j=i-2; j>=0; j--) {if(szBuf1[j]=='\n'){break;}}
+    j++;
+    /* "j>0" means the Buf1 has 2 or more lines. So, this routine *
+     * discards all but the last line,                            */
+    if (j > 0) {
+      if ((i-j-1) > (CTRL_FILE_BUF-1)) {
+        szCmdbuf[0]='\0'; continue; /*String is too long */
+      }
+    } else {
+      if (iBuf0ReadTimes>1 || ((i-j-1)+strlen(szCmdbuf)>(CTRL_FILE_BUF-1))) {
+        szCmdbuf[0]='\0'; continue; /* String is too long */
+      }
+    }
+    memcpy(szCmdbuf, szBuf1+j, i-j);
     i8 = parse_periodictime(szCmdbuf);
     if (i8 <= -2                             ) {
-      szCmdbuf[0]='\0'; iCmdbuflen=0; continue; /* Invalid periodic time */
+      szCmdbuf[0]='\0'; continue; /* Invalid periodic time */
     }
     if ((gi8Peritime==i8) && (giPtApplied==1)) {
-      szCmdbuf[0]='\0'; iCmdbuflen=0; continue; /* Already applied */
+      szCmdbuf[0]='\0'; continue; /* Already applied */
     }
-
-    /*--- Update the periodic time -----------------------------------*/
     gi8Peritime = i8;
     giPtApplied =  0;
     do {
@@ -1070,7 +1101,36 @@ void update_periodic_time_type_c(void) {
         }
       }
     } while (giPtApplied == 0);
-    szCmdbuf[0]='\0'; iCmdbuflen=0;
+    szCmdbuf[0]='\0'; continue;
+
+  /*--- ROUTINE B: For the string on the Buf1 is not terminated '\n'*/
+  /*      - This kind of string means that it is a portion of the   *
+   *        new parameter's string, which has come while the user   *
+   *        is still typing it. So, this command tries to           *
+   *        concatenate the partial strings instead of the          *
+   *        notification.                                           */
+  } else {
+    for (j=i-1; j>=0; j--) {if(szBuf1[j]=='\n'){break;}}
+    j++;
+    /* "j>0" means the Buf1 has 2 or more lines. So, this routine *
+     * discards all but the last line,                            */
+    if (j > 0) {
+      if ((i-j) > (CTRL_FILE_BUF-1)) {
+        szCmdbuf[0]='\0'; continue; /* String is too long */
+      }
+      memcpy(szCmdbuf, szBuf1+j, i-j+1);
+    } else {
+      if (iBuf0ReadTimes>1 || ((i-j-1)+strlen(szCmdbuf)>(CTRL_FILE_BUF-1))) {
+        memset(szCmdbuf, ' ', CTRL_FILE_BUF-1); /*<-- This expresses that the */
+        szCmdbuf[CTRL_FILE_BUF-1]='\0';         /*    new parameter string is */
+        continue;                               /*    already too long.       */
+      }
+      memcpy(szCmdbuf+strlen(szCmdbuf), szBuf1+j, i-j+1);
+    }
+    continue;
+  }
+
+  /*--- End of the infinite loop -----------------------------------*/
   }
 }
 #endif
