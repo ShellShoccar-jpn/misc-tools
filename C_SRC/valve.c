@@ -256,7 +256,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2024-09-25 02:47:46 JST\n"
+    "Version : 2024-09-25 02:54:01 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -1045,7 +1045,7 @@ void update_periodic_time_type_c(void) {
     iBuf0ReadTimes++;
   } while ((i=poll(fdsPoll,1,0)) > 0);
   if (i < 0) {
-    error_exit(errno,"select() in type_c(): %s\n",strerror(errno));
+    error_exit(errno,"poll() in type_c(): %s\n",strerror(errno));
   }
   if (iBuf0DatSiz[iBuf0Lst] < 0) {
     error_exit(errno,"read() in type_c(): %s\n",strerror(errno));
