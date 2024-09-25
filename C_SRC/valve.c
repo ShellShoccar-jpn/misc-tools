@@ -18,24 +18,35 @@
 #                                     '100%' (completely open the value)
 #                         The maximum value is INT_MAX for all units.
 #           controlfile . Filepath to specify the periodic time instead
-#                         of by argument. The word you can specify in
-#                         this file is completely the same as the argu-
-#                         ment.
-#                         However, you can replace the time by over-
-#                         writing the file. You can use a regular file,
-#                         a fifo file, or a character special file. The
-#                         latter two types are better because the UNIX
-#                         compatible programs have to poll the regular
-#                         file periodically to confirm whether its
-#                         content has been updated. So, this command
-#                         also accesses the controlfile every 0.1
-#                         second if the controlfile is a regular file.
-#                         If you want to notify me of the update im-
-#                         mediately, send me the SIGHUP. Finally, you
-#                         always have to overwrite the new parameter
-#                         at the top of the file. Do not use the append
-#                         mode because this command read the parameter
-#                         from the top.
+#                         of by argument. You can change the parameter
+#                         even when this command is running by updating
+#                         the content of the controlfile.
+#                         The parameter syntax you can specify in this
+#                         file is completely the same as the argument,
+#                         but if you give me an invalid parameter, this
+#                         command will ignore it silently with no error.
+#                         The default is "0bps" unless any valid para-
+#                         meter is given.
+#                         You can choose one of the following three types
+#                         as the controlfile.
+#                           * Regular file:
+#                             If you use a regular file as the control-
+#                             file, you have to write a new parameter
+#                             into it with the "O_CREAT" mode or ">",
+#                             not the "O_APPEND" mode or ">>" because
+#                             the command always checks the new para-
+#                             meter at the head of the regular file
+#                             periodically.
+#                             The periodic time of cheking is 0.1 secs.
+#                             If you want to apply the new parameter
+#                             immediately, send me the SIGHUP after
+#                             updating the file.
+#                           * Character-special file / Named-pipe;
+#                             It is better for the performance. If you
+#                             use these types of files, you can write
+#                             a new parameter with both the above two
+#                             modes. The new parameter will be applied
+#                             immediately just after writing.
 #           file ........ Filepath to be send ("-" means STDIN)
 # Options : -c .......... (Default) Changes the periodic unit to
 #                         character. This option defines that the
@@ -148,12 +159,15 @@
   #define CLOCK_FOR_ME CLOCK_MONOTONIC
 #endif
 
+/*--- data type definitions ----------------------------------------*/
+typedef struct timespec tmsp;
+
 /*--- prototype functions ------------------------------------------*/
 void* param_updater(void* pvArgs);
 int64_t parse_periodictime(char *pszArg);
 int change_to_rtprocess(int iPrio);
-void spend_my_spare_time(struct timespec *ptsPrev);
-int read_1line(FILE *fp, struct timespec *ptsGet1stchar);
+void spend_my_spare_time(tmsp *ptsPrev);
+int read_1line(FILE *fp, tmsp *ptsGet1stchar);
 void do_nothing(int iSig, siginfo_t *siInfo, void *pct);
 void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct);
 #ifndef NOTTY
@@ -200,24 +214,35 @@ void print_usage_and_exit(void) {
     "                        (Regular file only for it on the version)\n"
 #endif
     "          controlfile . Filepath to specify the periodic time instead\n"
-    "                        of by argument. The word you can specify in\n"
-    "                        this file is completely the same as the argu-\n"
-    "                        ment.\n"
-    "                        However, you can replace the time by over-\n"
-    "                        writing the file. You can use a regular file,\n"
-    "                        a fifo file, or a character special file. The\n"
-    "                        latter two types are better because the UNIX\n"
-    "                        compatible programs have to poll the regular\n"
-    "                        file periodically to confirm whether its\n"
-    "                        content has been updated. So, this command\n"
-    "                        also accesses the controlfile every 0.1\n"
-    "                        second if the controlfile is a regular file.\n"
-    "                        If you want to notify me of the update im-\n"
-    "                        mediately, send me the SIGHUP. Finally, you\n"
-    "                        always have to overwrite the new parameter\n"
-    "                        at the top of the file. Do not use the append\n"
-    "                        mode because this command read the parameter\n"
-    "                        from the top.\n"
+    "                        of by argument. You can change the parameter\n"
+    "                        even when this command is running by updating\n"
+    "                        the content of the controlfile.\n"
+    "                        The parameter syntax you can specify in this\n"
+    "                        file is completely the same as the argument,\n"
+    "                        but if you give me an invalid parameter, this\n"
+    "                        command will ignore it silently with no error.\n"
+    "                        The default is \"0bps\" unless any valid para-\n"
+    "                        meter is given.\n"
+    "                        You can choose one of the following three types\n"
+    "                        as the controlfile.\n"
+    "                          * Regular file\n"
+    "                            If you use a regular file as the control-\n"
+    "                            file, you have to write a new parameter\n"
+    "                            into it with the \"O_CREAT\" mode or \">\",\n"
+    "                            not the \"O_APPEND\" mode or \">>\" because\n"
+    "                            the command always checks the new para-\n"
+    "                            meter at the head of the regular file\n"
+    "                            periodically.\n"
+    "                            The periodic time of cheking is 0.1 secs.\n"
+    "                            If you want to apply the new parameter\n"
+    "                            immediately, send me the SIGHUP after\n"
+    "                            updating the file.\n"
+    "                          * Character-special file / Named-pipe\n"
+    "                            It is better for the performance. If you\n"
+    "                            use these types of files, you can write\n"
+    "                            a new parameter with both the above two\n"
+    "                            modes. The new parameter will be applied\n"
+    "                            immediately just after writing.\n"
     "          file ........ Filepath to be send (\"-\" means STDIN)\n"
     "Options : -c .......... (Default) Changes the periodic unit to\n"
     "                        character. This option defines that the\n"
@@ -256,7 +281,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2024-09-25 02:54:01 JST\n"
+    "Version : 2024-09-25 16:54:14 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -310,7 +335,7 @@ int      iFileno;         /* file# of filepath                      */
 int      iFileno_opened;  /* number of the files opened successfully*/
 int      iFd;             /* file descriptor                        */
 FILE    *fp;              /* file handle                            */
-struct timespec ts1st;    /* the time when the 1st char was got
+tmsp     ts1st;           /* the time when the 1st char was got
                              (only for line mode)                   */
 int      i;               /* all-purpose int                        */
 
@@ -754,7 +779,7 @@ int change_to_rtprocess(int iPrio) {
  *       1   : Finished reading/writing due to '\n', which is the last
  *             char of the file
  *       EOF : Finished reading/writing due to EOF              */
-int read_1line(FILE *fp, struct timespec *ptsGet1stchar) {
+int read_1line(FILE *fp, tmsp *ptsGet1stchar) {
 
   /*--- Variables --------------------------------------------------*/
   static int iHold = 0; /* set 1 if next character is currently held */
@@ -793,17 +818,17 @@ int read_1line(FILE *fp, struct timespec *ptsGet1stchar) {
          ptsPrev     : If not null, set it to tsPrev and exit immediately
    [out] giPtApplied : This variable will be turned to 1 when the sleeping
                        time has been calculated with the gi8Peritime */
-void spend_my_spare_time(struct timespec *ptsPrev) {
+void spend_my_spare_time(tmsp *ptsPrev) {
 
   /*--- Variables --------------------------------------------------*/
-  static struct timespec tsPrev = {0,0}; /* the time when this func
+  static tmsp    tsPrev = {0,0};         /* the time when this func
                                             called last time        */
-  static struct timespec tsRecovmax  = {0,0} ;
-  struct timespec        tsNow               ;
-  struct timespec        tsTo                ;
-  struct timespec        tsDiff              ;
+  static tmsp    tsRecovmax  = {0,0} ;
+  tmsp           tsNow               ;
+  tmsp           tsTo                ;
+  tmsp           tsDiff              ;
 
-  static int64_t         i8LastPeritime  = -1;
+  static int64_t i8LastPeritime  = -1;
 
   uint64_t               ui8                 ;
 
@@ -962,7 +987,7 @@ void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct) {
   int     iLen                ;
   int     i                   ;
   int64_t i8                  ;
-  struct timespec tsRety      ;
+  tmsp    tsRety              ;
 
   while (1) {
 
@@ -1020,7 +1045,7 @@ void update_periodic_time_type_c(void) {
   int     iBuf0ReadTimes           ; /* Num of times of Buf0 writing*/
   char    szBuf1[CTRL_FILE_BUF*2+1]; /* 1st buffer                  */
   char    szCmdbuf[CTRL_FILE_BUF]  ; /* Buffer for the new parameter*/
-  struct timespec tsRety           ; /* Retry timer to apply        */
+  tmsp    tsRety                   ; /* Retry timer to apply        */
   struct pollfd fdsPoll[1]         ;
   char*   psz                      ;
   int64_t i8                       ;
