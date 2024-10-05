@@ -96,7 +96,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-10-05
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-10-06
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -162,6 +162,7 @@ typedef struct _thr_t {
   pthread_t       tMainth_id;       /* main thread ID                         */
   pthread_mutex_t mu;               /* The mutex variable                     */
   pthread_cond_t  co;               /* The condition variable                 */
+  int             iSubth_iscreated; /* Set 1 when the subthread is created    */
   int             iMu_isready;      /* Set 1 when mu has been initialized     */
   int             iCo_isready;      /* Set 1 when co has been initialized     */
   int             iRequested__main; /* Req. received flag (only in mainth)    */
@@ -215,9 +216,6 @@ void print_usage_and_exit(void) {
     "                         - output : '0%%'   (completely shut the value)\n"
     "                                    '100%%' (completely open the value)\n"
     "                        The maximum value is INT_MAX for all units.\n"
-#ifdef NOTTY
-    "                        (Regular file only for it on the version)\n"
-#endif
     "          controlfile . Filepath to specify the periodic time instead\n"
     "                        of by argument. You can change the parameter\n"
     "                        even when this command is running by updating\n"
@@ -248,6 +246,9 @@ void print_usage_and_exit(void) {
     "                            a new parameter with both the above two\n"
     "                            modes. The new parameter will be applied\n"
     "                            immediately just after writing.\n"
+#ifdef NOTTY
+    "                          (Regular file only for it on the version)\n"
+#endif
     "          file ........ Filepath to be send (\"-\" means STDIN)\n"
     "Options : -c .......... (Default) Changes the periodic unit to\n"
     "                        character. This option defines that the\n"
@@ -286,7 +287,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2024-10-05 17:41:26 JST\n"
+    "Version : 2024-10-06 01:20:03 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -328,10 +329,10 @@ int main(int argc, char *argv[]) {
 
 /*--- Variables ----------------------------------------------------*/
 sigset_t ssMask;          /* blocking signal list for the main thread*/
-int      iUnit;           /* 0:character 1:line 2-:undefined        */
-int      iPrio;           /* -p option number (default 1)           */
 struct sigaction saHup;   /* for signal handler definition (action) */
 pthread_t tSub;           /* subthread ID                           */
+int      iUnit;           /* 0:character 1:line 2-:undefined        */
+int      iPrio;           /* -p option number (default 1)           */
 int      iRet;            /* return code                            */
 int      iRet_r1l;        /* return value by read_1line()           */
 char    *pszPath;         /* filepath on arguments                  */
@@ -428,6 +429,7 @@ if (gi8Peritime <= -2) {
   gstTh.iCo_isready = 1;
   i = pthread_create(&tSub,NULL,&param_updater,(void*)argv[0]);
   if (i) {error_exit(i,"pthread_create() in main(): %s\n"    ,strerror(i));}
+  gstTh.iSubth_iscreated = 1;
   /* Register a SIGHUP handler to apply the new gi8Peritime  */
   memset(&saHup, 0, sizeof(saHup));
   sigemptyset(&saHup.sa_mask);
@@ -445,6 +447,8 @@ if (gi8Peritime <= -2) {
   if ((i=pthread_sigmask(SIG_UNBLOCK,&ssMask,NULL)) != 0) {
     error_exit(i,"pthread_sigmask() #3 in main(): %s\n",strerror(i));
   }
+} else {
+  gstTh.iSubth_iscreated = 0;
 }
 argc--;
 argv++;
@@ -539,6 +543,9 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
 }
 
 /*=== Finish normally ==============================================*/
+if (gstTh.iSubth_iscreated) {
+  pthread_cancel(tSub); gstTh.iSubth_iscreated=0; pthread_join(tSub, NULL);
+}
 return(iRet);}
 
 
@@ -704,15 +711,15 @@ void update_periodic_time_type_c(char* pszCtrlfile) {
   int64_t i8                       ;
   int     i, j, k                  ;
 
-  /*--- Initialize -------------------------------------------------*/
-  szCmdbuf[0]       = '\0'        ;
-  fdsPoll[0].fd     = iFd_ctrlfile;
-  fdsPoll[0].events = POLLIN      ;
+  /*--- Initialize the buffer for the parameter --------------------*/
+  szCmdbuf[0] = '\0';
 
   /*--- Open the file ----------------------------------------------*/
   if ((iFd_ctrlfile=open(pszCtrlfile,O_RDONLY)) < 0) {
     error_exit(errno,"%s: %s\n",pszCtrlfile,strerror(errno));
   }
+  fdsPoll[0].fd     = iFd_ctrlfile;
+  fdsPoll[0].events = POLLIN      ;
 
   /*--- Begin of the infinite loop ---------------------------------*/
   while (1) {
