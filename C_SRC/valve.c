@@ -96,7 +96,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-09-25
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-10-05
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -142,9 +142,6 @@
 /* Interval time of looking at the parameter on the control file */
 #define FREAD_ITRVL_SEC  0
 #define FREAD_ITRVL_USEC 100000
-/* Time to retry the applying the new parameter to the main thread */
-#define RETRY_APPLY_SEC  0
-#define RETRY_APPLY_NSEC 500000000
 /* Buffer size for the control file */
 #define CTRL_FILE_BUF 64
 /* If you set the following definition to 2 or more, recovery mode will be
@@ -161,29 +158,37 @@
 
 /*--- data type definitions ----------------------------------------*/
 typedef struct timespec tmsp;
+typedef struct _thr_t {
+  pthread_t       tMainth_id;       /* main thread ID                         */
+  pthread_mutex_t mu;               /* The mutex variable                     */
+  pthread_cond_t  co;               /* The condition variable                 */
+  int             iMu_isready;      /* Set 1 when mu has been initialized     */
+  int             iCo_isready;      /* Set 1 when co has been initialized     */
+  int             iRequested__main; /* Req. received flag (only in mainth)    */
+  int             iReceived;        /* Set 1 when the param. has been received*/
+} thr_t;
 
 /*--- prototype functions ------------------------------------------*/
 void* param_updater(void* pvArgs);
+void update_periodic_time_type_r(char* pszCtrlfile);
+#ifndef NOTTY
+  void update_periodic_time_type_c(char* pszCtrlfile);
+#endif
 int64_t parse_periodictime(char *pszArg);
 int change_to_rtprocess(int iPrio);
 void spend_my_spare_time(tmsp *ptsPrev);
 int read_1line(FILE *fp, tmsp *ptsGet1stchar);
 void do_nothing(int iSig, siginfo_t *siInfo, void *pct);
-void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct);
-#ifndef NOTTY
-  void update_periodic_time_type_c(void);
-#endif
+void recv_param_application_req(int iSig, siginfo_t *siInfo, void *pct);
+void destroy_thread_objects(void);
 
 /*--- global variables ---------------------------------------------*/
 char*    gpszCmdname;     /* The name of this command                        */
-pthread_t gtMain;         /* main thread ID                                  */
 int64_t  gi8Peritime;     /* Periodic time in nanosecond (-1 means infinity) */
-int      giPtApplied;     /* gi8Peritime is 0:"not applied yet" 1:"applied"  */
 struct stat gstCtrlfile;  /* stat for the control file                       */
-int      giFd_ctrlfile;   /* File descriptor of the control file             */
-struct sigaction gsaAlrm; /* for signal trap definition (action)             */
 int      giRecovery;      /* 0:normal 1:Recovery mode                        */
 int      giVerbose;       /* speaks more verbosely by the greater number     */
+thr_t    gstTh;           /* Variables for threads communication             */
 
 /*=== Define the functions for printing usage and error ============*/
 
@@ -281,7 +286,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2024-09-25 16:54:14 JST\n"
+    "Version : 2024-10-05 17:41:26 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -325,7 +330,7 @@ int main(int argc, char *argv[]) {
 sigset_t ssMask;          /* blocking signal list for the main thread*/
 int      iUnit;           /* 0:character 1:line 2-:undefined        */
 int      iPrio;           /* -p option number (default 1)           */
-struct sigaction saHup;   /* for signal trap definition (action)    */
+struct sigaction saHup;   /* for signal handler definition (action) */
 pthread_t tSub;           /* subthread ID                           */
 int      iRet;            /* return code                            */
 int      iRet_r1l;        /* return value by read_1line()           */
@@ -381,7 +386,6 @@ if (giVerbose>0) {warning("verbose mode (level %d)\n",giVerbose);}
 
 /*--- Parse the periodic time ----------------------------------------*/
 if (argc < 2         ) {print_usage_and_exit();}
-giPtApplied = 0;
 gi8Peritime = parse_periodictime(argv[0]);
 if (gi8Peritime <= -2) {
   /* Set the initial parameter, which is "0%" */
@@ -413,14 +417,21 @@ if (gi8Peritime <= -2) {
     error_exit(i,"pthread_sigmask() #2 in main(): %s\n",strerror(i));
   }
   /* Start the subthread */
-  gtMain = pthread_self();
-  if ((i=pthread_create(&tSub,NULL,&param_updater,(void*)argv[0])) != 0) {
-    error_exit(i,"pthread_create() in main(): %s\n",strerror(i));
-  }
+  memset(&gstTh, 0, sizeof(gstTh));
+  atexit(destroy_thread_objects);
+  gstTh.tMainth_id = pthread_self();
+  i = pthread_mutex_init(&gstTh.mu, NULL);
+  if (i) {error_exit(i,"pthread_mutex_init() in main(): %s\n",strerror(i));}
+  gstTh.iMu_isready = 1;
+  i = pthread_cond_init(&gstTh.co, NULL);
+  if (i) {error_exit(i,"pthread_cond_init() in main(): %s\n" ,strerror(i));}
+  gstTh.iCo_isready = 1;
+  i = pthread_create(&tSub,NULL,&param_updater,(void*)argv[0]);
+  if (i) {error_exit(i,"pthread_create() in main(): %s\n"    ,strerror(i));}
   /* Register a SIGHUP handler to apply the new gi8Peritime  */
   memset(&saHup, 0, sizeof(saHup));
   sigemptyset(&saHup.sa_mask);
-  saHup.sa_sigaction = do_nothing;
+  saHup.sa_sigaction = recv_param_application_req;
   saHup.sa_flags     = SA_SIGINFO | SA_RESTART;
   if (sigaction(SIGHUP,&saHup,NULL) != 0) {
     error_exit(errno,"sigaction() in main(): %s\n",strerror(errno));
@@ -541,9 +552,7 @@ void* param_updater(void* pvArgs) {
 
 /*--- Variables ----------------------------------------------------*/
 char*  pszCtrlfile;
-sigset_t ssMask;           /* unblocking signal list                */
-int    i;                  /* all-purpose int                       */
-struct itimerval  itInt;   /* for signal trap definition (interval) */
+int    i;               /* all-purpose int                          */
 
 /*=== Validate the control file ====================================*/
 if (! pvArgs) {error_exit(255,"line #%d: Fatal error\n",__LINE__);}
@@ -559,35 +568,67 @@ switch (gstCtrlfile.st_mode & S_IFMT) {
 }
 
 /*=== The routine when the control file is a regular file ==========*/
-if (gstCtrlfile.st_mode & S_IFREG) {
+if (gstCtrlfile.st_mode & S_IFREG) {update_periodic_time_type_r(pszCtrlfile);}
 
-  /*--- Unblock the SIGALRM ----------------------------------------*/
+/*=== The routine when the control file is a character special file */
+#ifndef NOTTY
+else                               {update_periodic_time_type_c(pszCtrlfile);}
+#endif
+
+/*=== End of the subthread (does not come here) ====================*/
+return NULL;}
+
+
+
+/*####################################################################
+# Subroutines of the Subthread
+####################################################################*/
+
+/*=== Try to update "gi8Peritime" for a regular file =================
+ * [in]  pszCtrlfile   : Filename of the control file which the periodic
+ *                       time is written
+ *       gi8Peritime   : (must be defined as a global variable)
+ *       gstTh.tMainth_id
+ *                     : The main thread ID
+ *       gstTh.mu      : Mutex object to lock
+ *       gstTh.co      : Condition variable to send a signal to the sub-th
+ * [out] gi8Peritime   : Overwritten with the new parameter
+ *       gstTh.iReceived
+ *                     : Set to 0 after confirming that the main thread
+ *                       receivedi the request                      */
+void update_periodic_time_type_r(char* pszCtrlfile) {
+
+  /*--- Variables --------------------------------------------------*/
+  struct sigaction saAlrm; /* for signal handler definition (action)   */
+  sigset_t         ssMask; /* unblocking signal list                   */
+  struct itimerval itInt ; /* for signal handler definition (interval) */
+  int              iFd_ctrlfile        ; /* file desc. of the ctrlfile */
+  char             szBuf[CTRL_FILE_BUF]; /* parameter string buffer    */
+  int              iLen                ; /* length of the parameter str*/
+  int64_t          i8                  ;
+  int              i                   ;
+
+  /*--- Set the signal-triggered timer -----------------------------*/
+  /* 0) Unblock the SIGALRM */
   if (sigemptyset(&ssMask) != 0) {
-    error_exit(errno,"sigemptyset() in param_updater(): %s\n",strerror(errno));
+    error_exit(errno,"sigemptyset() in type_r(): %s\n",strerror(errno));
   }
   if (sigaddset(&ssMask,SIGALRM) != 0) {
-    error_exit(errno,"sigaddset() in param_updater(): %s\n",strerror(errno));
+    error_exit(errno,"sigaddset() in type_r(): %s\n",strerror(errno));
   }
   if ((i=pthread_sigmask(SIG_UNBLOCK,&ssMask,NULL)) != 0) {
-    error_exit(i,"pthread_sigmask() in param_updater(): %s\n",strerror(i));
+    error_exit(i,"pthread_sigmask() in type_r(): %s\n",strerror(i));
   }
-
-  /*--- Open the file ----------------------------------------------*/
-  if ((giFd_ctrlfile=open(pszCtrlfile,O_RDONLY)) < 0){
-    error_exit(errno,"%s: %s\n",pszCtrlfile,strerror(errno));
+  /* 1) Register the signal handler */
+  memset(&saAlrm, 0, sizeof(saAlrm));
+  sigemptyset(&saAlrm.sa_mask);
+  sigaddset(&saAlrm.sa_mask, SIGALRM);
+  saAlrm.sa_sigaction = do_nothing;
+  saAlrm.sa_flags     = SA_SIGINFO | SA_RESTART;
+  if (sigaction(SIGALRM,&saAlrm,NULL) != 0) {
+    error_exit(errno,"sigaction() in type_r(): %s\n",strerror(errno));
   }
-
-  /*--- Register the signal handler --------------------------------*/
-  memset(&gsaAlrm, 0, sizeof(gsaAlrm));
-  sigemptyset(&gsaAlrm.sa_mask);
-  sigaddset(&gsaAlrm.sa_mask, SIGALRM);
-  gsaAlrm.sa_sigaction = update_periodic_time_type_r;
-  gsaAlrm.sa_flags     = SA_SIGINFO | SA_RESTART;
-  if (sigaction(SIGALRM,&gsaAlrm,NULL) != 0) {
-    error_exit(errno,"sigaction() in param_updater(): %s\n",strerror(errno));
-  }
-
-  /*--- Register a signal pulse and start it -----------------------*/
+  /* 2) Register a signal pulse and start it */
   memset(&itInt, 0, sizeof(itInt));
   itInt.it_interval.tv_sec  = FREAD_ITRVL_SEC;
   itInt.it_interval.tv_usec = FREAD_ITRVL_USEC;
@@ -597,30 +638,198 @@ if (gstCtrlfile.st_mode & S_IFREG) {
     error_exit(errno,"setitimer(): %s\n"    ,strerror(errno));
   }
 
-  /*--- Sleep infinitely -------------------------------------------*/
-  while(1) {pause();}
-
-/*=== The routine when the control file is a character special file */
-#ifndef NOTTY
-} else {
   /*--- Open the file ----------------------------------------------*/
-  if ((giFd_ctrlfile=open(pszCtrlfile,O_RDONLY)) < 0) {
+  if ((iFd_ctrlfile=open(pszCtrlfile,O_RDONLY)) < 0){
     error_exit(errno,"%s: %s\n",pszCtrlfile,strerror(errno));
   }
 
-  /*--- Read the file and update the parameter continuously --------*/
-  update_periodic_time_type_c();
-#endif
+  /*--- Get the new parameter on the file perodically (infinite loop) */
+  while (1) {
+    /* 1) Try to read the time */
+    if (lseek(iFd_ctrlfile,0,SEEK_SET) < 0                 ) {goto pause;}
+    if ((iLen=read(iFd_ctrlfile,szBuf,CTRL_FILE_BUF-1)) < 1) {goto pause;}
+    for (i=0;i<iLen;i++) {if(szBuf[i]=='\n'){break;}}
+    szBuf[i]='\0';
+    i8 = parse_periodictime(szBuf);
+    if (i8          <= -2                                  ) {goto pause;}
+    if (gi8Peritime == i8                                  ) {goto pause;}
+    /* 2) Update the periodic time */
+    gi8Peritime = i8;
+    if (pthread_kill(gstTh.tMainth_id, SIGHUP) != 0) {
+      error_exit(errno,"pthread_kill() in type_r(): %s\n",strerror(errno));
+    }
+    if ((i=pthread_mutex_lock(&gstTh.mu)) != 0) {
+      error_exit(i,"pthread_mutex_lock() in type_r(): %s\n"  , strerror(i));
+    }
+    while (! gstTh.iReceived) {
+      if ((i=pthread_cond_wait(&gstTh.co, &gstTh.mu)) != 0) {
+        error_exit(i,"pthread_cond_wait() in type_r(): %s\n" , strerror(i));
+      }
+    }
+    gstTh.iReceived = 0;
+    if ((i=pthread_mutex_unlock(&gstTh.mu)) != 0) {
+      error_exit(i,"pthread_mutex_unlock() in type_r(): %s\n", strerror(i));
+    }
+    /* 3) Wait for the next timing */
+pause:
+    pause();
+  }
 }
 
-/*=== End of the subthread (does not come here) ====================*/
-return NULL;}
+#ifndef NOTTY
+/*=== Try to update "gi8Peritime" for a char-sp/FIFO file
+ * [in]  pszCtrlfile   : Filename of the control file which the periodic
+ *                       time is written
+ *       gi8Peritime   : (must be defined as a global variable)
+ *       gstTh.tMainth_id
+ *                     : The main thread ID
+ *       gstTh.mu      : Mutex object to lock
+ *       gstTh.co      : Condition variable to send a signal to the sub-th
+ * [out] gi8Peritime   : Overwritten with the new parameter
+ *       gstTh.iReceived
+ *                     : Set to 0 after confirming that the main thread
+ *                       receivedi the request                      */
+void update_periodic_time_type_c(char* pszCtrlfile) {
 
+  /*--- Variables --------------------------------------------------*/
+  int     iFd_ctrlfile             ; /* file desc. of the ctrlfile  */
+  char    cBuf0[2][CTRL_FILE_BUF]  ; /* 0th buffers (two bunches)   */
+  int     iBuf0DatSiz[2]           ; /* Data sizes of the two       */
+  int     iBuf0Lst                 ; /* Which bunch was written last*/
+  int     iBuf0ReadTimes           ; /* Num of times of Buf0 writing*/
+  char    szBuf1[CTRL_FILE_BUF*2+1]; /* 1st buffer                  */
+  char    szCmdbuf[CTRL_FILE_BUF]  ; /* Buffer for the new parameter*/
+  struct pollfd fdsPoll[1]         ;
+  char*   psz                      ;
+  int64_t i8                       ;
+  int     i, j, k                  ;
+
+  /*--- Initialize -------------------------------------------------*/
+  szCmdbuf[0]       = '\0'        ;
+  fdsPoll[0].fd     = iFd_ctrlfile;
+  fdsPoll[0].events = POLLIN      ;
+
+  /*--- Open the file ----------------------------------------------*/
+  if ((iFd_ctrlfile=open(pszCtrlfile,O_RDONLY)) < 0) {
+    error_exit(errno,"%s: %s\n",pszCtrlfile,strerror(errno));
+  }
+
+  /*--- Begin of the infinite loop ---------------------------------*/
+  while (1) {
+
+  /*--- Read the ctrlfile and write the data into the Buf0          *
+   *    until the unread data does not remain              ---------*/
+  iBuf0DatSiz[0]=0; iBuf0DatSiz[1]=0;
+  iBuf0Lst      =1; iBuf0ReadTimes=0;
+  do {
+    iBuf0Lst=1-iBuf0Lst;
+    iBuf0DatSiz[iBuf0Lst]=read(iFd_ctrlfile,cBuf0[iBuf0Lst],CTRL_FILE_BUF);
+    iBuf0ReadTimes++;
+  } while ((i=poll(fdsPoll,1,0)) > 0);
+  if (i < 0) {
+    error_exit(errno,"poll() in type_c(): %s\n",strerror(errno));
+  }
+  if (iBuf0DatSiz[iBuf0Lst] < 0) {
+    error_exit(errno,"read() in type_c(): %s\n",strerror(errno));
+  }
+
+  /*--- Normalized the data in the Buf0 and write it into Buf1      *
+   *     1) Contatinate the two bunch of data in the Buf0           *
+   *        and write the data into the Buf1                        *
+   *     2) Replace all NULLs in the data on Buf1 with <0x20>       *
+   *     3) Make the data on the Buf1 a null-terminated string -----*/
+  psz       = szBuf1;
+  iBuf0Lst  = 1-iBuf0Lst;
+  memcpy(psz, cBuf0[iBuf0Lst], (size_t)iBuf0DatSiz[iBuf0Lst]);
+  psz      += iBuf0DatSiz[iBuf0Lst];
+  iBuf0Lst  = 1-iBuf0Lst;
+  memcpy(psz, cBuf0[iBuf0Lst], (size_t)iBuf0DatSiz[iBuf0Lst]);
+  psz      += iBuf0DatSiz[iBuf0Lst];
+  i = iBuf0DatSiz[0]+iBuf0DatSiz[1];
+  for (j=0; j<i; j++) {if(szBuf1[j]=='\0'){szBuf1[j]=' ';}}
+  szBuf1[i] = '\0';
+
+  /*--- ROUTINE A: For the string on the Buf1 is terminated '\n' ---*/
+  /*      - This kind of string means the user has finished typing  *
+   *        the new parameter and has pressed the enter key. So,    *
+   *        this command tries to notify the main thread of it.     */
+  if (szBuf1[i-1]=='\n') {
+    szBuf1[i-1]='\0';
+    for (j=i-2; j>=0; j--) {if(szBuf1[j]=='\n'){break;}}
+    j++;
+    /* "j>0" means the Buf1 has 2 or more lines. So, this routine *
+     * discards all but the last line,                            */
+    if (j > 0) {
+      if ((i-j-1) > (CTRL_FILE_BUF-1)) {
+        szCmdbuf[0]='\0'; continue; /*String is too long */
+      }
+    } else {
+      if (iBuf0ReadTimes>1 || ((i-j-1)+strlen(szCmdbuf)>(CTRL_FILE_BUF-1))) {
+        szCmdbuf[0]='\0'; continue; /* String is too long */
+      }
+    }
+    memcpy(szCmdbuf, szBuf1+j, i-j);
+    i8 = parse_periodictime(szCmdbuf);
+    if (i8          <= -2) {
+      szCmdbuf[0]='\0'; continue; /* Invalid periodic time */
+    }
+    if (gi8Peritime == i8) {
+      szCmdbuf[0]='\0'; continue; /* Parameter does not change */
+    }
+    gi8Peritime = i8;
+    if (pthread_kill(gstTh.tMainth_id, SIGHUP) != 0) {
+      error_exit(errno,"pthread_kill() in type_c(): %s\n",strerror(errno));
+    }
+    if ((k=pthread_mutex_lock(&gstTh.mu)) != 0) {
+      error_exit(k,"pthread_mutex_lock() in type_c(): %s\n"  , strerror(k));
+    }
+    while (! gstTh.iReceived) {
+      if ((k=pthread_cond_wait(&gstTh.co, &gstTh.mu)) != 0) {
+        error_exit(k,"pthread_cond_wait() in type_c(): %s\n" , strerror(k));
+      }
+    }
+    gstTh.iReceived = 0;
+    if ((k=pthread_mutex_unlock(&gstTh.mu)) != 0) {
+      error_exit(k,"pthread_mutex_unlock() in type_c(): %s\n", strerror(k));
+    }
+    szCmdbuf[0]='\0'; continue;
+
+  /*--- ROUTINE B: For the string on the Buf1 is not terminated '\n'*/
+  /*      - This kind of string means that it is a portion of the   *
+   *        new parameter's string, which has come while the user   *
+   *        is still typing it. So, this command tries to           *
+   *        concatenate the partial strings instead of the          *
+   *        notification.                                           */
+  } else {
+    for (j=i-1; j>=0; j--) {if(szBuf1[j]=='\n'){break;}}
+    j++;
+    /* "j>0" means the Buf1 has 2 or more lines. So, this routine *
+     * discards all but the last line,                            */
+    if (j > 0) {
+      if ((i-j) > (CTRL_FILE_BUF-1)) {
+        szCmdbuf[0]='\0'; continue; /* String is too long */
+      }
+      memcpy(szCmdbuf, szBuf1+j, i-j+1);
+    } else {
+      if (iBuf0ReadTimes>1 || ((i-j-1)+strlen(szCmdbuf)>(CTRL_FILE_BUF-1))) {
+        memset(szCmdbuf, ' ', CTRL_FILE_BUF-1); /*<-- This expresses that the */
+        szCmdbuf[CTRL_FILE_BUF-1]='\0';         /*    new parameter string is */
+        continue;                               /*    already too long.       */
+      }
+      memcpy(szCmdbuf+strlen(szCmdbuf), szBuf1+j, i-j+1);
+    }
+    continue;
+  }
+
+  /*--- End of the infinite loop -----------------------------------*/
+  }
+}
+#endif
 
 
 
 /*####################################################################
-# Functions
+# Other Functions
 ####################################################################*/
 
 /*=== Parse the periodic time ========================================
@@ -815,9 +1024,14 @@ int read_1line(FILE *fp, tmsp *ptsGet1stchar) {
 
 /*=== Sleep until the next interval period ===========================
  * [in]  gi8Peritime : Periodic time (-1 means infinity)
-         ptsPrev     : If not null, set it to tsPrev and exit immediately
-   [out] giPtApplied : This variable will be turned to 1 when the sleeping
-                       time has been calculated with the gi8Peritime */
+ *       ptsPrev     : If not null, set it to tsPrev and exit immediately
+ *       gstTh.iReceived_main
+ *                   : 1 when the request has come
+ *       gstTh.mu    : Mutex object to lock
+ *       gstTh.co    : Condition variable to send a signal to the sub-th
+ * [out] gstTh.iReceived, gstTh.iRequested__main
+ *                   : Set to 1, 0 respectively after dealing with the
+ *                     request */
 void spend_my_spare_time(tmsp *ptsPrev) {
 
   /*--- Variables --------------------------------------------------*/
@@ -830,7 +1044,9 @@ void spend_my_spare_time(tmsp *ptsPrev) {
 
   static int64_t i8LastPeritime  = -1;
 
-  uint64_t               ui8                 ;
+  uint64_t       ui8                 ;
+  int            i                   ;
+
 
   /*--- Set tsPrev and exit if ptsPrev has a time ------------------*/
   if (ptsPrev) {
@@ -841,6 +1057,26 @@ void spend_my_spare_time(tmsp *ptsPrev) {
   }
 
 top:
+  /*--- Notify the subthread that the main thread received the
+        request if the request has come                        -----*/
+  if (gstTh.iRequested__main) {
+    if ((i=pthread_mutex_lock(&gstTh.mu)) != 0) {
+      error_exit(i,"pthread_mutex_lock() in spend_my_spare_time(): %s\n",
+                                                                strerror(i));
+    }
+    gstTh.iReceived = 1;
+    if ((i=pthread_cond_signal(&gstTh.co)) != 0) {
+      error_exit(i,"pthread_cond_signal() in spend_my_spare_time(): %s\n",
+                                                                strerror(i));
+    }
+    if ((i=pthread_mutex_unlock(&gstTh.mu)) != 0) {
+      error_exit(i,"pthread_mutex_unlock() in spend_my_spare_time(): %s\n",
+                                                                strerror(i));
+    }
+    if (giVerbose>0) {warning("gi8Peritime=%ld\n",gi8Peritime);}
+    gstTh.iRequested__main = 0;
+  }
+
   /*--- Reset tsPrev if gi8Peritime was changed --------------------*/
   if (gi8Peritime != i8LastPeritime) {
     tsPrev.tv_sec  = 0;
@@ -852,7 +1088,6 @@ top:
   if (gi8Peritime<0) {
     tsDiff.tv_sec  = 86400;
     tsDiff.tv_nsec =     0;
-    giPtApplied    =     1;
     while (1) {
       if (nanosleep(&tsDiff,NULL) != 0) {
         if (errno != EINTR) {
@@ -861,7 +1096,7 @@ top:
         if (clock_gettime(CLOCK_FOR_ME,&tsPrev) != 0) {
           error_exit(errno,"clock_gettime() #1: %s\n",strerror(errno));
         }
-        goto top; /* Go to "top" in case of a signal trap */
+        goto top; /* Go to "top" in case of a signal handler */
       }
     }
   }
@@ -870,7 +1105,6 @@ top:
   ui8 = (uint64_t)tsPrev.tv_nsec + gi8Peritime;
   tsTo.tv_sec  = tsPrev.tv_sec + (time_t)(ui8/1000000000);
   tsTo.tv_nsec = (long)(ui8%1000000000);
-  giPtApplied  = 1;
 
   /*--- If the "tsTo" has been already past, return immediately without sleep */
   if (clock_gettime(CLOCK_FOR_ME,&tsNow) != 0) {
@@ -908,7 +1142,7 @@ top:
   if (nanosleep(&tsDiff,NULL) != 0) {
     if (errno == EINTR) {
       i8LastPeritime=gi8Peritime;
-      goto top; /* Go to "top" in case of a signal trap */
+      goto top; /* Go to "top" in case of a signal handler */
     }
     error_exit(errno,"nanosleep() #2: %s\n",strerror(errno));
   }
@@ -960,209 +1194,25 @@ top:
   return;
 }
 
-/*=== SIGNALTRAP : Do nothing ========================================
- * This function does nothing. However, it works effectively when you
- * want to interrupt the system calls and function using them and make
- * them stop with errno=EINTR.
- * For this command, it is useful to make the nanosleep() stop sleeping
- * and re-sleep for the new duration.                               */
-void do_nothing(int iSig, siginfo_t *siInfo, void *pct) {
-  if (giVerbose>0) {warning("gi8Peritime=%ld\n",gi8Peritime);}
+/*=== SIGNALHANDLER : Do nothing =====================================
+ * This function does nothing, but it is helpful to break a thread
+ * sleeping by using me as a signal handler.                        */
+void do_nothing(int iSig, siginfo_t *siInfo, void *pct) {return;}
+
+/*=== SIGNALHANDLER : Received the parameter application request =====
+ * This function sets the flag of the new parameter application request.
+ * This function should be called as a signal handler so that you can
+ * wake myself (the main thread) up even while sleeping with the
+ * nanosleep().
+ * [out] gstTh.iRequested : set to 1 to notify the main-th of the request */
+void recv_param_application_req(int iSig, siginfo_t *siInfo, void *pct) {
+  gstTh.iRequested__main = 1;
   return;
 }
 
-/*=== SIGNALTRAP : Try to update "gi8Peritime" for a regular file ====
- * [in]  gi8Peritime   : (must be defined as a global variable)
- *       giFd_ctrlfile : File descriptor for the file which the periodic
- *                       time is written
- *       gtMain        : The main thread ID
- *       giPtApplied   : This variable will be turned to 1 when the sleeping
- *                       time has been calculated with the gi8Peritime
- * [out] giPtApplied   : This function will set the variable to 0 after
- *                       setting the new "gi8Peritime" value         */
-void update_periodic_time_type_r(int iSig, siginfo_t *siInfo, void *pct) {
-
-  /*--- Variables --------------------------------------------------*/
-  char    szBuf[CTRL_FILE_BUF];
-  int     iLen                ;
-  int     i                   ;
-  int64_t i8                  ;
-  tmsp    tsRety              ;
-
-  while (1) {
-
-    /*--- Try to read the time -------------------------------------*/
-    if (lseek(giFd_ctrlfile,0,SEEK_SET) < 0                 ) {break;}
-    if ((iLen=read(giFd_ctrlfile,szBuf,CTRL_FILE_BUF-1)) < 1) {break;}
-    for (i=0;i<iLen;i++) {if(szBuf[i]=='\n'){break;}}
-    szBuf[i]='\0';
-    i8 = parse_periodictime(szBuf);
-    if (i8 <= -2                                            ) {break;}
-    if ((gi8Peritime==i8) && (giPtApplied==1)               ) {break;}
-
-    /*--- Update the periodic time ---------------------------------*/
-    gi8Peritime = i8;
-    giPtApplied =  0;
-    do {
-      if (pthread_kill(gtMain, SIGHUP) != 0) {
-        error_exit(errno,"pthread_kill() in type_r(): %s\n",strerror(errno));
-      }
-      tsRety.tv_sec  = RETRY_APPLY_SEC;   /* Try sleeping for a while to */
-      tsRety.tv_nsec = RETRY_APPLY_NSEC;  /* confirm the parameter has   */
-      if (nanosleep(&tsRety,NULL) != 0) { /* been applied                */
-        if (errno != EINTR) {
-          error_exit(errno,"nanosleep() in type_r: %s\n",strerror(errno));
-        }
-      }
-    } while (giPtApplied == 0);
-
-  break;}
-
-  /*--- Restore the signal action ----------------------------------*/
-  if (iSig > 0) {
-    if (sigaction(SIGALRM,&gsaAlrm,NULL) != 0) {
-      error_exit(errno,"sigaction() in type_r(): %s\n",strerror(errno));
-    }
-  }
+/*=== EXITHANDLER : Destroy thread objects =========================*/
+void destroy_thread_objects(void) {
+  if (gstTh.iMu_isready) {pthread_mutex_destroy(&gstTh.mu);gstTh.iMu_isready=0;}
+  if (gstTh.iCo_isready) {pthread_cond_destroy( &gstTh.co);gstTh.iCo_isready=0;}
+  return;
 }
-
-#ifndef NOTTY
-/*=== Try to update "gi8Peritime" for a char-sp/FIFO file
- * [in]  gi8Peritime   : (must be defined as a global variable)
- *       giFd_ctrlfile : File descriptor for the file which the periodic
- *                       time is written
- *       gtMain        : The main thread ID
- *       giPtApplied   : This variable will be turned to 1 when the sleeping
- *                       time has been calculated with the gi8Peritime
- * [out] giPtApplied   : This function will set the variable to 0 after
- *                       setting the new "gi8Peritime" value         */
-void update_periodic_time_type_c(void) {
-
-  /*--- Variables --------------------------------------------------*/
-  char    cBuf0[2][CTRL_FILE_BUF]  ; /* 0th buffers (two bunches)   */
-  int     iBuf0DatSiz[2]           ; /* Data sizes of the two       */
-  int     iBuf0Lst                 ; /* Which bunch was written last*/
-  int     iBuf0ReadTimes           ; /* Num of times of Buf0 writing*/
-  char    szBuf1[CTRL_FILE_BUF*2+1]; /* 1st buffer                  */
-  char    szCmdbuf[CTRL_FILE_BUF]  ; /* Buffer for the new parameter*/
-  tmsp    tsRety                   ; /* Retry timer to apply        */
-  struct pollfd fdsPoll[1]         ;
-  char*   psz                      ;
-  int64_t i8                       ;
-  int     i, j                     ;
-
-
-  /*--- Initialize -------------------------------------------------*/
-  szCmdbuf[0]       = '\0'         ;
-  fdsPoll[0].fd     = giFd_ctrlfile;
-  fdsPoll[0].events = POLLIN       ;
-
-  /*--- Begin of the infinite loop ---------------------------------*/
-  while (1) {
-
-  /*--- Read the ctrlfile and write the data into the Buf0          *
-   *    until the unread data does not remain              ---------*/
-  iBuf0DatSiz[0]=0; iBuf0DatSiz[1]=0;
-  iBuf0Lst      =1; iBuf0ReadTimes=0;
-  do {
-    iBuf0Lst=1-iBuf0Lst;
-    iBuf0DatSiz[iBuf0Lst]=read(giFd_ctrlfile,cBuf0[iBuf0Lst],CTRL_FILE_BUF);
-    iBuf0ReadTimes++;
-  } while ((i=poll(fdsPoll,1,0)) > 0);
-  if (i < 0) {
-    error_exit(errno,"poll() in type_c(): %s\n",strerror(errno));
-  }
-  if (iBuf0DatSiz[iBuf0Lst] < 0) {
-    error_exit(errno,"read() in type_c(): %s\n",strerror(errno));
-  }
-
-  /*--- Normalized the data in the Buf0 and write it into Buf1      *
-   *     1) Contatinate the two bunch of data in the Buf0           *
-   *        and write the data into the Buf1                        *
-   *     2) Replace all NULLs in the data on Buf1 with <0x20>       *
-   *     3) Make the data on the Buf1 a null-terminated string -----*/
-  psz       = szBuf1;
-  iBuf0Lst  = 1-iBuf0Lst;
-  memcpy(psz, cBuf0[iBuf0Lst], (size_t)iBuf0DatSiz[iBuf0Lst]);
-  psz      += iBuf0DatSiz[iBuf0Lst];
-  iBuf0Lst  = 1-iBuf0Lst;
-  memcpy(psz, cBuf0[iBuf0Lst], (size_t)iBuf0DatSiz[iBuf0Lst]);
-  psz      += iBuf0DatSiz[iBuf0Lst];
-  i = iBuf0DatSiz[0]+iBuf0DatSiz[1];
-  for (j=0; j<i; j++) {if(szBuf1[j]=='\0'){szBuf1[j]=' ';}}
-  szBuf1[i] = '\0';
-
-  /*--- ROUTINE A: For the string on the Buf1 is terminated '\n' ---*/
-  /*      - This kind of string means the user has finished typing  *
-   *        the new parameter and has pressed the enter key. So,    *
-   *        this command tries to notify the main thread of it.     */
-  if (szBuf1[i-1]=='\n') {
-    szBuf1[i-1]='\0';
-    for (j=i-2; j>=0; j--) {if(szBuf1[j]=='\n'){break;}}
-    j++;
-    /* "j>0" means the Buf1 has 2 or more lines. So, this routine *
-     * discards all but the last line,                            */
-    if (j > 0) {
-      if ((i-j-1) > (CTRL_FILE_BUF-1)) {
-        szCmdbuf[0]='\0'; continue; /*String is too long */
-      }
-    } else {
-      if (iBuf0ReadTimes>1 || ((i-j-1)+strlen(szCmdbuf)>(CTRL_FILE_BUF-1))) {
-        szCmdbuf[0]='\0'; continue; /* String is too long */
-      }
-    }
-    memcpy(szCmdbuf, szBuf1+j, i-j);
-    i8 = parse_periodictime(szCmdbuf);
-    if (i8 <= -2                             ) {
-      szCmdbuf[0]='\0'; continue; /* Invalid periodic time */
-    }
-    if ((gi8Peritime==i8) && (giPtApplied==1)) {
-      szCmdbuf[0]='\0'; continue; /* Already applied */
-    }
-    gi8Peritime = i8;
-    giPtApplied =  0;
-    do {
-      if (pthread_kill(gtMain, SIGHUP) != 0) {
-        error_exit(errno,"pthread_kill() in type_c(): %s\n",strerror(errno));
-      }
-      tsRety.tv_sec  = RETRY_APPLY_SEC;   /* Try sleeping for a while to */
-      tsRety.tv_nsec = RETRY_APPLY_NSEC;  /* confirm the parameter has   */
-      if (nanosleep(&tsRety,NULL) != 0) { /* been applied                */
-        if (errno != EINTR) {
-          error_exit(errno,"nanosleep() in type_c: %s\n",strerror(errno));
-        }
-      }
-    } while (giPtApplied == 0);
-    szCmdbuf[0]='\0'; continue;
-
-  /*--- ROUTINE B: For the string on the Buf1 is not terminated '\n'*/
-  /*      - This kind of string means that it is a portion of the   *
-   *        new parameter's string, which has come while the user   *
-   *        is still typing it. So, this command tries to           *
-   *        concatenate the partial strings instead of the          *
-   *        notification.                                           */
-  } else {
-    for (j=i-1; j>=0; j--) {if(szBuf1[j]=='\n'){break;}}
-    j++;
-    /* "j>0" means the Buf1 has 2 or more lines. So, this routine *
-     * discards all but the last line,                            */
-    if (j > 0) {
-      if ((i-j) > (CTRL_FILE_BUF-1)) {
-        szCmdbuf[0]='\0'; continue; /* String is too long */
-      }
-      memcpy(szCmdbuf, szBuf1+j, i-j+1);
-    } else {
-      if (iBuf0ReadTimes>1 || ((i-j-1)+strlen(szCmdbuf)>(CTRL_FILE_BUF-1))) {
-        memset(szCmdbuf, ' ', CTRL_FILE_BUF-1); /*<-- This expresses that the */
-        szCmdbuf[CTRL_FILE_BUF-1]='\0';         /*    new parameter string is */
-        continue;                               /*    already too long.       */
-      }
-      memcpy(szCmdbuf+strlen(szCmdbuf), szBuf1+j, i-j+1);
-    }
-    continue;
-  }
-
-  /*--- End of the infinite loop -----------------------------------*/
-  }
-}
-#endif
