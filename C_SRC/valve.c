@@ -21,15 +21,15 @@
 #                         of by argument. You can change the parameter
 #                         even when this command is running by updating
 #                         the content of the controlfile.
-#                         The parameter syntax you can specify in this
-#                         file is completely the same as the argument,
-#                         but if you give me an invalid parameter, this
-#                         command will ignore it silently with no error.
-#                         The default is "0bps" unless any valid para-
-#                         meter is given.
-#                         You can choose one of the following three types
-#                         as the controlfile.
-#                           * Regular file:
+#                         * The parameter syntax you can specify in this
+#                           file is completely the same as the argument,
+#                           but if you give me an invalid parameter, this
+#                           command will ignore it silently with no error.
+#                         * The default is "0bps" unless any valid para-
+#                           meter is given.
+#                         * You can choose one of the following three types
+#                           as the controlfile.
+#                           - Regular file:
 #                             If you use a regular file as the control-
 #                             file, you have to write a new parameter
 #                             into it with the "O_CREAT" mode or ">",
@@ -41,7 +41,7 @@
 #                             If you want to apply the new parameter
 #                             immediately, send me the SIGHUP after
 #                             updating the file.
-#                           * Character-special file / Named-pipe;
+#                           - Character-special file / Named-pipe;
 #                             It is better for the performance. If you
 #                             use these types of files, you can write
 #                             a new parameter with both the above two
@@ -220,15 +220,18 @@ void print_usage_and_exit(void) {
     "                        of by argument. You can change the parameter\n"
     "                        even when this command is running by updating\n"
     "                        the content of the controlfile.\n"
-    "                        The parameter syntax you can specify in this\n"
-    "                        file is completely the same as the argument,\n"
-    "                        but if you give me an invalid parameter, this\n"
-    "                        command will ignore it silently with no error.\n"
-    "                        The default is \"0bps\" unless any valid para-\n"
-    "                        meter is given.\n"
-    "                        You can choose one of the following three types\n"
-    "                        as the controlfile.\n"
-    "                          * Regular file\n"
+    "                        * The parameter syntax you can specify in this\n"
+    "                          file is completely the same as the argument,\n"
+    "                          but if you give me an invalid parameter, this\n"
+    "                          command will ignore it silently with no error.\n"
+    "                        * The default is \"0bps\" unless any valid para-\n"
+    "                          meter is given.\n"
+    "                        * You can choose one of the following three types\n"
+    "                          as the controlfile.\n"
+#ifdef NOTTY
+    "                          (!) This is the regular file only version.\n"
+#endif
+    "                          - Regular file:\n"
     "                            If you use a regular file as the control-\n"
     "                            file, you have to write a new parameter\n"
     "                            into it with the \"O_CREAT\" mode or \">\",\n"
@@ -240,15 +243,12 @@ void print_usage_and_exit(void) {
     "                            If you want to apply the new parameter\n"
     "                            immediately, send me the SIGHUP after\n"
     "                            updating the file.\n"
-    "                          * Character-special file / Named-pipe\n"
+    "                          - Character-special file / Named-pipe:\n"
     "                            It is better for the performance. If you\n"
     "                            use these types of files, you can write\n"
     "                            a new parameter with both the above two\n"
     "                            modes. The new parameter will be applied\n"
     "                            immediately just after writing.\n"
-#ifdef NOTTY
-    "                          (Regular file only for it on the version)\n"
-#endif
     "          file ........ Filepath to be send (\"-\" means STDIN)\n"
     "Options : -c .......... (Default) Changes the periodic unit to\n"
     "                        character. This option defines that the\n"
@@ -287,7 +287,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2024-10-06 01:20:03 JST\n"
+    "Version : 2024-10-06 03:14:15 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -800,6 +800,7 @@ void update_periodic_time_type_c(char* pszCtrlfile) {
       error_exit(k,"pthread_mutex_unlock() in type_c(): %s\n", strerror(k));
     }
     szCmdbuf[0]='\0'; continue;
+  }
 
   /*--- ROUTINE B: For the string on the Buf1 is not terminated '\n'*/
   /*      - This kind of string means that it is a portion of the   *
@@ -807,7 +808,7 @@ void update_periodic_time_type_c(char* pszCtrlfile) {
    *        is still typing it. So, this command tries to           *
    *        concatenate the partial strings instead of the          *
    *        notification.                                           */
-  } else {
+  else {
     for (j=i-1; j>=0; j--) {if(szBuf1[j]=='\n'){break;}}
     j++;
     /* "j>0" means the Buf1 has 2 or more lines. So, this routine *

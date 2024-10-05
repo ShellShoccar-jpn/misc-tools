@@ -71,8 +71,6 @@
 #                         * When you set another type of string, this
 #                           command regards it as a filename.
 #
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -pthread -lrt
-#                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -pthread
 #
 # Retuen  : Return 0 only when finished successfully
@@ -197,7 +195,7 @@ void print_usage_and_exit(void) {
     "                          meter is given.\n"
     "                        * You can choose one of the following three types\n"
     "                          as the controlfile.\n"
-    "                          - Regular file\n"
+    "                          - Regular file:\n"
     "                            If you use a regular file as the control-\n"
     "                            file, you have to write a new parameter\n"
     "                            into it with the \"O_CREAT\" mode or \">\",\n"
@@ -209,7 +207,7 @@ void print_usage_and_exit(void) {
     "                            If you want to apply the new parameter\n"
     "                            immediately, send me the SIGHUP after\n"
     "                            updating the file.\n"
-    "                          - Character-special file / Named-pipe\n"
+    "                          - Character-special file / Named-pipe:\n"
     "                            It is better for the performance. If you\n"
     "                            use these types of files, you can write\n"
     "                            a new parameter with both the above two\n"
@@ -231,7 +229,7 @@ void print_usage_and_exit(void) {
     "                          add \"./\" before the name, like \"./3.\"\n"
     "                        * When you set another type of string, this\n"
     "                          command regards it as a filename.\n"
-    "Version : 2024-10-06 01:20:46 JST\n"
+    "Version : 2024-10-06 03:15:16 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -936,36 +934,3 @@ void destroy_thread_objects(void) {
   if (gstTh.iCo_isready) {pthread_cond_destroy( &gstTh.co);gstTh.iCo_isready=0;}
   return;
 }
-
-
-/*
-Helpful document telling about the pthread
-https://www.tenkaiken.com/short-articles/linux%E3%82%B9%E3%83%AC%E3%83%83%E3%83%89-pthread/
-*/
-
-/*
- * 
- * BUF: 1行バッファリング
- * select()で何か来るまで待つ
- *   a.タイムアップ→バッファラッシュ
- *   b.来た        →BUFに戻る
- *   c.エラー      →エラー処理
- * 
- * ToDo:
- *   * Debug:
- *     + pselect()はたぶんシグナルを食らうと中断するのでその対策
- *   * 空行を無視したい場合の扱いはどうすべきか考える。
- *     a. 表示だけ無視すればいい？
- *     b. 読み込み時に無視すべき？（バッファの内容を保持すべき？）
- *     c. 読み込み時に無視すべき？
- * 
- * 
- * 
- * Discussion:
- *   Q. selectのタイムアウト前に、controlfileの更新でselectが終了したらどうすべきか？
- *      (a)保留中の1行は捨て（or drain）、次の行のための新しいタイムアウトによるselect待機をする → 条件に合致しないデータは飽くまで捨てるポリシー
- *      (b)保留中の1行はフラッシュし、次の行のための新しいタイムアウトによるselect待機をする     → データをなるべく通すポリシー
- *      (c)保留中の1行はそのまま、新しいタイムアウトによるselect待機をする                       → 保留時間10秒で5秒まで待った時に、保留時間が6秒に設定されたならあと1秒selectしてもらいたい
- *                                                                                                  保留時間10秒で5秒まで待った時に、保留時間が15秒に設定されたならあと10秒selectしてもらいたい
- *   A. (c)は理想的だが手間が増える。残された(a)(b)どちらがマシかといえば、(a)。
- */
