@@ -1,9 +1,9 @@
 /*####################################################################
 #
-# OOBLECK - Pass Through the Lines Not Updated for a Specified Time
+# OOBLECK - Output Only a Line That the Next Line Does Not Arrive for a While
 #
-# USAGE   : dilatant [-d fd|file] holdingtime [file]
-#         : dilatant [-d fd|file] controlfile [file]
+# USAGE   : oobleck [-d fd|file] holdingtime [file]
+#         : oobleck [-d fd|file] controlfile [file]
 # Args    : holdingtime . The time of holding the current line until
 #                         passing through.
 #                         * If the next line did not come, the current
@@ -75,7 +75,7 @@
 #
 # Retuen  : Return 0 only when finished successfully
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-10-06
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-10-07
 #
 # The latest version is distributed at the following page.
 # https://github.com/ShellShoccar-jpn/tokideli
@@ -229,7 +229,7 @@ void print_usage_and_exit(void) {
     "                          add \"./\" before the name, like \"./3.\"\n"
     "                        * When you set another type of string, this\n"
     "                          command regards it as a filename.\n"
-    "Version : 2024-10-06 03:15:16 JST\n"
+    "Version : 2024-10-07 23:09:42 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
