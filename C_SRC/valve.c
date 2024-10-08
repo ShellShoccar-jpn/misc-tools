@@ -96,7 +96,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-10-06
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-10-08
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -167,6 +167,7 @@ typedef struct _thr_t {
   int             iCo_isready;      /* Set 1 when co has been initialized     */
   int             iRequested__main; /* Req. received flag (only in mainth)    */
   int             iReceived;        /* Set 1 when the param. has been received*/
+  int64_t         i8Param1;         /* int64 variable #1 to sent to the mainth*/
 } thr_t;
 
 /*--- prototype functions ------------------------------------------*/
@@ -185,7 +186,11 @@ void destroy_thread_objects(void);
 
 /*--- global variables ---------------------------------------------*/
 char*    gpszCmdname;     /* The name of this command                        */
-int64_t  gi8Peritime;     /* Periodic time in nanosecond (-1 means infinity) */
+int64_t  gi8Peritime;     /* Periodic time in nanosecond (-1 means infinity)
+                           * - It is global but for only the main-th. The
+                           *   sub-th has to write the parameter into the
+                           *   gstTh.i8Param1 instead when the sub-th gives
+                           *   the main-th the new parameter.                */
 struct stat gstCtrlfile;  /* stat for the control file                       */
 int      giRecovery;      /* 0:normal 1:Recovery mode                        */
 int      giVerbose;       /* speaks more verbosely by the greater number     */
@@ -287,7 +292,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2024-10-06 03:14:15 JST\n"
+    "Version : 2024-10-08 11:10:36 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -591,15 +596,14 @@ return NULL;}
 # Subroutines of the Subthread
 ####################################################################*/
 
-/*=== Try to update "gi8Peritime" for a regular file =================
+/*=== Try to update the parameter for a regular file =================
  * [in]  pszCtrlfile   : Filename of the control file which the periodic
  *                       time is written
- *       gi8Peritime   : (must be defined as a global variable)
  *       gstTh.tMainth_id
  *                     : The main thread ID
  *       gstTh.mu      : Mutex object to lock
  *       gstTh.co      : Condition variable to send a signal to the sub-th
- * [out] gi8Peritime   : Overwritten with the new parameter
+ * [out] gstTh.i8Param1: Overwritten with the new parameter
  *       gstTh.iReceived
  *                     : Set to 0 after confirming that the main thread
  *                       receivedi the request                      */
@@ -658,10 +662,10 @@ void update_periodic_time_type_r(char* pszCtrlfile) {
     for (i=0;i<iLen;i++) {if(szBuf[i]=='\n'){break;}}
     szBuf[i]='\0';
     i8 = parse_periodictime(szBuf);
-    if (i8          <= -2                                  ) {goto pause;}
-    if (gi8Peritime == i8                                  ) {goto pause;}
+    if (i8             <= -2                               ) {goto pause;}
+    if (gstTh.i8Param1 == i8                               ) {goto pause;}
     /* 2) Update the periodic time */
-    gi8Peritime = i8;
+    gstTh.i8Param1 = i8;
     if (pthread_kill(gstTh.tMainth_id, SIGHUP) != 0) {
       error_exit(errno,"pthread_kill() in type_r(): %s\n",strerror(errno));
     }
@@ -684,15 +688,14 @@ pause:
 }
 
 #ifndef NOTTY
-/*=== Try to update "gi8Peritime" for a char-sp/FIFO file
+/*=== Try to update the parameter for a char-sp/FIFO file ============
  * [in]  pszCtrlfile   : Filename of the control file which the periodic
  *                       time is written
- *       gi8Peritime   : (must be defined as a global variable)
  *       gstTh.tMainth_id
  *                     : The main thread ID
  *       gstTh.mu      : Mutex object to lock
  *       gstTh.co      : Condition variable to send a signal to the sub-th
- * [out] gi8Peritime   : Overwritten with the new parameter
+ * [out] gstTh.i8Param1: The new parameter
  *       gstTh.iReceived
  *                     : Set to 0 after confirming that the main thread
  *                       receivedi the request                      */
@@ -780,10 +783,10 @@ void update_periodic_time_type_c(char* pszCtrlfile) {
     if (i8          <= -2) {
       szCmdbuf[0]='\0'; continue; /* Invalid periodic time */
     }
-    if (gi8Peritime == i8) {
+    if (gstTh.i8Param1 == i8) {
       szCmdbuf[0]='\0'; continue; /* Parameter does not change */
     }
-    gi8Peritime = i8;
+    gstTh.i8Param1 = i8;
     if (pthread_kill(gstTh.tMainth_id, SIGHUP) != 0) {
       error_exit(errno,"pthread_kill() in type_c(): %s\n",strerror(errno));
     }
@@ -1212,8 +1215,11 @@ void do_nothing(int iSig, siginfo_t *siInfo, void *pct) {return;}
  * This function should be called as a signal handler so that you can
  * wake myself (the main thread) up even while sleeping with the
  * nanosleep().
+ * [in]  stTh.i8Param1    : The new parameter the sub-th gave
+ * [out] gi8Peritime      : The new parameter the sub-th gave
  * [out] gstTh.iRequested : set to 1 to notify the main-th of the request */
 void recv_param_application_req(int iSig, siginfo_t *siInfo, void *pct) {
+  gi8Peritime            = gstTh.i8Param1;
   gstTh.iRequested__main = 1;
   return;
 }
