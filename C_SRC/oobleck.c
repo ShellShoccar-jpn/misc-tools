@@ -146,6 +146,9 @@ int read_1line_into_elbuf(FILE *fp, elbuf_t* elb);
 void flush_elbuf(elbuf_t* elb, FILE* fp);
 void free_elbuf(elbuf_t* elb);
 void do_nothing(int iSig, siginfo_t *siInfo, void *pct);
+#ifdef __ANDROID__
+void term_this_thread(int iSig, siginfo_t *siInfo, void *pct);
+#endif
 void recv_param_application_req(int iSig, siginfo_t *siInfo, void *pct);
 void destroy_thread_objects(void);
 
@@ -234,7 +237,7 @@ void print_usage_and_exit(void) {
     "                          add \"./\" before the name, like \"./3.\"\n"
     "                        * When you set another type of string, this\n"
     "                          command regards it as a filename.\n"
-    "Version : 2024-10-08 11:19:18 JST\n"
+    "Version : 2024-10-08 22:50:03 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -486,7 +489,12 @@ do {
 
 /*=== Finish normally ==============================================*/
 if (gstTh.iSubth_iscreated) {
-  pthread_cancel(tSub); gstTh.iSubth_iscreated=0; pthread_join(tSub, NULL);
+  #ifndef __ANDROID__
+  pthread_cancel(tSub);
+  #else
+  pthread_kill(tSub, SIGTERM);
+  #endif
+  gstTh.iSubth_iscreated=0; pthread_join(tSub, NULL);
 }
 iRet=0;
 return iRet;}
@@ -502,6 +510,9 @@ void* param_updater(void* pvArgs) {
 
 /*--- Variables ----------------------------------------------------*/
 char*  pszCtrlfile;
+#ifdef __ANDROID__
+struct sigaction sa;    /* for signal handler definition (action)   */
+#endif
 int    i;               /* all-purpose int                          */
 
 /*=== Validate the control file ====================================*/
@@ -514,6 +525,18 @@ switch (gstCtrlfile.st_mode & S_IFMT) {
   case S_IFIFO : break;
   default      : error_exit(255,"%s: Unsupported file type\n",pszCtrlfile);
 }
+
+#ifdef __ANDROID__
+/*=== Set the signal handler to terminate the subthread ============*/
+memset(&sa, 0, sizeof(sa));
+sigemptyset(&sa.sa_mask);
+sigaddset(&sa.sa_mask, SIGTERM);
+sa.sa_sigaction = term_this_thread;
+sa.sa_flags     = SA_SIGINFO | SA_RESTART;
+if (sigaction(SIGTERM,&sa,NULL) != 0) {
+  error_exit(errno,"sigaction() in param_updater(): %s\n",strerror(errno));
+}
+#endif
 
 /*=== The routine when the control file is a regular file ==========*/
 if (gstCtrlfile.st_mode & S_IFREG) {update_holding_time_type_r(pszCtrlfile);}
@@ -919,6 +942,12 @@ void free_elbuf(elbuf_t* elb) {
  * This function does nothing, but it is helpful to break a thread
  * sleeping by using me as a signal handler.                        */
 void do_nothing(int iSig, siginfo_t *siInfo, void *pct) {return;}
+
+#ifdef __ANDROID__
+/*=== SIGNALHANDLER : Terminate this thread ==========================
+ * This function just terminates itself.                            */
+void term_this_thread(int iSig, siginfo_t *siInfo, void *pct) {pthread_exit(0);}
+#endif
 
 /*=== SIGNALHANDLER : Received the parameter application request =====
  * This function sets the flag of the new parameter application request.
