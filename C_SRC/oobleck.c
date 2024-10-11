@@ -75,7 +75,7 @@
 #
 # Retuen  : Return 0 only when finished successfully
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-10-08
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-10-11
 #
 # The latest version is distributed at the following page.
 # https://github.com/ShellShoccar-jpn/tokideli
@@ -95,8 +95,8 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <locale.h>
-#include <pthread.h>
 #include <poll.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -109,7 +109,7 @@
 #include <unistd.h>
 
 /*--- macro constants ----------------------------------------------*/
-/* Default holding time parameter if a controlfile are given */
+/* Default holding time parameter if the controlfile is given */
 #define DEFAULT_HOLDINGTIME 0
 /* Interval time of looking at the parameter on the control file */
 #define FREAD_ITRVL_SEC  0
@@ -237,7 +237,7 @@ void print_usage_and_exit(void) {
     "                          add \"./\" before the name, like \"./3.\"\n"
     "                        * When you set another type of string, this\n"
     "                          command regards it as a filename.\n"
-    "Version : 2024-10-08 22:50:03 JST\n"
+    "Version : 2024-10-11 17:22:47 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
