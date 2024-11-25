@@ -12,10 +12,10 @@
 #                         like '100ms'. Available units are 's', 'ms',
 #                         'us', 'ns'.
 #                         You can also specify it by the units/words.
-#                          - rate   : '[kMG]bps' (regards as 1chr= 8bit)
-#                                     'cps' (regards as 1chr=10bit)
-#                          - output : '0%'   (completely shut the value)
-#                                     '100%' (completely open the value)
+#                         * rate   : '[kMG]bps' (regards as 1chr= 8bit)
+#                                    'cps' (regards as 1chr=10bit)
+#                         * output : '0%'   (completely shut the value)
+#                                    '100%' (completely open the value)
 #                         The maximum value is INT_MAX for all units.
 #           controlfile . Filepath to specify the periodic time instead
 #                         of by argument. You can change the parameter
@@ -96,7 +96,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-10-08
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-11-26
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -160,9 +160,9 @@
 typedef struct timespec tmsp;
 typedef struct _thr_t {
   pthread_t       tMainth_id;       /* main thread ID                         */
+  pthread_t       tSubth_id;        /* sub thread ID                          */
   pthread_mutex_t mu;               /* The mutex variable                     */
   pthread_cond_t  co;               /* The condition variable                 */
-  int             iSubth_iscreated; /* Set 1 when the subthread is created    */
   int             iMu_isready;      /* Set 1 when mu has been initialized     */
   int             iCo_isready;      /* Set 1 when co has been initialized     */
   int             iRequested__main; /* Req. received flag (only in mainth)    */
@@ -185,7 +185,8 @@ void do_nothing(int iSig, siginfo_t *siInfo, void *pct);
   void term_this_thread(int iSig, siginfo_t *siInfo, void *pct);
 #endif
 void recv_param_application_req(int iSig, siginfo_t *siInfo, void *pct);
-void destroy_thread_objects(void);
+void mainth_destructor(void);
+void subth_destructor(void *pvFd);
 
 /*--- global variables ---------------------------------------------*/
 char*    gpszCmdname;     /* The name of this command                        */
@@ -219,10 +220,10 @@ void print_usage_and_exit(void) {
     "                        like '100ms'. Available units are 's', 'ms',\n"
     "                        'us', 'ns'.\n"
     "                        You can also specify it by the units/words.\n"
-    "                         - rate   : '[kMG]bps' (regards as 1chr= 8bit)\n"
-    "                                    'cps' (regards as 1chr=10bit)\n"
-    "                         - output : '0%%'   (completely shut the value)\n"
-    "                                    '100%%' (completely open the value)\n"
+    "                        * rate   : '[kMG]bps' (regards as 1chr= 8bit)\n"
+    "                                   'cps' (regards as 1chr=10bit)\n"
+    "                        * output : '0%%'   (completely shut the value)\n"
+    "                                   '100%%' (completely open the value)\n"
     "                        The maximum value is INT_MAX for all units.\n"
     "          controlfile . Filepath to specify the periodic time instead\n"
     "                        of by argument. You can change the parameter\n"
@@ -295,7 +296,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2024-10-08 22:46:20 JST\n"
+    "Version : 2024-11-26 00:06:12 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -338,7 +339,6 @@ int main(int argc, char *argv[]) {
 /*--- Variables ----------------------------------------------------*/
 sigset_t ssMask;          /* blocking signal list for the main thread*/
 struct sigaction saHup;   /* for signal handler definition (action) */
-pthread_t tSub;           /* subthread ID                           */
 int      iUnit;           /* 0:character 1:line 2-:undefined        */
 int      iPrio;           /* -p option number (default 1)           */
 int      iRet;            /* return code                            */
@@ -427,7 +427,7 @@ if (gi8Peritime <= -2) {
   }
   /* Start the subthread */
   memset(&gstTh, 0, sizeof(gstTh));
-  atexit(destroy_thread_objects);
+  atexit(mainth_destructor);
   gstTh.tMainth_id = pthread_self();
   i = pthread_mutex_init(&gstTh.mu, NULL);
   if (i) {error_exit(i,"pthread_mutex_init() in main(): %s\n",strerror(i));}
@@ -435,9 +435,11 @@ if (gi8Peritime <= -2) {
   i = pthread_cond_init(&gstTh.co, NULL);
   if (i) {error_exit(i,"pthread_cond_init() in main(): %s\n" ,strerror(i));}
   gstTh.iCo_isready = 1;
-  i = pthread_create(&tSub,NULL,&param_updater,(void*)argv[0]);
-  if (i) {error_exit(i,"pthread_create() in main(): %s\n"    ,strerror(i));}
-  gstTh.iSubth_iscreated = 1;
+  i = pthread_create(&gstTh.tSubth_id,NULL,&param_updater,(void*)argv[0]);
+  if (i) {
+    gstTh.tSubth_id = 0;
+    error_exit(i,"pthread_create() in main(): %s\n",strerror(i));
+  }
   /* Register a SIGHUP handler to apply the new gi8Peritime  */
   memset(&saHup, 0, sizeof(saHup));
   sigemptyset(&saHup.sa_mask);
@@ -455,8 +457,6 @@ if (gi8Peritime <= -2) {
   if ((i=pthread_sigmask(SIG_UNBLOCK,&ssMask,NULL)) != 0) {
     error_exit(i,"pthread_sigmask() #3 in main(): %s\n",strerror(i));
   }
-} else {
-  gstTh.iSubth_iscreated = 0;
 }
 argc--;
 argv++;
@@ -551,14 +551,6 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
 }
 
 /*=== Finish normally ==============================================*/
-if (gstTh.iSubth_iscreated) {
-  #ifndef __ANDROID__
-  pthread_cancel(tSub);
-  #else
-  pthread_kill(tSub, SIGTERM);
-  #endif
-  gstTh.iSubth_iscreated=0; pthread_join(tSub, NULL);
-}
 return(iRet);}
 
 
@@ -673,6 +665,8 @@ void update_periodic_time_type_r(char* pszCtrlfile) {
   }
 
   /*--- Open the file ----------------------------------------------*/
+  iFd_ctrlfile = -1;
+  pthread_cleanup_push(subth_destructor, &iFd_ctrlfile);
   if ((iFd_ctrlfile=open(pszCtrlfile,O_RDONLY)) < 0){
     error_exit(errno,"%s: %s\n",pszCtrlfile,strerror(errno));
   }
@@ -708,6 +702,9 @@ void update_periodic_time_type_r(char* pszCtrlfile) {
 pause:
     pause();
   }
+
+  /*--- End of the function (does not come here) -------------------*/
+  pthread_cleanup_pop(0);
 }
 
 #ifndef NOTTY
@@ -741,6 +738,8 @@ void update_periodic_time_type_c(char* pszCtrlfile) {
   szCmdbuf[0] = '\0';
 
   /*--- Open the file ----------------------------------------------*/
+  iFd_ctrlfile = -1;
+  pthread_cleanup_push(subth_destructor, &iFd_ctrlfile);
   if ((iFd_ctrlfile=open(pszCtrlfile,O_RDONLY)) < 0) {
     error_exit(errno,"%s: %s\n",pszCtrlfile,strerror(errno));
   }
@@ -857,6 +856,9 @@ void update_periodic_time_type_c(char* pszCtrlfile) {
 
   /*--- End of the infinite loop -----------------------------------*/
   }
+
+  /*--- End of the function (does not come here) -------------------*/
+  pthread_cleanup_pop(0);
 }
 #endif
 
@@ -1254,8 +1256,34 @@ void recv_param_application_req(int iSig, siginfo_t *siInfo, void *pct) {
 }
 
 /*=== EXITHANDLER : Destroy thread objects =========================*/
-void destroy_thread_objects(void) {
+void mainth_destructor(void) {
+  if (giVerbose>1) {warning("Enter mainth_destructor()\n");}
+  if (gstTh.tSubth_id) {
+    #ifndef __ANDROID__
+    pthread_cancel(gstTh.tSubth_id);
+    #else
+    pthread_kill(gstTh.tSubth_id, SIGTERM);
+    #endif
+    pthread_join(gstTh.tSubth_id, NULL);
+    gstTh.tSubth_id = 0;
+  }
   if (gstTh.iMu_isready) {pthread_mutex_destroy(&gstTh.mu);gstTh.iMu_isready=0;}
   if (gstTh.iCo_isready) {pthread_cond_destroy( &gstTh.co);gstTh.iCo_isready=0;}
+  return;
+}
+
+/*=== CLEANUPHANDLER : Release the sub-th. resources ===============*/
+/* This function should be registered with pthread_cleanup_push().
+   [in] pvFd : The pointer of the file descriptor the sub-th. opened. */
+void subth_destructor(void *pvFd) {
+  int* piFd;
+  if (giVerbose>1) {warning("Enter subth_destructor()\n");}
+  if (pvFd == NULL) {return;}
+  piFd = (int*)pvFd;
+  if (*piFd >= 0) {
+    if (giVerbose>0) {warning("Ctrlfile is closed\n");}
+    close(*piFd); *piFd=-1;
+  }
+  gstTh.tSubth_id = 0;
   return;
 }

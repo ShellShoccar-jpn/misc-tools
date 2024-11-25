@@ -107,7 +107,7 @@
 #
 # Retuen  : Return 0 only when finished successfully
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-11-25
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-11-26
 #
 # The latest version is distributed at the following page.
 # https://github.com/ShellShoccar-jpn/tokideli
@@ -318,7 +318,7 @@ void print_usage_and_exit(void) {
     "                          add \"./\" before the name, like \"./3.\"\n"
     "                        * When you set another type of string, this\n"
     "                          command regards it as a filename.\n"
-    "Version : 2024-11-25 22:46:58 JST\n"
+    "Version : 2024-11-26 00:06:12 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -453,7 +453,7 @@ if (i != 0) {
   gstTh.iCo_isready = 1;
   i = pthread_create(&gstTh.tSubth_id,NULL,&param_updater,(void*)argv[0]);
   if (i) {
-    gstTh.tSubth_id=NULL;
+    gstTh.tSubth_id = 0;
     error_exit(i,"pthread_create() in main(): %s\n",strerror(i));
   }
   /* Register a SIGHUP handler to apply the new parameters */
@@ -730,7 +730,7 @@ pause:
   }
 
   /*--- End of the function (does not come here) -------------------*/
-  pthread_cleanup_pop(0)
+  pthread_cleanup_pop(0);
 }
 
 /*=== Try to update the parameter for a char-sp/FIFO file ============
@@ -885,7 +885,7 @@ void update_holding_time_type_c(char* pszCtrlfile) {
   }
 
   /*--- End of the function (does not come here) -------------------*/
-  pthread_cleanup_pop(0)
+  pthread_cleanup_pop(0);
 }
 
 
@@ -1228,7 +1228,7 @@ void mainth_destructor(void) {
     pthread_kill(gstTh.tSubth_id, SIGTERM);
     #endif
     pthread_join(gstTh.tSubth_id, NULL);
-    gstTh.tSubth_id = NULL;
+    gstTh.tSubth_id = 0;
   }
   if (gstTh.iMu_isready) {pthread_mutex_destroy(&gstTh.mu);gstTh.iMu_isready=0;}
   if (gstTh.iCo_isready) {pthread_cond_destroy( &gstTh.co);gstTh.iCo_isready=0;}
@@ -1241,14 +1241,14 @@ void mainth_destructor(void) {
 /* This function should be registered with pthread_cleanup_push().
    [in] pvFd : The pointer of the file descriptor the sub-th. opened. */
 void subth_destructor(void *pvFd) {
-  int iFd;
+  int* piFd;
   if (giVerbose>1) {warning("Enter subth_destructor()\n");}
   if (pvFd == NULL) {return;}
-  iFd = *(int*)pvFd;
-  if (iFd >= 0) {
+  piFd = (int*)pvFd;
+  if (*piFd >= 0) {
     if (giVerbose>0) {warning("Ctrlfile is closed\n");}
-    close(iFd); iFd=-1;
+    close(*piFd); *piFd=-1;
   }
-  gstTh.tSubth_id = NULL;
+  gstTh.tSubth_id = 0;
   return;
 }
