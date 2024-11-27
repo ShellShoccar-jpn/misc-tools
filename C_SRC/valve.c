@@ -96,7 +96,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-11-26
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-11-27
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -296,7 +296,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2024-11-26 00:06:12 JST\n"
+    "Version : 2024-11-27 13:38:53 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -392,9 +392,11 @@ if (giVerbose>0) {warning("verbose mode (level %d)\n",giVerbose);}
 #if RECOVMAX_MULTIPLIER > 0
   if (giVerbose>0) {warning("RECOVMAX_MULTIPLIER is %d\n",RECOVMAX_MULTIPLIER);}
 #endif
-
-/*--- Parse the periodic time ----------------------------------------*/
-if (argc < 2         ) {print_usage_and_exit();}
+if (argc < 2) {print_usage_and_exit();}
+/*--- Prepare the thread operation ---------------------------------*/
+memset(&gstTh, 0, sizeof(gstTh));
+atexit(mainth_destructor);
+/*--- Parse the periodic time --------------------------------------*/
 gi8Peritime = parse_periodictime(argv[0]);
 if (gi8Peritime <= -2) {
   /* Set the initial parameter, which is "0%" */
@@ -426,8 +428,6 @@ if (gi8Peritime <= -2) {
     error_exit(i,"pthread_sigmask() #2 in main(): %s\n",strerror(i));
   }
   /* Start the subthread */
-  memset(&gstTh, 0, sizeof(gstTh));
-  atexit(mainth_destructor);
   gstTh.tMainth_id = pthread_self();
   i = pthread_mutex_init(&gstTh.mu, NULL);
   if (i) {error_exit(i,"pthread_mutex_init() in main(): %s\n",strerror(i));}

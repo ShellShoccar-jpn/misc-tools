@@ -107,7 +107,7 @@
 #
 # Retuen  : Return 0 only when finished successfully
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-11-26
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-11-27
 #
 # The latest version is distributed at the following page.
 # https://github.com/ShellShoccar-jpn/tokideli
@@ -318,7 +318,7 @@ void print_usage_and_exit(void) {
     "                          add \"./\" before the name, like \"./3.\"\n"
     "                        * When you set another type of string, this\n"
     "                          command regards it as a filename.\n"
-    "Version : 2024-11-26 00:06:12 JST\n"
+    "Version : 2024-11-27 13:38:53 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -404,8 +404,11 @@ while ((i=getopt(argc, argv, "d:hv")) != -1) {
 if (giVerbose>0) {warning("verbose mode (level %d)\n",giVerbose);}
 argc -= optind;
 argv += optind;
-/*--- Parse the holdingtime argument -------------------------------*/
 if (argc < 1) {print_usage_and_exit();}
+/*--- Prepare the thread operation ---------------------------------*/
+memset(&gstTh, 0, sizeof(gstTh));
+atexit(mainth_destructor);
+/*--- Parse the holdingtime argument -------------------------------*/
 i = parse_holdingrule(argv[0], &gi8Holdtime, &giHoldlines);
 if (i != 0) {
   /* Set the initial parameter, which means "immediately" */
@@ -442,8 +445,6 @@ if (i != 0) {
     error_exit(i,"pthread_sigmask() #2 in main(): %s\n",strerror(i));
   }
   /* Start the subthread */
-  memset(&gstTh, 0, sizeof(gstTh));
-  atexit(mainth_destructor);
   gstTh.tMainth_id = pthread_self();
   i = pthread_mutex_init(&gstTh.mu, NULL);
   if (i) {error_exit(i,"pthread_mutex_init() in main(): %s\n",strerror(i));}
