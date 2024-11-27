@@ -83,6 +83,8 @@
 #                          3: Strongest realtime process of this host
 #                         Larger numbers maybe require a privileged user,
 #                         but if failed, it will try the smaller numbers.
+#                         An administrative privilege might be required to
+#                         use this option.
 # Retuen  : Return 0 only when finished successfully
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -pthread -lrt
@@ -295,8 +297,10 @@ void print_usage_and_exit(void) {
     "                         3: Strongest realtime process of this host\n"
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
+    "                        An administrative privilege might be required to\n"
+    "                        use this option.\n"
 #endif
-    "Version : 2024-11-27 13:38:53 JST\n"
+    "Version : 2024-11-27 17:57:21 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"

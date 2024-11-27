@@ -56,6 +56,10 @@
 #                                  after the atmark.
 #                                + "time" is the holding-time. The usage
 #                                  is explained in the previous section.
+#                              * For example, if you want to get the last
+#                                three lines when the incoming text data
+#                                lets up for 500ms, you can write
+#                                "3@500ms" as the holdingrule argument.
 #           controlfile . Filepath to specify the holding-time instead
 #                         of by argument. You can change the parameter
 #                         even when this command is running by updating
@@ -102,10 +106,20 @@
 #                           add "./" before the name, like "./3."
 #                         * When you set another type of string, this
 #                           command regards it as a filename.
+#           [Only some operating systems support the following option]
+#           -p n ........ Process priority setting [0-3] (if possible)
+#                          0: Normal process
+#                          1: Weakest realtime process (default)
+#                          2: Strongest realtime process for generic users
+#                             (for only Linux, equivalent 1 for otheres)
+#                          3: Strongest realtime process of this host
+#                         Larger numbers maybe require a privileged user,
+#                         but if failed, it will try the smaller numbers.
+#                         An administrative privilege might be required to
+#                         use this option.
+# Retuen  : Return 0 only when finished successfully
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -pthread
-#
-# Retuen  : Return 0 only when finished successfully
 #
 # Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-11-27
 #
@@ -139,6 +153,10 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
+  #include <sched.h>
+  #include <sys/resource.h>
+#endif
 
 /*--- macro constants ----------------------------------------------*/
 #define RINGBUF_NUM_MAX 256
@@ -188,6 +206,7 @@ void flush_ringbuf(ringbuf_t* pstRingbuf, FILE* fp);
 void release_following_elbufs(elbuf_t* elb);
 int  create_ring_buf(ringbuf_t* pstRingbuf);
 void destroy_ring_buf(ringbuf_t* pstRingbuf);
+int change_to_rtprocess(int iPrio);
 void do_nothing(int iSig, siginfo_t *siInfo, void *pct);
 #ifdef __ANDROID__
 void term_this_thread(int iSig, siginfo_t *siInfo, void *pct);
@@ -218,8 +237,13 @@ thinfo_t gstTh = {0};     /* Variables for threads communication             */
 /*--- exit with usage ----------------------------------------------*/
 void print_usage_and_exit(void) {
   fprintf(stderr,
+#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
+    "USAGE   : %s [-d fd|file] [-p n] holdingtime [file]\n"
+    "        : %s [-d fd|file] [-p n] controlfile [file]\n"
+#else
     "USAGE   : %s [-d fd|file] holdingtime [file]\n"
     "        : %s [-d fd|file] controlfile [file]\n"
+#endif
     "Args    : holdingrule . Rule to hold the data from the data source.\n"
     "                        You can specify it by the following two methods.\n"
     "                          a. holding-time\n"
@@ -272,6 +296,10 @@ void print_usage_and_exit(void) {
     "                                 after the atmark.\n"
     "                               + \"time\" is the holding-time. The usage\n"
     "                                 is explained in the previous section.\n"
+    "                             * For example, if you want to get the last\n"
+    "                               three lines when the incoming text data\n"
+    "                               lets up for 500ms, you can write\n"
+    "                               \"3@500ms\" as the holdingrule argument.\n"
     "          controlfile . Filepath to specify the holding-time instead\n"
     "                        of by argument. You can change the parameter\n"
     "                        even when this command is running by updating\n"
@@ -318,7 +346,19 @@ void print_usage_and_exit(void) {
     "                          add \"./\" before the name, like \"./3.\"\n"
     "                        * When you set another type of string, this\n"
     "                          command regards it as a filename.\n"
-    "Version : 2024-11-27 13:38:53 JST\n"
+#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
+    "          -p n ........ Process priority setting [0-3] (if possible)\n"
+    "                         0: Normal process\n"
+    "                         1: Weakest realtime process (default)\n"
+    "                         2: Strongest realtime process for generic users\n"
+    "                            (for only Linux, equivalent 1 for otheres)\n"
+    "                         3: Strongest realtime process of this host\n"
+    "                        Larger numbers maybe require a privileged user,\n"
+    "                        but if failed, it will try the smaller numbers.\n"
+    "                        An administrative privilege might be required to\n"
+    "                        use this option.\n"
+#endif
+    "Version : 2024-11-27 17:57:21 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -363,6 +403,7 @@ sigset_t ssMask;          /* blocking signal list for the main thread*/
 struct sigaction saHup;   /* for signal handler definition (action) */
 char*    pszDrainname;    /* Drain stream name (for the -d option)  */
 int      iDrainFd;        /* Drain filedesc. (for the -d option)    */
+int      iPrio;           /* -p option number (default 1)           */
 struct stat stCtrlfile;   /* stat for the control file              */
 char     szDummy[2];      /* Dummy string for sscanf()              */
 char    *pszFilename;     /* filepath (for message)                 */
@@ -389,13 +430,18 @@ setlocale(LC_CTYPE, "");
 /*--- Set default parameters of the arguments ----------------------*/
 giVerbose    =    0;
 iDrainFd     =   -1;
+iPrio        =    1;
 pszDrainname = NULL;
 /*--- Parse options which start with "-" ---------------------------*/
-while ((i=getopt(argc, argv, "d:hv")) != -1) {
+while ((i=getopt(argc, argv, "d:p:hv")) != -1) {
   switch (i) {
     case 'd': if (sscanf(optarg,"%d%1s",&iDrainFd,szDummy) != 1) {iDrainFd=-1;}
               if (iDrainFd>=0) {pszDrainname=NULL;} else {pszDrainname=optarg;}
               break;
+#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
+    case 'p': if (sscanf(optarg,"%d",&iPrio) != 1) {print_usage_and_exit();}
+              break;
+#endif
     case 'v': giVerbose++;    break;
     case 'h': print_usage_and_exit();
     default : print_usage_and_exit();
@@ -1191,6 +1237,74 @@ void destroy_ring_buf(ringbuf_t* pstRingbuf) {
 
   /*--- Return successfully ----------------------------------------*/
   return;
+}
+
+/*=== Try to make me a realtime process ==============================
+ * [in]  iPrio : 0:will not change (just return normally)
+ *               1:minimum priority
+ *               2:maximun priority for non-privileged users (only Linux)
+ *               3:maximun priority of this host
+ * [ret] = 0 : success, or errno
+ *       =-1 : error (by this function)
+ *       > 0 : error (by system call, and the value means "errno")       */
+int change_to_rtprocess(int iPrio) {
+
+#if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
+  /*--- Variables --------------------------------------------------*/
+  struct sched_param spPrio;
+  #ifdef RLIMIT_RTPRIO
+    struct rlimit      rlInfo;
+  #endif
+
+  /*--- Initialize -------------------------------------------------*/
+  memset(&spPrio, 0, sizeof(spPrio));
+
+  /*--- Decide the priority number ---------------------------------*/
+  switch (iPrio) {
+    case 3 : if ((spPrio.sched_priority=sched_get_priority_max(SCHED_RR))==-1) {
+               return errno;
+             }
+             if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {
+               if (giVerbose>0) {warning("\"-p3\": succeeded\n"         );}
+               return 0;
+             } else                                           {
+               if (giVerbose>0) {warning("\"-p3\": %s\n",strerror(errno));}
+             }
+    case 2 : 
+      #ifdef RLIMIT_RTPRIO
+             if ((getrlimit(RLIMIT_RTPRIO,&rlInfo))==-1) {
+               return errno;
+             }
+             if (rlInfo.rlim_cur > 0) {
+               spPrio.sched_priority=rlInfo.rlim_cur;
+               if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {
+                 if (giVerbose>0){warning("\"-p2\" succeeded\n"          );}
+                 return 0;
+               } else                                           {
+                 if (giVerbose>0){warning("\"-p2\": %s\n",strerror(errno));}
+               }
+               if (giVerbose>0) {warning("\"-p2\": %s\n",strerror(errno));}
+             } else if (giVerbose>0) {
+               warning("RLIMIT_RTPRIO isn't set\n");
+             }
+      #endif
+    case 1 : if ((spPrio.sched_priority=sched_get_priority_min(SCHED_RR))==-1) {
+               return errno;
+             }
+             if (sched_setscheduler(0, SCHED_RR, &spPrio)==0) {
+               if (giVerbose>0) {warning("\"-p1\": succeeded\n"         );}
+               return 0;
+             } else                                           {
+               if (giVerbose>0) {warning("\"-p1\": %s\n",strerror(errno));}
+             }
+             return errno;
+    case 0 : if (giVerbose>0) {warning("\"-p0\": succeeded\n");}
+             return  0;
+    default: return -1;
+  }
+#endif
+  /*--- Return successfully ----------------------------------------*/
+  return 0;
 }
 
 /*=== SIGNALHANDLER : Do nothing =====================================
