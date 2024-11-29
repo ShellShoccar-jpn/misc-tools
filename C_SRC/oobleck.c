@@ -121,7 +121,7 @@
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -pthread
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-11-27
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-11-29
 #
 # The latest version is distributed at the following page.
 # https://github.com/ShellShoccar-jpn/tokideli
@@ -182,18 +182,22 @@ typedef struct _RINGBUF {
   int             iSize;       /* Size (Number of ELBs)      */
   int             iLatestLine; /* Which Line Is the Last One */
 } ringbuf_t;              /* Bunch of the ELBs (Ring buffer)        */
-typedef struct _thr_t {
+typedef struct _thrcom_t {
   pthread_t       tMainth_id;       /* main thread ID                         */
-  pthread_t       tSubth_id;        /* sub thread ID                          */
   pthread_mutex_t mu;               /* The mutex variable                     */
   pthread_cond_t  co;               /* The condition variable                 */
-  int             iMu_isready;      /* Set 1 when mu has been initialized     */
-  int             iCo_isready;      /* Set 1 when co has been initialized     */
   int             iRequested__main; /* Req. received flag (only in mainth)    */
   int             iReceived;        /* Set 1 when the param. has been received*/
   int64_t         i8Param1;         /* int64 variable #1 to sent to the mainth*/
   int             iParam1;          /* int variable #1 to sent to the mainth  */
-} thinfo_t;
+} thcominfo_t;
+typedef struct _thrmain_t {
+  pthread_t       tSubth_id;        /* sub thread ID                          */
+  int             iMu_isready;      /* Set 1 when mu has been initialized     */
+  int             iCo_isready;      /* Set 1 when co has been initialized     */
+  FILE*           fpIn;             /* File handle for the current input file */
+  FILE*           fpDrain;          /* File handle for the drain file         */
+} thmaininfo_t;
 
 /*--- prototype functions ------------------------------------------*/
 void* param_updater(void* pvArgs);
@@ -202,6 +206,7 @@ void update_holding_time_type_c(char* pszCtrlfile);
 int parse_holdingrule(char *pszRule, int64_t* pi8Hldtime, int* piNumlin);
 int64_t parse_holdingtime(char *pszArg);
 int read_1line_into_ringbuf(FILE *fp, ringbuf_t* pstRingbuf);
+void flush_elbuf_chain(elbuf_t* pelbHead, FILE* fp);
 void flush_ringbuf(ringbuf_t* pstRingbuf, FILE* fp);
 void release_following_elbufs(elbuf_t* elb);
 int  create_ring_buf(ringbuf_t* pstRingbuf);
@@ -212,7 +217,7 @@ void do_nothing(int iSig, siginfo_t *siInfo, void *pct);
 void term_this_thread(int iSig, siginfo_t *siInfo, void *pct);
 #endif
 void recv_param_application_req(int iSig, siginfo_t *siInfo, void *pct);
-void mainth_destructor(void);
+void mainth_destructor(void* pvMainth);
 void subth_destructor(void *pvFd);
 
 /*--- global variables ---------------------------------------------*/
@@ -222,15 +227,15 @@ struct stat gstCtrlfile;  /* stat for the control file                       */
 int      giHoldlines = 0; /* Number of lines to be kept in the buffer
                            * - It is global but for only the main-th. The
                            *   sub-th has to write the parameter into the
-                           *   gstTh.iParam1 instead when the sub-th gives
-                           *   the main-th the new parameter.                */
+                           *   gstThCom.iParam1 instead when the sub-th
+                           *   gives the main-th the new parameter.          */
 int64_t  gi8Holdtime;     /* Holding time in nanosecond (-1 means infinity)
                            * - It is global but for only the main-th. The
                            *   sub-th has to write the parameter into the
-                           *   gstTh.i8Param1 instead when the sub-th gives
-                           *   the main-th the new parameter.                */
+                           *   gstThCom.i8Param1 instead when the sub-th
+                           *   gives the main-th the new parameter.          */
 ringbuf_t gstRingBuf = {0}; /* Ringed Buffer of Elastic Line Buffer          */
-thinfo_t gstTh = {0};     /* Variables for threads communication             */
+thcominfo_t gstThCom;      /* Variables for threads communication            */
 
 /*=== Define the functions for printing usage and error ============*/
 
@@ -358,7 +363,7 @@ void print_usage_and_exit(void) {
     "                        An administrative privilege might be required to\n"
     "                        use this option.\n"
 #endif
-    "Version : 2024-11-27 17:57:21 JST\n"
+    "Version : 2024-11-29 19:19:33 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -408,12 +413,11 @@ struct stat stCtrlfile;   /* stat for the control file              */
 char     szDummy[2];      /* Dummy string for sscanf()              */
 char    *pszFilename;     /* filepath (for message)                 */
 int      iFd;             /* file descriptor                        */
-FILE    *fp;              /* file handle                            */
-FILE    *fpDrain;         /* file handle for the drain              */
 struct timespec tsHoldtime; /* The Holding time                     */
 fd_set   fdsRead;         /* for pselect()                          */
 int      iRet;            /* return code                            */
 int      i;               /* all-purpose int                        */
+thmaininfo_t stMainth;    /* Variables required in handler functions*/
 
 /*--- Initialize ---------------------------------------------------*/
 gpszCmdname = argv[0];
@@ -452,8 +456,9 @@ argc -= optind;
 argv += optind;
 if (argc < 1) {print_usage_and_exit();}
 /*--- Prepare the thread operation ---------------------------------*/
-memset(&gstTh, 0, sizeof(gstTh));
-atexit(mainth_destructor);
+memset(&gstThCom, 0, sizeof(gstThCom    ));
+memset(&stMainth, 0, sizeof(thmaininfo_t));
+pthread_cleanup_push(mainth_destructor, &stMainth);
 /*--- Parse the holdingtime argument -------------------------------*/
 i = parse_holdingrule(argv[0], &gi8Holdtime, &giHoldlines);
 if (i != 0) {
@@ -491,16 +496,16 @@ if (i != 0) {
     error_exit(i,"pthread_sigmask() #2 in main(): %s\n",strerror(i));
   }
   /* Start the subthread */
-  gstTh.tMainth_id = pthread_self();
-  i = pthread_mutex_init(&gstTh.mu, NULL);
+  gstThCom.tMainth_id = pthread_self();
+  i = pthread_mutex_init(&gstThCom.mu, NULL);
   if (i) {error_exit(i,"pthread_mutex_init() in main(): %s\n",strerror(i));}
-  gstTh.iMu_isready = 1;
-  i = pthread_cond_init(&gstTh.co, NULL);
+  stMainth.iMu_isready = 1;
+  i = pthread_cond_init(&gstThCom.co, NULL);
   if (i) {error_exit(i,"pthread_cond_init() in main(): %s\n" ,strerror(i));}
-  gstTh.iCo_isready = 1;
-  i = pthread_create(&gstTh.tSubth_id,NULL,&param_updater,(void*)argv[0]);
+  stMainth.iCo_isready = 1;
+  i = pthread_create(&stMainth.tSubth_id,NULL,&param_updater,(void*)argv[0]);
   if (i) {
-    gstTh.tSubth_id = 0;
+    stMainth.tSubth_id = 0;
     error_exit(i,"pthread_create() in main(): %s\n",strerror(i));
   }
   /* Register a SIGHUP handler to apply the new parameters */
@@ -546,10 +551,10 @@ if (argv[0] == NULL || strcmp(argv[0], "-") == 0) {
   }
 }
 if (iFd == STDIN_FILENO) {
-  fp = stdin;
+  stMainth.fpIn = stdin;
   if (feof(stdin)) {clearerr(stdin);} /* Reset EOF condition when stdin */
 } else                   {
-  fp = fdopen(iFd, "r");
+  stMainth.fpIn = fdopen(iFd, "r");
 }
 /*--- Open the drain file if specified -----------------------------*/
 if (pszDrainname != NULL) {
@@ -557,11 +562,11 @@ if (pszDrainname != NULL) {
     if (errno == EINTR) {continue;}
     error_exit(errno, "%s: %s\n", pszDrainname   ,
                                   strerror(errno) );
-  };                       fpDrain = fdopen(iDrainFd, "w");  }
-else if (iDrainFd != -1 ) {fpDrain = fdopen(iDrainFd, "w");  }
-else                      {fpDrain = NULL;                   }
-if (fpDrain) {
-  if (setvbuf(fpDrain,NULL,_IOLBF,0)!=0) {
+  };                       stMainth.fpDrain = fdopen(iDrainFd, "w");  }
+else if (iDrainFd != -1 ) {stMainth.fpDrain = fdopen(iDrainFd, "w");  }
+else                      {stMainth.fpDrain = NULL;                   }
+if (stMainth.fpDrain) {
+  if (setvbuf(stMainth.fpDrain,NULL,_IOLBF,0)!=0) {
     error_exit(255,"Failed to switch to line-buffered mode (drain)\n");
   }
 }
@@ -574,14 +579,17 @@ do {
       warning("RingBuffer will be recreated (size: %d -> %d)\n",
               gstRingBuf.iSize, giHoldlines                     );
     }
-    if (gstRingBuf.iSize > 0) {destroy_ring_buf(&gstRingBuf);}
+    if (gstRingBuf.iSize > 0) {
+      if(stMainth.fpDrain){flush_ringbuf(&gstRingBuf,stMainth.fpDrain);}
+      destroy_ring_buf(&gstRingBuf);
+    }
     gstRingBuf.iSize = giHoldlines;
     if (create_ring_buf(&gstRingBuf) > 0) {
       error_exit(errno,"create_ring_buf() in main() #2\n");
     }
   }
   /* 2) Read a line from stdin and store it in the EL-buffer */
-  i = read_1line_into_ringbuf(fp,&gstRingBuf);
+  i = read_1line_into_ringbuf(stMainth.fpIn,&gstRingBuf);
   /* 3-a) If the stdin is EOF, flush the buffer */
   if      (i ==  0) {flush_ringbuf(&gstRingBuf,stdout); break;        }
   /* 3-b) If some error happens on the stdin, exit */
@@ -589,19 +597,19 @@ do {
   /* 3-c) If the stdin is not EOF yet, move on */
   /* 4) If the new parameter has arrived from the subthread, notify
         the acknowledgment to it.                                   */
-  if (gstTh.iRequested__main) {
-    if ((i=pthread_mutex_lock(&gstTh.mu)) != 0) {
+  if (gstThCom.iRequested__main) {
+    if ((i=pthread_mutex_lock(&gstThCom.mu)) != 0) {
       error_exit(i,"pthread_mutex_lock() in main(): %s\n", strerror(i));
     }
-    gstTh.iReceived = 1;
-    if ((i=pthread_cond_signal(&gstTh.co)) != 0) {
+    gstThCom.iReceived = 1;
+    if ((i=pthread_cond_signal(&gstThCom.co)) != 0) {
       error_exit(i,"pthread_cond_signal() in main(): %s\n", strerror(i));
     }
-    if ((i=pthread_mutex_unlock(&gstTh.mu)) != 0) {
+    if ((i=pthread_mutex_unlock(&gstThCom.mu)) != 0) {
       error_exit(i,"pthread_mutex_unlock() in main(): %s\n", strerror(i));
     }
     if (giVerbose>0) {warning("gi8Holdtime=%ld\n",gi8Holdtime);}
-    gstTh.iRequested__main = 0;
+    gstThCom.iRequested__main = 0;
   }
   /* 5) (If the stdin is not EOF yet,) wait for the next line coming */
   FD_ZERO(     &fdsRead);
@@ -613,18 +621,29 @@ do {
     tsHoldtime.tv_nsec = gi8Holdtime % 1000000000;
     i = pselect(iFd+1, &fdsRead, NULL, NULL, &tsHoldtime, NULL);
   }
-  /* 5-a) If the next line has come in time, discard the current line */
-  if      ( i>  0        ) {if(fpDrain){flush_ringbuf(&gstRingBuf,fpDrain);};}
-  /* 5-b) If the next line has not come in time, write the line to the stdout */
-  else if ( i== 0        ) {flush_ringbuf(&gstRingBuf,stdout);               }
-  /* 5-c) If signal interruption happend, discard the current line, too */
-  else if ((i==-1)&&
-           (errno==EINTR)) {if(fpDrain){flush_ringbuf(&gstRingBuf,fpDrain);};}
-  /* 5-d) If another error happend, exit */
+  /* 6-a) If the next line has come in time, discard the current line */
+  if      ( i>  0                 ) {
+    /* If fpDrain is open and the incoming data still continues, flush
+       the oldest line now. Otherwise, the oldest line, which should be
+       output to the drain, will be lost by the next reading.           */
+    if (stMainth.fpDrain && ((i=fgetc(stMainth.fpIn))!=EOF)) {
+      ungetc(i, stMainth.fpIn);
+      i = (gstRingBuf.iLatestLine+1) % gstRingBuf.iSize;
+      flush_elbuf_chain(&gstRingBuf.pelbRing[i], stMainth.fpDrain);
+    }
+  }
+  /* 6-b) If the next line has not come in time, write the line to the stdout */
+  else if ( i== 0                 ) {flush_ringbuf(&gstRingBuf,stdout);}
+  /* 6-c) If signal interruption happend, discard the current line, too */
+  else if ((i==-1)&&(errno==EINTR)) {
+    if(stMainth.fpDrain){flush_ringbuf(&gstRingBuf,stMainth.fpDrain);}
+  }
+  /* 6-d) If another error happend, exit */
   else                   {error_exit(errno,"pselect(): %s\n",strerror(errno));}
 } while (1);
 
 /*=== Finish normally ==============================================*/
+pthread_cleanup_pop(1);
 iRet=0;
 return iRet;}
 
@@ -683,17 +702,17 @@ return NULL;}
 ####################################################################*/
 
 /*=== Try to update the parameter for a regular file =================
- * [in]  pszCtrlfile   : Filename of the control file which the holding
- *                       time is written
- *       gstTh.tMainth_id
- *                     : The main thread ID
- *       gstTh.mu      : Mutex object to lock
- *       gstTh.co      : Condition variable to send a signal to the sub-th
- * [out] gstTh.iParam1 : The new parameter (int)
- *       gstTh.i8Param1: The new parameter (int64_t)
- *       gstTh.iReceived
- *                     : Set to 0 after confirming that the main thread
- *                       receivedi the request                      */
+ * [in]  pszCtrlfile      : Filename of the control file which the holding
+ *                          time is written
+ *       gstThCom.tMainth_id
+ *                        : The main thread ID
+ *       gstThCom.mu      : Mutex object to lock
+ *       gstThCom.co      : Condition variable to send a signal to the sub-th
+ * [out] gstThCom.iParam1 : The new parameter (int)
+ *       gstThCom.i8Param1: The new parameter (int64_t)
+ *       gstThCom.iReceived
+ *                        : Set to 0 after confirming that the main thread
+ *                          receivedi the request                      */
 void update_holding_time_type_r(char* pszCtrlfile) {
 
   /*--- Variables --------------------------------------------------*/
@@ -752,23 +771,23 @@ void update_holding_time_type_r(char* pszCtrlfile) {
     szBuf[i]='\0';
     i = parse_holdingrule(szBuf, &i8, &j);
     if (i != 0                                             ) {goto pause;}
-    if ((gstTh.i8Param1==i8) && (gstTh.iParam1==j)         ) {goto pause;}
+    if ((gstThCom.i8Param1==i8) && (gstThCom.iParam1==j)   ) {goto pause;}
     /* 2) Update the holding time */
-    gstTh.i8Param1 = i8;
-    gstTh.iParam1  =  j;
-    if (pthread_kill(gstTh.tMainth_id, SIGHUP) != 0) {
+    gstThCom.i8Param1 = i8;
+    gstThCom.iParam1  =  j;
+    if (pthread_kill(gstThCom.tMainth_id, SIGHUP) != 0) {
       error_exit(errno,"pthread_kill() in type_r(): %s\n",strerror(errno));
     }
-    if ((i=pthread_mutex_lock(&gstTh.mu)) != 0) {
+    if ((i=pthread_mutex_lock(&gstThCom.mu)) != 0) {
       error_exit(i,"pthread_mutex_lock() in type_r(): %s\n"  , strerror(i));
     }
-    while (! gstTh.iReceived) {
-      if ((i=pthread_cond_wait(&gstTh.co, &gstTh.mu)) != 0) {
+    while (! gstThCom.iReceived) {
+      if ((i=pthread_cond_wait(&gstThCom.co, &gstThCom.mu)) != 0) {
         error_exit(i,"pthread_cond_wait() in type_r(): %s\n" , strerror(i));
       }
     }
-    gstTh.iReceived = 0;
-    if ((i=pthread_mutex_unlock(&gstTh.mu)) != 0) {
+    gstThCom.iReceived = 0;
+    if ((i=pthread_mutex_unlock(&gstThCom.mu)) != 0) {
       error_exit(i,"pthread_mutex_unlock() in type_r(): %s\n", strerror(i));
     }
     /* 3) Wait for the next timing */
@@ -781,17 +800,17 @@ pause:
 }
 
 /*=== Try to update the parameter for a char-sp/FIFO file ============
- * [in]  pszCtrlfile   : Filename of the control file which the holding
- *                       time is written
- *       gstTh.tMainth_id
- *                     : The main thread ID
- *       gstTh.mu      : Mutex object to lock
- *       gstTh.co      : Condition variable to send a signal to the sub-th
- * [out] gstTh.iParam1 : The new parameter (int)
- *       gstTh.i8Param1: The new parameter (int64_t)
- *       gstTh.iReceived
- *                     : Set to 0 after confirming that the main thread
- *                       receivedi the request                      */
+ * [in]  pszCtrlfile      : Filename of the control file which the holding
+ *                          time is written
+ *       gstThCom.tMainth_id
+ *                        : The main thread ID
+ *       gstThCom.mu      : Mutex object to lock
+ *       gstThCom.co      : Condition variable to send a signal to the sub-th
+ * [out] gstThCom.iParam1 : The new parameter (int)
+ *       gstThCom.i8Param1: The new parameter (int64_t)
+ *       gstThCom.iReceived
+ *                        : Set to 0 after confirming that the main thread
+ *                          receivedi the request                      */
 void update_holding_time_type_c(char* pszCtrlfile) {
 
   /*--- Variables --------------------------------------------------*/
@@ -875,27 +894,27 @@ void update_holding_time_type_c(char* pszCtrlfile) {
     }
     memcpy(szCmdbuf, szBuf1+j, i-j);
     j = parse_holdingrule(szBuf1, &i8, &k);
-    if (j != 0                                    ) {
+    if (j != 0                                          ) {
       szCmdbuf[0]='\0'; continue; /* Invalid rule string */
     }
-    if ((gstTh.i8Param1==i8) && (gstTh.iParam1==k)) {
+    if ((gstThCom.i8Param1==i8) && (gstThCom.iParam1==k)) {
       szCmdbuf[0]='\0'; continue; /* Parameters do not change */
     }
-    gstTh.i8Param1 = i8;
-    gstTh.iParam1  =  k;
-    if (pthread_kill(gstTh.tMainth_id, SIGHUP) != 0) {
+    gstThCom.i8Param1 = i8;
+    gstThCom.iParam1  =  k;
+    if (pthread_kill(gstThCom.tMainth_id, SIGHUP) != 0) {
       error_exit(errno,"pthread_kill() in type_c(): %s\n",strerror(errno));
     }
-    if ((j=pthread_mutex_lock(&gstTh.mu)) != 0) {
+    if ((j=pthread_mutex_lock(&gstThCom.mu)) != 0) {
       error_exit(j,"pthread_mutex_lock() in type_c(): %s\n"  , strerror(j));
     }
-    while (! gstTh.iReceived) {
-      if ((j=pthread_cond_wait(&gstTh.co, &gstTh.mu)) != 0) {
+    while (! gstThCom.iReceived) {
+      if ((j=pthread_cond_wait(&gstThCom.co, &gstThCom.mu)) != 0) {
         error_exit(j,"pthread_cond_wait() in type_c(): %s\n" , strerror(j));
       }
     }
-    gstTh.iReceived = 0;
-    if ((j=pthread_mutex_unlock(&gstTh.mu)) != 0) {
+    gstThCom.iReceived = 0;
+    if ((j=pthread_mutex_unlock(&gstThCom.mu)) != 0) {
       error_exit(j,"pthread_mutex_unlock() in type_c(): %s\n", strerror(j));
     }
     szCmdbuf[0]='\0'; continue;
@@ -1103,46 +1122,66 @@ int read_1line_into_ringbuf(FILE *fp, ringbuf_t* pstRingbuf) {
   return iRet;
 }
 
-/*=== Flush the EL-buffer's bunch (ring buffer) to the stdout ========
+/*=== Flush an EL-buffer chain to a file =============================
  * [notice] After flishing, this command releases the memory for following
- *          chunks of every elb. (The top chunk will remain)
+ *          chunks of every elb. (The top chunk will remain) And,
+ *          sets the sSize of the first chunk to 0.
+ * [in] pelbHead : Pointer of the head of the EL-buffer chain
+ *      fp       : File handle to output                            */
+void flush_elbuf_chain(elbuf_t* pelbHead, FILE* fp) {
+
+  /*--- Variables --------------------------------------------------*/
+  elbuf_t* pelbCurrent;
+
+  /*--- Validate the arguments -------------------------------------*/
+  if (! pelbHead) {error_exit(1,"flush_1elbuf_chain(): pelbHead is NULL\n");}
+  if (!       fp) {error_exit(1,"flush_1elbuf_chain(): fp is NULL\n"      );}
+
+  /*--- Flush the EL-buffer chain and initialize it ----------------*/
+  pelbCurrent = pelbHead;
+  do {
+    if (pelbCurrent->sSize == 0) {break;}
+    if (fputs(pelbCurrent->szBuf, fp) == EOF) {
+      error_exit(errno,"Write error: %s\n",strerror(errno));
+    }
+    /* Flush the next buffer if all of the following conditions are satisfied.
+     *   a. The size of the current buffer is full.
+     *   b. The current buffer is not terminated with "\n."
+     *   c. The next buffer exists.                                         */
+    if (pelbCurrent->sSize < sizeof(pelbCurrent->szBuf)-1) {break;}
+    if (pelbCurrent->szBuf[pelbCurrent->sSize-1] == '\n' ) {break;}
+    pelbCurrent = pelbCurrent->pelbNext;
+  } while (pelbCurrent);
+  pelbHead->sSize = 0;
+  release_following_elbufs(pelbHead);
+
+  /*--- Finish -----------------------------------------------------*/
+  return;
+}
+
+/*=== Flush the bunch of EL-buffers (ring buffer) to a file ==========
+ * [notice] After flishing, this command releases the memory for following
+ *          chunks of every elb chain. (The top chunk will remain) And,
+ *          sets the sSize of the first chunk to 0.
  * [in] pstRingbuf : Pointer of the ring buffer
- *      fp         ; File handle for stdout                         */
+ *      fp         : File handle to output                          */
 void flush_ringbuf(ringbuf_t* pstRingbuf, FILE* fp) {
 
   /*--- Variables --------------------------------------------------*/
-  elbuf_t* pelbHead;
-  elbuf_t* pelbCurrent;
   int      i,j,k;
 
   /*--- Validate the arguments -------------------------------------*/
   if (! pstRingbuf) {error_exit(1,"flush_ringbuf(): pstRingbuf is NULL\n");}
   if (!         fp) {error_exit(1,"flush_ringbuf(): fp is NULL\n"        );}
 
-  /*--- Flush the buffered line data and initialize all EL-buffers -*/
+  /*--- Flush the buffered line data and initialize all ELB chains -*/
   i = pstRingbuf->iLatestLine + 1;
   j = i                       + pstRingbuf->iSize;
   for (k=i; k<j; k++) {
-    pelbHead    = &pstRingbuf->pelbRing[k%(pstRingbuf->iSize)];
-    pelbCurrent = pelbHead;
-    do {
-      if (pelbCurrent->sSize == 0) {break;}
-      if (fputs(pelbCurrent->szBuf, fp) == EOF) {
-        error_exit(errno,"Write error: %s\n",strerror(errno));
-      }
-      /* Flush the next buffer if all of the following conditions are satisfied.
-       *   a. The size of the current buffer is full.
-       *   b. The current buffer is not terminated with "\n."
-       *   c. The next buffer exists.                                         */
-      if (pelbCurrent->sSize < sizeof(pelbCurrent->szBuf)-1) {break;}
-      if (pelbCurrent->szBuf[pelbCurrent->sSize-1] == '\n' ) {break;}
-      pelbCurrent = pelbCurrent->pelbNext;
-    } while (pelbCurrent);
-    pelbHead->sSize = 0;
-    release_following_elbufs(pelbHead);
+    flush_elbuf_chain(&pstRingbuf->pelbRing[k%(pstRingbuf->iSize)],fp);
   }
 
-  /*--- Return -----------------------------------------------------*/
+  /*--- Finish -----------------------------------------------------*/
   return;
 }
 
@@ -1323,32 +1362,66 @@ void term_this_thread(int iSig, siginfo_t *siInfo, void *pct) {pthread_exit(0);}
  * This function should be called as a signal handler so that you can
  * wake myself (the main thread) up even while sleeping with the
  * nanosleep().
- * [in]  stTh.i8Param1    : The new parameter the sub-th gave
- * [out] gi8Holdtime      : The new parameter the sub-th gave
- * [out] gstTh.iRequested : set to 1 to notify the main-th of the request */
+ * [in]  stTh.i8Param1       : The new parameter the sub-th gave
+ * [out] gi8Holdtime         : The new parameter the sub-th gave
+ * [out] gstThCom.iRequested : set to 1 to notify the main-th of the request */
 void recv_param_application_req(int iSig, siginfo_t *siInfo, void *pct) {
-  gi8Holdtime            = gstTh.i8Param1;
-  giHoldlines            = gstTh.iParam1 ;
-  gstTh.iRequested__main = 1;
+  gi8Holdtime            = gstThCom.i8Param1;
+  giHoldlines            = gstThCom.iParam1 ;
+  gstThCom.iRequested__main = 1;
   return;
 }
 
 /*=== EXITHANDLER : Release the main-th. resources =================*/
-void mainth_destructor(void) {
+/* This function should be registered with pthread_cleanup_push().
+   [in] pvMainth : The pointer of the structure of the main thread
+                    local variables                                 */
+void mainth_destructor(void* pvMainth) {
+
+  /*--- Variables --------------------------------------------------*/
+  thmaininfo_t* pstMainth;
+
+  /*--- Initialize -------------------------------------------------*/
   if (giVerbose>1) {warning("Enter mainth_destructor()\n");}
-  if (gstTh.tSubth_id) {
+  if (! pvMainth ) {return;}
+  pstMainth = (thmaininfo_t*)pvMainth;
+
+  /*--- Terminate the sub thread -----------------------------------*/
+  if (pstMainth->tSubth_id) {
     #ifndef __ANDROID__
-    pthread_cancel(gstTh.tSubth_id);
+    pthread_cancel(pstMainth->tSubth_id);
     #else
-    pthread_kill(gstTh.tSubth_id, SIGTERM);
+    pthread_kill(pstMainth->tSubth_id, SIGTERM);
     #endif
-    pthread_join(gstTh.tSubth_id, NULL);
-    gstTh.tSubth_id = 0;
+    pthread_join(pstMainth->tSubth_id, NULL);
+    pstMainth->tSubth_id = 0;
   }
-  if (gstTh.iMu_isready) {pthread_mutex_destroy(&gstTh.mu);gstTh.iMu_isready=0;}
-  if (gstTh.iCo_isready) {pthread_cond_destroy( &gstTh.co);gstTh.iCo_isready=0;}
+
+  /*--- Destroy mutex variables ------------------------------------*/
+  if (pstMainth->iMu_isready) {
+    if (giVerbose>0) {warning("Mutex is destroied\n");}
+    pthread_mutex_destroy(&gstThCom.mu);pstMainth->iMu_isready=0;
+  }
+  if (pstMainth->iCo_isready) {
+    if (giVerbose>0) {warning("Conditional variable is destroied\n");}
+    pthread_cond_destroy( &gstThCom.co);pstMainth->iCo_isready=0;
+  }
+
+  /*--- Destroy the ring buffer ------------------------------------*/
   if (giVerbose>0) {warning("RingBuf is destroied\n");}
   destroy_ring_buf(&gstRingBuf);
+
+  /*--- Close files ------------------------------------------------*/
+  if (pstMainth->fpIn    != NULL) {
+    if (giVerbose>0) {warning("Input file is closed\n");}
+    fclose(pstMainth->fpIn   ); pstMainth->fpIn   = NULL;
+  }
+  if (pstMainth->fpDrain != NULL) {
+    if (giVerbose>0) {warning("Drain is closed\n");}
+    fclose(pstMainth->fpDrain); pstMainth->fpDrain= NULL;
+  }
+
+  /*--- Finish -----------------------------------------------------*/
   return;
 }
 
@@ -1364,6 +1437,5 @@ void subth_destructor(void *pvFd) {
     if (giVerbose>0) {warning("Ctrlfile is closed\n");}
     close(*piFd); *piFd=-1;
   }
-  gstTh.tSubth_id = 0;
   return;
 }

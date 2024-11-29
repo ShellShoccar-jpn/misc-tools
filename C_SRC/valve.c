@@ -98,7 +98,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-11-27
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-11-29
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -160,17 +160,20 @@
 
 /*--- data type definitions ----------------------------------------*/
 typedef struct timespec tmsp;
-typedef struct _thr_t {
+typedef struct _thrcom_t {
   pthread_t       tMainth_id;       /* main thread ID                         */
-  pthread_t       tSubth_id;        /* sub thread ID                          */
   pthread_mutex_t mu;               /* The mutex variable                     */
   pthread_cond_t  co;               /* The condition variable                 */
-  int             iMu_isready;      /* Set 1 when mu has been initialized     */
-  int             iCo_isready;      /* Set 1 when co has been initialized     */
   int             iRequested__main; /* Req. received flag (only in mainth)    */
   int             iReceived;        /* Set 1 when the param. has been received*/
   int64_t         i8Param1;         /* int64 variable #1 to sent to the mainth*/
-} thr_t;
+} thcominfo_t;
+typedef struct _thrmain_t {
+  pthread_t       tSubth_id;        /* sub thread ID                          */
+  int             iMu_isready;      /* Set 1 when mu has been initialized     */
+  int             iCo_isready;      /* Set 1 when co has been initialized     */
+  FILE*           fpIn;             /* File handle for the current input file */
+} thmaininfo_t;
 
 /*--- prototype functions ------------------------------------------*/
 void* param_updater(void* pvArgs);
@@ -187,7 +190,7 @@ void do_nothing(int iSig, siginfo_t *siInfo, void *pct);
   void term_this_thread(int iSig, siginfo_t *siInfo, void *pct);
 #endif
 void recv_param_application_req(int iSig, siginfo_t *siInfo, void *pct);
-void mainth_destructor(void);
+void mainth_destructor(void* pvMainth);
 void subth_destructor(void *pvFd);
 
 /*--- global variables ---------------------------------------------*/
@@ -195,12 +198,12 @@ char*    gpszCmdname;     /* The name of this command                        */
 int64_t  gi8Peritime;     /* Periodic time in nanosecond (-1 means infinity)
                            * - It is global but for only the main-th. The
                            *   sub-th has to write the parameter into the
-                           *   gstTh.i8Param1 instead when the sub-th gives
-                           *   the main-th the new parameter.                */
+                           *   gstThCom.i8Param1 instead when the sub-th
+                           *   gives the main-th the new parameter.          */
 struct stat gstCtrlfile;  /* stat for the control file                       */
 int      giRecovery;      /* 0:normal 1:Recovery mode                        */
 int      giVerbose;       /* speaks more verbosely by the greater number     */
-thr_t    gstTh;           /* Variables for threads communication             */
+thcominfo_t gstThCom;     /* Variables for threads communication             */
 
 /*=== Define the functions for printing usage and error ============*/
 
@@ -300,7 +303,7 @@ void print_usage_and_exit(void) {
     "                        An administrative privilege might be required to\n"
     "                        use this option.\n"
 #endif
-    "Version : 2024-11-27 17:57:21 JST\n"
+    "Version : 2024-11-29 20:06:05 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -352,10 +355,10 @@ char    *pszFilename;     /* filepath (for message)                 */
 int      iFileno;         /* file# of filepath                      */
 int      iFileno_opened;  /* number of the files opened successfully*/
 int      iFd;             /* file descriptor                        */
-FILE    *fp;              /* file handle                            */
 tmsp     ts1st;           /* the time when the 1st char was got
                              (only for line mode)                   */
 int      i;               /* all-purpose int                        */
+thmaininfo_t stMainth;    /* Variables required in handler functions*/
 
 /*--- Initialize ---------------------------------------------------*/
 gpszCmdname = argv[0];
@@ -398,8 +401,9 @@ if (giVerbose>0) {warning("verbose mode (level %d)\n",giVerbose);}
 #endif
 if (argc < 2) {print_usage_and_exit();}
 /*--- Prepare the thread operation ---------------------------------*/
-memset(&gstTh, 0, sizeof(gstTh));
-atexit(mainth_destructor);
+memset(&gstThCom, 0, sizeof(gstThCom    ));
+memset(&stMainth, 0, sizeof(thmaininfo_t));
+pthread_cleanup_push(mainth_destructor, &stMainth);
 /*--- Parse the periodic time --------------------------------------*/
 gi8Peritime = parse_periodictime(argv[0]);
 if (gi8Peritime <= -2) {
@@ -432,16 +436,16 @@ if (gi8Peritime <= -2) {
     error_exit(i,"pthread_sigmask() #2 in main(): %s\n",strerror(i));
   }
   /* Start the subthread */
-  gstTh.tMainth_id = pthread_self();
-  i = pthread_mutex_init(&gstTh.mu, NULL);
+  gstThCom.tMainth_id = pthread_self();
+  i = pthread_mutex_init(&gstThCom.mu, NULL);
   if (i) {error_exit(i,"pthread_mutex_init() in main(): %s\n",strerror(i));}
-  gstTh.iMu_isready = 1;
-  i = pthread_cond_init(&gstTh.co, NULL);
+  stMainth.iMu_isready = 1;
+  i = pthread_cond_init(&gstThCom.co, NULL);
   if (i) {error_exit(i,"pthread_cond_init() in main(): %s\n" ,strerror(i));}
-  gstTh.iCo_isready = 1;
-  i = pthread_create(&gstTh.tSubth_id,NULL,&param_updater,(void*)argv[0]);
+  stMainth.iCo_isready = 1;
+  i = pthread_create(&stMainth.tSubth_id,NULL,&param_updater,(void*)argv[0]);
   if (i) {
-    gstTh.tSubth_id = 0;
+    stMainth.tSubth_id = 0;
     error_exit(i,"pthread_create() in main(): %s\n",strerror(i));
   }
   /* Register a SIGHUP handler to apply the new gi8Peritime  */
@@ -509,10 +513,10 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
     if (iFd < 0) {continue;}
   }
   if (iFd == STDIN_FILENO) {
-    fp = stdin;
+    stMainth.fpIn = stdin;
     if (feof(stdin)) {clearerr(stdin);} /* Reset EOF condition when stdin */
   } else                   {
-    fp = fdopen(iFd, "r");
+    stMainth.fpIn = fdopen(iFd, "r");
   }
   iFileno_opened++;
 
@@ -520,7 +524,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
   if (iFileno_opened==1 && gi8Peritime==-1) {spend_my_spare_time(NULL);}
   switch (iUnit) {
     case 0:
-              while ((i=getc(fp)) != EOF) {
+              while ((i=getc(stMainth.fpIn)) != EOF) {
                 spend_my_spare_time(NULL);
                 while (putchar(i)==EOF) {
                   error_exit(errno,"main() #C1: %s\n",strerror(errno));
@@ -529,15 +533,15 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
               break;
     case 1:
               if (ts1st.tv_nsec == -1) {
-                iRet_r1l = read_1line(fp,&ts1st);
+                iRet_r1l = read_1line(stMainth.fpIn,&ts1st);
                 spend_my_spare_time(&ts1st);
                 if (iRet_r1l != 0) {break;}
               }
               while (1) {
-                if ( iRet_r1l                      != EOF) {
+                if ( iRet_r1l                                 != EOF) {
                   spend_my_spare_time(NULL);
                 }
-                if ((iRet_r1l=read_1line(fp,NULL)) !=   0) {
+                if ((iRet_r1l=read_1line(stMainth.fpIn,NULL)) !=   0) {
                   break;
                 }
               }
@@ -547,7 +551,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
   }
 
   /*--- Close the input file ---------------------------------------*/
-  if (fp != stdin) {fclose(fp);}
+  if (stMainth.fpIn != stdin) {fclose(stMainth.fpIn); stMainth.fpIn=NULL;}
 
   /*--- End loop ---------------------------------------------------*/
   if (pszPath == NULL) {break;}
@@ -555,6 +559,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
 }
 
 /*=== Finish normally ==============================================*/
+pthread_cleanup_pop(1);
 return(iRet);}
 
 
@@ -616,16 +621,16 @@ return NULL;}
 ####################################################################*/
 
 /*=== Try to update the parameter for a regular file =================
- * [in]  pszCtrlfile   : Filename of the control file which the periodic
- *                       time is written
- *       gstTh.tMainth_id
- *                     : The main thread ID
- *       gstTh.mu      : Mutex object to lock
- *       gstTh.co      : Condition variable to send a signal to the sub-th
- * [out] gstTh.i8Param1: Overwritten with the new parameter
- *       gstTh.iReceived
- *                     : Set to 0 after confirming that the main thread
- *                       receivedi the request                      */
+ * [in]  pszCtrlfile      : Filename of the control file which the periodic
+ *                          time is written
+ *       gstThCom.tMainth_id
+ *                        : The main thread ID
+ *       gstThCom.mu      : Mutex object to lock
+ *       gstThCom.co      : Condition variable to send a signal to the sub-th
+ * [out] gstThCom.i8Param1: Overwritten with the new parameter
+ *       gstThCom.iReceived
+ *                        : Set to 0 after confirming that the main thread
+ *                          receivedi the request                      */
 void update_periodic_time_type_r(char* pszCtrlfile) {
 
   /*--- Variables --------------------------------------------------*/
@@ -684,22 +689,22 @@ void update_periodic_time_type_r(char* pszCtrlfile) {
     szBuf[i]='\0';
     i8 = parse_periodictime(szBuf);
     if (i8             <= -2                               ) {goto pause;}
-    if (gstTh.i8Param1 == i8                               ) {goto pause;}
+    if (gstThCom.i8Param1 == i8                            ) {goto pause;}
     /* 2) Update the periodic time */
-    gstTh.i8Param1 = i8;
-    if (pthread_kill(gstTh.tMainth_id, SIGHUP) != 0) {
+    gstThCom.i8Param1 = i8;
+    if (pthread_kill(gstThCom.tMainth_id, SIGHUP) != 0) {
       error_exit(errno,"pthread_kill() in type_r(): %s\n",strerror(errno));
     }
-    if ((i=pthread_mutex_lock(&gstTh.mu)) != 0) {
+    if ((i=pthread_mutex_lock(&gstThCom.mu))      != 0) {
       error_exit(i,"pthread_mutex_lock() in type_r(): %s\n"  , strerror(i));
     }
-    while (! gstTh.iReceived) {
-      if ((i=pthread_cond_wait(&gstTh.co, &gstTh.mu)) != 0) {
+    while (! gstThCom.iReceived) {
+      if ((i=pthread_cond_wait(&gstThCom.co, &gstThCom.mu)) != 0) {
         error_exit(i,"pthread_cond_wait() in type_r(): %s\n" , strerror(i));
       }
     }
-    gstTh.iReceived = 0;
-    if ((i=pthread_mutex_unlock(&gstTh.mu)) != 0) {
+    gstThCom.iReceived = 0;
+    if ((i=pthread_mutex_unlock(&gstThCom.mu)) != 0) {
       error_exit(i,"pthread_mutex_unlock() in type_r(): %s\n", strerror(i));
     }
     /* 3) Wait for the next timing */
@@ -713,16 +718,16 @@ pause:
 
 #ifndef NOTTY
 /*=== Try to update the parameter for a char-sp/FIFO file ============
- * [in]  pszCtrlfile   : Filename of the control file which the periodic
- *                       time is written
- *       gstTh.tMainth_id
- *                     : The main thread ID
- *       gstTh.mu      : Mutex object to lock
- *       gstTh.co      : Condition variable to send a signal to the sub-th
- * [out] gstTh.i8Param1: The new parameter
- *       gstTh.iReceived
- *                     : Set to 0 after confirming that the main thread
- *                       receivedi the request                      */
+ * [in]  pszCtrlfile      : Filename of the control file which the periodic
+ *                          time is written
+ *       gstThCom.tMainth_id
+ *                        : The main thread ID
+ *       gstThCom.mu      : Mutex object to lock
+ *       gstThCom.co      : Condition variable to send a signal to the sub-th
+ * [out] gstThCom.i8Param1: The new parameter
+ *       gstThCom.iReceived
+ *                        : Set to 0 after confirming that the main thread
+ *                          receivedi the request                      */
 void update_periodic_time_type_c(char* pszCtrlfile) {
 
   /*--- Variables --------------------------------------------------*/
@@ -806,26 +811,26 @@ void update_periodic_time_type_c(char* pszCtrlfile) {
     }
     memcpy(szCmdbuf, szBuf1+j, i-j);
     i8 = parse_periodictime(szCmdbuf);
-    if (i8          <= -2) {
+    if (i8                <= -2) {
       szCmdbuf[0]='\0'; continue; /* Invalid periodic time */
     }
-    if (gstTh.i8Param1 == i8) {
+    if (gstThCom.i8Param1 == i8) {
       szCmdbuf[0]='\0'; continue; /* Parameter does not change */
     }
-    gstTh.i8Param1 = i8;
-    if (pthread_kill(gstTh.tMainth_id, SIGHUP) != 0) {
+    gstThCom.i8Param1 = i8;
+    if (pthread_kill(gstThCom.tMainth_id, SIGHUP)           != 0) {
       error_exit(errno,"pthread_kill() in type_c(): %s\n",strerror(errno));
     }
-    if ((k=pthread_mutex_lock(&gstTh.mu)) != 0) {
+    if ((k=pthread_mutex_lock(&gstThCom.mu))                != 0) {
       error_exit(k,"pthread_mutex_lock() in type_c(): %s\n"  , strerror(k));
     }
-    while (! gstTh.iReceived) {
-      if ((k=pthread_cond_wait(&gstTh.co, &gstTh.mu)) != 0) {
+    while (! gstThCom.iReceived) {
+      if ((k=pthread_cond_wait(&gstThCom.co, &gstThCom.mu)) != 0) {
         error_exit(k,"pthread_cond_wait() in type_c(): %s\n" , strerror(k));
       }
     }
-    gstTh.iReceived = 0;
-    if ((k=pthread_mutex_unlock(&gstTh.mu)) != 0) {
+    gstThCom.iReceived = 0;
+    if ((k=pthread_mutex_unlock(&gstThCom.mu))              != 0) {
       error_exit(k,"pthread_mutex_unlock() in type_c(): %s\n", strerror(k));
     }
     szCmdbuf[0]='\0'; continue;
@@ -1063,14 +1068,14 @@ int read_1line(FILE *fp, tmsp *ptsGet1stchar) {
 }
 
 /*=== Sleep until the next interval period ===========================
- * [in]  gi8Peritime : Periodic time (-1 means infinity)
- *       ptsPrev     : If not null, set it to tsPrev and exit immediately
- *       gstTh.iReceived_main
- *                   : 1 when the request has come
- *       gstTh.mu    : Mutex object to lock
- *       gstTh.co    : Condition variable to send a signal to the sub-th
- * [out] gstTh.iReceived, gstTh.iRequested__main
- *                   : Set to 1, 0 respectively after dealing with the
+ * [in]  gi8Peritime    : Periodic time (-1 means infinity)
+ *       ptsPrev        : If not null, set it to tsPrev and exit immediately
+ *       gstThCom.iReceived_main
+ *                      : 1 when the request has come
+ *       gstThCom.mu    : Mutex object to lock
+ *       gstThCom.co    : Condition variable to send a signal to the sub-th
+ * [out] gstThCom.iReceived, gstThCom.iRequested__main
+ *                      : Set to 1, 0 respectively after dealing with the
  *                     request */
 void spend_my_spare_time(tmsp *ptsPrev) {
 
@@ -1099,22 +1104,22 @@ void spend_my_spare_time(tmsp *ptsPrev) {
 top:
   /*--- Notify the subthread that the main thread received the
         request if the request has come                        -----*/
-  if (gstTh.iRequested__main) {
-    if ((i=pthread_mutex_lock(&gstTh.mu)) != 0) {
+  if (gstThCom.iRequested__main) {
+    if ((i=pthread_mutex_lock(&gstThCom.mu))   != 0) {
       error_exit(i,"pthread_mutex_lock() in spend_my_spare_time(): %s\n",
                                                                 strerror(i));
     }
-    gstTh.iReceived = 1;
-    if ((i=pthread_cond_signal(&gstTh.co)) != 0) {
+    gstThCom.iReceived = 1;
+    if ((i=pthread_cond_signal(&gstThCom.co))  != 0) {
       error_exit(i,"pthread_cond_signal() in spend_my_spare_time(): %s\n",
                                                                 strerror(i));
     }
-    if ((i=pthread_mutex_unlock(&gstTh.mu)) != 0) {
+    if ((i=pthread_mutex_unlock(&gstThCom.mu)) != 0) {
       error_exit(i,"pthread_mutex_unlock() in spend_my_spare_time(): %s\n",
                                                                 strerror(i));
     }
     if (giVerbose>0) {warning("gi8Peritime=%ld\n",gi8Peritime);}
-    gstTh.iRequested__main = 0;
+    gstThCom.iRequested__main = 0;
   }
 
   /*--- Reset tsPrev if gi8Peritime was changed --------------------*/
@@ -1250,29 +1255,57 @@ void term_this_thread(int iSig, siginfo_t *siInfo, void *pct) {pthread_exit(0);}
  * This function should be called as a signal handler so that you can
  * wake myself (the main thread) up even while sleeping with the
  * nanosleep().
- * [in]  stTh.i8Param1    : The new parameter the sub-th gave
- * [out] gi8Peritime      : The new parameter the sub-th gave
- * [out] gstTh.iRequested : set to 1 to notify the main-th of the request */
+ * [in]  stTh.i8Param1       : The new parameter the sub-th gave
+ * [out] gi8Peritime         : The new parameter the sub-th gave
+ * [out] gstThCom.iRequested : set to 1 to notify the main-th of the request */
 void recv_param_application_req(int iSig, siginfo_t *siInfo, void *pct) {
-  gi8Peritime            = gstTh.i8Param1;
-  gstTh.iRequested__main = 1;
+  gi8Peritime               = gstThCom.i8Param1;
+  gstThCom.iRequested__main = 1;
   return;
 }
 
-/*=== EXITHANDLER : Destroy thread objects =========================*/
-void mainth_destructor(void) {
+/*=== EXITHANDLER : Release the main-th. resources =================*/
+/* This function should be registered with pthread_cleanup_push().
+   [in] pvMainth : The pointer of the structure of the main thread
+                    local variables                                 */
+void mainth_destructor(void* pvMainth) {
+
+  /*--- Variables --------------------------------------------------*/
+  thmaininfo_t* pstMainth;
+
+  /*--- Initialize -------------------------------------------------*/
   if (giVerbose>1) {warning("Enter mainth_destructor()\n");}
-  if (gstTh.tSubth_id) {
+  if (! pvMainth ) {return;}
+  pstMainth = (thmaininfo_t*)pvMainth;
+
+  /*--- Terminate the sub thread -----------------------------------*/
+  if (pstMainth->tSubth_id) {
     #ifndef __ANDROID__
-    pthread_cancel(gstTh.tSubth_id);
+    pthread_cancel(pstMainth->tSubth_id);
     #else
-    pthread_kill(gstTh.tSubth_id, SIGTERM);
+    pthread_kill(pstMainth->tSubth_id, SIGTERM);
     #endif
-    pthread_join(gstTh.tSubth_id, NULL);
-    gstTh.tSubth_id = 0;
+    pthread_join(pstMainth->tSubth_id, NULL);
+    pstMainth->tSubth_id = 0;
   }
-  if (gstTh.iMu_isready) {pthread_mutex_destroy(&gstTh.mu);gstTh.iMu_isready=0;}
-  if (gstTh.iCo_isready) {pthread_cond_destroy( &gstTh.co);gstTh.iCo_isready=0;}
+
+  /*--- Destroy mutex variables ------------------------------------*/
+  if (pstMainth->iMu_isready) {
+    if (giVerbose>0) {warning("Mutex is destroied\n");}
+    pthread_mutex_destroy(&gstThCom.mu);pstMainth->iMu_isready=0;
+  }
+  if (pstMainth->iCo_isready) {
+    if (giVerbose>0) {warning("Conditional variable is destroied\n");}
+    pthread_cond_destroy( &gstThCom.co);pstMainth->iCo_isready=0;
+  }
+
+  /*--- Close files ------------------------------------------------*/
+  if (pstMainth->fpIn != NULL) {
+    if (giVerbose>0) {warning("Input file is closed\n");}
+    fclose(pstMainth->fpIn); pstMainth->fpIn = NULL;
+  }
+
+  /*--- Finish -----------------------------------------------------*/
   return;
 }
 
@@ -1288,6 +1321,5 @@ void subth_destructor(void *pvFd) {
     if (giVerbose>0) {warning("Ctrlfile is closed\n");}
     close(*piFd); *piFd=-1;
   }
-  gstTh.tSubth_id = 0;
   return;
 }
