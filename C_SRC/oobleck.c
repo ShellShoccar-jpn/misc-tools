@@ -1,9 +1,9 @@
 /*####################################################################
 #
-# OOBLECK - Output Only a Line That the Next Line Does Not Arrive for a While
+# OOBLECK - Output Lines Only When the Next Line Does Not Arrive for a While
 #
-# USAGE   : oobleck [-d fd|file] holdingrule [file]
-#         : oobleck [-d fd|file] controlfile [file]
+# USAGE   : oobleck [-d fd|file] [-p n] holdingtime [file]
+#         : oobleck [-d fd|file] [-p n] controlfile [file]
 # Args    : holdingrule . Rule to hold the data from the data source.
 #                         You can specify it by the following two methods.
 #                           a. holding-time
@@ -121,7 +121,7 @@
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -pthread
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-11-29
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-12-01
 #
 # The latest version is distributed at the following page.
 # https://github.com/ShellShoccar-jpn/tokideli
@@ -363,7 +363,7 @@ void print_usage_and_exit(void) {
     "                        An administrative privilege might be required to\n"
     "                        use this option.\n"
 #endif
-    "Version : 2024-11-29 19:19:33 JST\n"
+    "Version : 2024-12-01 17:14:39 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
