@@ -98,7 +98,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-11-29
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-01-10
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -303,7 +303,7 @@ void print_usage_and_exit(void) {
     "                        An administrative privilege might be required to\n"
     "                        use this option.\n"
 #endif
-    "Version : 2024-11-29 20:06:05 JST\n"
+    "Version : 2025-01-10 23:33:41 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -732,8 +732,8 @@ void update_periodic_time_type_c(char* pszCtrlfile) {
 
   /*--- Variables --------------------------------------------------*/
   int     iFd_ctrlfile             ; /* file desc. of the ctrlfile  */
-  char    cBuf0[2][CTRL_FILE_BUF]  ; /* 0th buffers (two bunches)   */
-  int     iBuf0DatSiz[2]           ; /* Data sizes of the two       */
+  char    cBuf0[3][CTRL_FILE_BUF]  ; /* 0th buffers (two bunches)   */
+  int     iBuf0DatSiz[3]           ; /* Data sizes of the two       */
   int     iBuf0Lst                 ; /* Which bunch was written last*/
   int     iBuf0ReadTimes           ; /* Num of times of Buf0 writing*/
   char    szBuf1[CTRL_FILE_BUF*2+1]; /* 1st buffer                  */
@@ -760,13 +760,24 @@ void update_periodic_time_type_c(char* pszCtrlfile) {
 
   /*--- Read the ctrlfile and write the data into the Buf0          *
    *    until the unread data does not remain              ---------*/
-  iBuf0DatSiz[0]=0; iBuf0DatSiz[1]=0;
-  iBuf0Lst      =1; iBuf0ReadTimes=0;
+  iBuf0DatSiz[0]=0; iBuf0DatSiz[1]=0; iBuf0DatSiz[2]=0;
+  iBuf0Lst      =2; iBuf0ReadTimes=0;
   do {
-    iBuf0Lst=1-iBuf0Lst;
+    iBuf0Lst=(iBuf0Lst+1)%3;
     iBuf0DatSiz[iBuf0Lst]=read(iFd_ctrlfile,cBuf0[iBuf0Lst],CTRL_FILE_BUF);
+    if (iBuf0DatSiz[iBuf0Lst]==0) {iBuf0Lst=(iBuf0Lst+2)%3; i=0; break;}
     iBuf0ReadTimes++;
   } while ((i=poll(fdsPoll,1,0)) > 0);
+  if (i==0 && iBuf0ReadTimes==0) {
+    /* Once the status changes to EOF, poll() considers the fd readable
+       until it is re-opened. To avoid overload caused by that misdetection,
+       this command sleeps for 0.1 seconds every lap while the fd is EOF.   */
+    if (giVerbose>0) {
+      warning("%s: Controlfile closed! Please re-open it.\n", pszCtrlfile);
+    }
+    nanosleep(&(tmsp){.tv_sec=0, .tv_nsec=100000000}, NULL);
+    continue;
+  }
   if (i < 0) {
     error_exit(errno,"poll() in type_c(): %s\n",strerror(errno));
   }
@@ -780,13 +791,13 @@ void update_periodic_time_type_c(char* pszCtrlfile) {
    *     2) Replace all NULLs in the data on Buf1 with <0x20>       *
    *     3) Make the data on the Buf1 a null-terminated string -----*/
   psz       = szBuf1;
-  iBuf0Lst  = 1-iBuf0Lst;
+  iBuf0Lst  = (iBuf0Lst+2)%3;
   memcpy(psz, cBuf0[iBuf0Lst], (size_t)iBuf0DatSiz[iBuf0Lst]);
   psz      += iBuf0DatSiz[iBuf0Lst];
-  iBuf0Lst  = 1-iBuf0Lst;
+  iBuf0Lst  = (iBuf0Lst+1)%3;
   memcpy(psz, cBuf0[iBuf0Lst], (size_t)iBuf0DatSiz[iBuf0Lst]);
   psz      += iBuf0DatSiz[iBuf0Lst];
-  i = iBuf0DatSiz[0]+iBuf0DatSiz[1];
+  i = iBuf0DatSiz[(iBuf0Lst+2)%3]+iBuf0DatSiz[iBuf0Lst];
   for (j=0; j<i; j++) {if(szBuf1[j]=='\0'){szBuf1[j]=' ';}}
   szBuf1[i] = '\0';
 

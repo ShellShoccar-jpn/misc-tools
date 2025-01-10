@@ -121,7 +121,7 @@
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -pthread
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-12-01
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-01-10
 #
 # The latest version is distributed at the following page.
 # https://github.com/ShellShoccar-jpn/tokideli
@@ -171,7 +171,8 @@
 /* Unit size of "Elastic Line Buffer" */
 #define ELBUF_SIZE 1024
 
-/*--- structures ---------------------------------------------------*/
+/*--- data type definitions ----------------------------------------*/
+typedef struct timespec tmsp;
 typedef struct _ELBUF {
   char            szBuf[ELBUF_SIZE];
   size_t          sSize;
@@ -363,7 +364,7 @@ void print_usage_and_exit(void) {
     "                        An administrative privilege might be required to\n"
     "                        use this option.\n"
 #endif
-    "Version : 2024-12-01 17:14:39 JST\n"
+    "Version : 2025-01-10 23:36:40 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -413,7 +414,7 @@ struct stat stCtrlfile;   /* stat for the control file              */
 char     szDummy[2];      /* Dummy string for sscanf()              */
 char    *pszFilename;     /* filepath (for message)                 */
 int      iFd;             /* file descriptor                        */
-struct timespec tsHoldtime; /* The Holding time                     */
+tmsp     tsHoldtime;      /* The Holding time                       */
 fd_set   fdsRead;         /* for pselect()                          */
 int      iRet;            /* return code                            */
 int      i;               /* all-purpose int                        */
@@ -815,8 +816,8 @@ void update_holding_time_type_c(char* pszCtrlfile) {
 
   /*--- Variables --------------------------------------------------*/
   int     iFd_ctrlfile             ; /* file desc. of the ctrlfile  */
-  char    cBuf0[2][CTRL_FILE_BUF]  ; /* 0th buffers (two bunches)   */
-  int     iBuf0DatSiz[2]           ; /* Data sizes of the two       */
+  char    cBuf0[3][CTRL_FILE_BUF]  ; /* 0th buffers (two bunches)   */
+  int     iBuf0DatSiz[3]           ; /* Data sizes of the two       */
   int     iBuf0Lst                 ; /* Which bunch was written last*/
   int     iBuf0ReadTimes           ; /* Num of times of Buf0 writing*/
   char    szBuf1[CTRL_FILE_BUF*2+1]; /* 1st buffer                  */
@@ -843,13 +844,24 @@ void update_holding_time_type_c(char* pszCtrlfile) {
 
   /*--- Read the ctrlfile and write the data into the Buf0          *
    *    until the unread data does not remain              ---------*/
-  iBuf0DatSiz[0]=0; iBuf0DatSiz[1]=0;
-  iBuf0Lst      =1; iBuf0ReadTimes=0;
+  iBuf0DatSiz[0]=0; iBuf0DatSiz[1]=0; iBuf0DatSiz[2]=0;
+  iBuf0Lst      =2; iBuf0ReadTimes=0;
   do {
-    iBuf0Lst=1-iBuf0Lst;
+    iBuf0Lst=(iBuf0Lst+1)%3;
     iBuf0DatSiz[iBuf0Lst]=read(iFd_ctrlfile,cBuf0[iBuf0Lst],CTRL_FILE_BUF);
+    if (iBuf0DatSiz[iBuf0Lst]==0) {iBuf0Lst=(iBuf0Lst+2)%3; i=0; break;}
     iBuf0ReadTimes++;
   } while ((i=poll(fdsPoll,1,0)) > 0);
+  if (i==0 && iBuf0ReadTimes==0) {
+    /* Once the status changes to EOF, poll() considers the fd readable
+       until it is re-opened. To avoid overload caused by that misdetection,
+       this command sleeps for 0.1 seconds every lap while the fd is EOF.   */
+    if (giVerbose>0) {
+      warning("%s: Controlfile closed! Please re-open it.\n", pszCtrlfile);
+    }
+    nanosleep(&(tmsp){.tv_sec=0, .tv_nsec=100000000}, NULL);
+    continue;
+  }
   if (i < 0) {
     error_exit(errno,"poll() in type_c(): %s\n",strerror(errno));
   }
@@ -863,13 +875,13 @@ void update_holding_time_type_c(char* pszCtrlfile) {
    *     2) Replace all NULLs in the data on Buf1 with <0x20>       *
    *     3) Make the data on the Buf1 a null-terminated string -----*/
   psz       = szBuf1;
-  iBuf0Lst  = 1-iBuf0Lst;
+  iBuf0Lst  = (iBuf0Lst+2)%3;
   memcpy(psz, cBuf0[iBuf0Lst], (size_t)iBuf0DatSiz[iBuf0Lst]);
   psz      += iBuf0DatSiz[iBuf0Lst];
-  iBuf0Lst  = 1-iBuf0Lst;
+  iBuf0Lst  = (iBuf0Lst+1)%3;
   memcpy(psz, cBuf0[iBuf0Lst], (size_t)iBuf0DatSiz[iBuf0Lst]);
   psz      += iBuf0DatSiz[iBuf0Lst];
-  i = iBuf0DatSiz[0]+iBuf0DatSiz[1];
+  i = iBuf0DatSiz[(iBuf0Lst+2)%3]+iBuf0DatSiz[iBuf0Lst];
   for (j=0; j<i; j++) {if(szBuf1[j]=='\0'){szBuf1[j]=' ';}}
   szBuf1[i] = '\0';
 
