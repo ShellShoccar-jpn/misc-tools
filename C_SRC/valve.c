@@ -303,7 +303,7 @@ void print_usage_and_exit(void) {
     "                        An administrative privilege might be required to\n"
     "                        use this option.\n"
 #endif
-    "Version : 2025-01-17 13:40:58 JST\n"
+    "Version : 2025-01-17 19:59:32 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -521,7 +521,12 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
   iFileno_opened++;
 
   /*--- Reading and writing loop -----------------------------------*/
-  if (iFileno_opened==1 && gi8Peritime==-1) {spend_my_spare_time(NULL);}
+  if (iFileno_opened==1 && gi8Peritime==-1) {
+    spend_my_spare_time(NULL);
+     /* This following code clears the internal static variable "tsPrev,"
+        which remembers the last time this function was called.          */
+    spend_my_spare_time(&(tmsp){.tv_sec=0, .tv_nsec=0});
+  }
   switch (iUnit) {
     case 0:
               while ((i=getc(stMainth.fpIn)) != EOF) {
