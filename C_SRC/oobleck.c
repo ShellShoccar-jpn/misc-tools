@@ -121,7 +121,7 @@
 #
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -pthread
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-01-10
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-01-17
 #
 # The latest version is distributed at the following page.
 # https://github.com/ShellShoccar-jpn/tokideli
@@ -364,7 +364,7 @@ void print_usage_and_exit(void) {
     "                        An administrative privilege might be required to\n"
     "                        use this option.\n"
 #endif
-    "Version : 2025-01-10 23:36:40 JST\n"
+    "Version : 2025-01-17 13:45:36 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -464,8 +464,8 @@ pthread_cleanup_push(mainth_destructor, &stMainth);
 i = parse_holdingrule(argv[0], &gi8Holdtime, &giHoldlines);
 if (i != 0) {
   /* Set the initial parameter, which means "immediately" */
-  gi8Holdtime = DEFAULT_HOLDINGTIME ;
-  giHoldlines = DEFAULT_HOLDINGLINES;
+  gi8Holdtime=DEFAULT_HOLDINGTIME ; gstThCom.i8Param1=gi8Holdtime;
+  giHoldlines=DEFAULT_HOLDINGLINES; gstThCom.iParam1 =giHoldlines;
   gstRingBuf.iSize = giHoldlines; gstRingBuf.pelbRing = NULL;
   if (create_ring_buf(&gstRingBuf) > 0) {
     error_exit(errno,"create_ring_buf() in main() #1\n");

@@ -98,7 +98,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-01-10
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-01-17
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -303,7 +303,7 @@ void print_usage_and_exit(void) {
     "                        An administrative privilege might be required to\n"
     "                        use this option.\n"
 #endif
-    "Version : 2025-01-10 23:33:41 JST\n"
+    "Version : 2025-01-17 13:40:58 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -408,7 +408,7 @@ pthread_cleanup_push(mainth_destructor, &stMainth);
 gi8Peritime = parse_periodictime(argv[0]);
 if (gi8Peritime <= -2) {
   /* Set the initial parameter, which is "0%" */
-  gi8Peritime = -1;
+  gi8Peritime=-1; gstThCom.i8Param1=gi8Peritime;
   /* If the argument might be a control file, start the subthread */
   if (stat(argv[0],&gstCtrlfile) < 0) {
     error_exit(errno,"%s: %s\n",argv[0],strerror(errno));
