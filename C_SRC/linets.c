@@ -7,7 +7,7 @@
 #          current time" means the instant when this command starts
 #          writing the line which has been read.
 #
-# USAGE   : linets [-0|-3|-6|-9] [-c|-e|-z|-Z] [-du] [file [...]]
+# USAGE   : linets [-0|-3|-6|-9] [-c|-e|-I|-z|-Z] [-du] [file [...]]
 # Args    : file ...... Filepath to be attached the current timestamp
 #                       ("-" means STDIN)
 # Options : -0,-3,-6,-9 Specify resolution unit of the time. For instance,
@@ -18,8 +18,8 @@
 #                         -3 ... millisecond
 #                         -6 ... microsecond
 #                         -9 ... nanosecond
-#           -c,-e,-z,-Z Specify the format for timestamp. You can choose
-#                       one of them.
+#           -c,-e,-I,   Specify the format for timestamp. You can choose
+#           -z,-Z       one of them.
 #                         -c ... "YYYYMMDDhhmmss[.n]" (default)
 #                                Calendar-time (standard time) in your
 #                                timezone (".n" is the digits under
@@ -28,6 +28,9 @@
 #                         -e ... "n[.n]"
 #                                The number of seconds since the UNIX
 #                                epoch (".n" is the same as -c)
+#                         -I ... "YYYY-MM-DDThh:mm:ss[,n]{+|-}hh:mm"
+#                                The ISO 8601 format
+#                                (",n" is the same as -c)
 #                         -z ... "n[.n]"
 #                                The number of seconds since this command
 #                                started (".n" is the same as -c)
@@ -46,7 +49,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-06-23
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-01-20
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -90,6 +93,7 @@ typedef struct timespec tmsp;
 int read_1line(FILE *fp);
 int read_c1st_1line(FILE *fp);
 int read_e1st_1line(FILE *fp);
+int read_I1st_1line(FILE *fp);
 int read_Z1st_1line(FILE *fp);
 void print_cur_timestamp(void);
 
@@ -112,7 +116,7 @@ int   giNextchar       ; /* for read_1line(): the next character          */
 /*--- exit with usage ----------------------------------------------*/
 void print_usage_and_exit(void) {
   fprintf(stderr,
-    "USAGE   : %s [-0|-3|-6|-9] [-c|-e|-z|-Z] [-du] [file [...]]\n"
+    "USAGE   : %s [-0|-3|-6|-9] [-c|-e|-I|-z|-Z] [-du] [file [...]]\n"
     "Args    : file ...... Filepath to be attached the current timestamp\n"
     "                      (\"-\" means STDIN)\n"
     "Options : -0,-3,-6,-9 Specify resolution unit of the time. For instance,\n"
@@ -123,8 +127,8 @@ void print_usage_and_exit(void) {
     "                        -3 ... millisecond\n"
     "                        -6 ... microsecond\n"
     "                        -9 ... nanosecond\n"
-    "          -c,-e,-z,-Z Specify the format for timestamp. You can choose\n"
-    "                      one of them.\n"
+    "          -c,-e,-I,   Specify the format for timestamp. You can choose\n"
+    "          -z,-Z       one of them.\n"
     "                        -c ... \"YYYYMMDDhhmmss[.n]\" (default)\n"
     "                               Calendar-time (standard time) in your\n"
     "                               timezone (\".n\" is the digits under\n"
@@ -133,6 +137,9 @@ void print_usage_and_exit(void) {
     "                        -e ... \"n[.n]\"\n"
     "                               The number of seconds since the UNIX\n"
     "                               epoch (\".n\" is the same as -c)\n"
+    "                        -I ... \"YYYY-MM-DDThh:mm:ss[,n]{+|-}hh:mm\"\n"
+    "                               The ISO 8601 format\n"
+    "                               (\",n\" is the same as -c)\n"
     "                        -z ... \"n[.n]\"\n"
     "                               The number of seconds since this command\n"
     "                               started (\".n\" is the same as -c)\n"
@@ -146,7 +153,7 @@ void print_usage_and_exit(void) {
     "          -u ........ Set the date in UTC when -c option is set\n"
     "                      (same as that of date command)\n"
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2024-06-23 13:28:01 JST\n"
+    "Version : 2025-01-20 21:13:36 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -212,7 +219,7 @@ if (setenv("POSIXLY_CORRECT","1",1) < 0) {
 /*=== Parse arguments ==============================================*/
 
 /*--- Parse options which start by "-" -----------------------------*/
-while ((i=getopt(argc, argv, "0369cezZduvh")) != -1) {
+while ((i=getopt(argc, argv, "0369ceIzZduvh")) != -1) {
   switch (i) {
     case '0': giTimeResol =  0 ;                 break;
     case '3': giTimeResol =  3 ;                 break;
@@ -220,6 +227,7 @@ while ((i=getopt(argc, argv, "0369cezZduvh")) != -1) {
     case '9': giTimeResol =  9 ;                 break;
     case 'c': giFmtType   = 'c'; iFirstline='c'; break;
     case 'e': giFmtType   = 'e'; iFirstline='e'; break;
+    case 'I': giFmtType   = 'I'; iFirstline='I'; break;
     case 'Z': giFmtType   = 'Z'; iFirstline='Z'; break;
     case 'z': giFmtType   = 'z'; iFirstline='z'; break;
     case 'd': giDeltaMode =  1 ;                 break;
@@ -272,6 +280,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
     switch(iFirstline) {
       case 'c': iRet_r1l=read_c1st_1line(fp); iFirstline=0;               break;
       case 'e': iRet_r1l=read_e1st_1line(fp); iFirstline=0;               break;
+      case 'I': iRet_r1l=read_I1st_1line(fp); iFirstline=0;               break;
       case 'z': gtsPrev.tv_sec =gtsZero.tv_sec;
                 gtsPrev.tv_nsec=gtsZero.tv_nsec;
                 iRet_r1l=0;                   iFirstline=0;               break;
@@ -471,6 +480,79 @@ int read_e1st_1line(FILE *fp) {
 }
 
 
+/*=== Read and write only one line (for I-option and 1st line ) ======
+ * [in]  giHold     : (must be defined as a global variable)
+ *       giNextchar : (must be defined as a global variable)
+ * [ret] 0          : Finished reading/writing due to '\n'
+ *       1          : Finished reading/writing due to '\n',
+ *                    which is the last char of the file
+ *       EOF        : Finished reading/writing due to EOF           */
+int read_I1st_1line(FILE *fp) {
+
+  /*--- Variables --------------------------------------------------*/
+  tmsp       tsNow    ;
+  struct tm *ptm      ;
+  int        iChar    ;
+  char       szDec[21]; /* for the Decimal part */
+  char       szTmz[ 7]; /* timestamp (timezone) */
+
+  /*--- Reading and writing a line (1st letter of the line) --------*/
+  if (giHold) {iChar=giNextchar; giHold=0;} else {iChar=getc(fp);}
+  if (iChar == EOF) {return(EOF);}
+  if (clock_gettime(CLOCK_REALTIME,&tsNow) != 0) {
+    error_exit(errno,"read_I1st_1line(): clock_gettime(): %s\n",
+                     strerror(errno)                            );
+  }
+  if ((ptm=localtime(&tsNow.tv_sec)) == NULL) {
+    error_exit(255,"read_I1st_1line(): localtime(): returned NULL\n");
+  }
+  switch (giTimeResol) {
+    case 0 : szDec[0]=0                                                      ;
+             break;
+    case 3 : snprintf(szDec,21,",%03d" , (int)(tsNow.tv_nsec+500000)/1000000);
+             break;
+    case 6 : snprintf(szDec,21,",%06d" , (int)(tsNow.tv_nsec+   500)/   1000);
+             break;
+    case 9 : snprintf(szDec,21,",%09ld",       tsNow.tv_nsec                );
+             break;
+    default: error_exit(255,"read_e1st_1line(): Unknown resolution\n");
+  }
+  strftime(szTmz, 6, "%z", ptm);
+  szTmz[6]=0; szTmz[5]=szTmz[4]; szTmz[4]=szTmz[3]; szTmz[3]=':';
+  printf("%04d-%02d-%02dT%02d:%02d:%02d%s%s ",
+    ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
+    ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec , szDec, szTmz);
+  if (giDeltaMode) {
+    printf("0 ");
+    gtsPrev.tv_sec=tsNow.tv_sec; gtsPrev.tv_nsec=tsNow.tv_nsec;
+  }
+  while (putchar(iChar)==EOF) {
+    if (errno == EINTR) {continue;}
+    error_exit(errno,"read_I1st_1line(): putchar() #1: %s\n",strerror(errno));
+  }
+  if (iChar == '\n') {
+    giNextchar = getc(fp);
+    if (giNextchar!=EOF) {giHold=1;return 0;}
+    else                 {         return 1;}
+  }
+
+  /*--- Reading and writing a line ---------------------------------*/
+  while (1) {
+    if (giHold) {iChar=giNextchar; giHold=0;} else {iChar=getc(fp);}
+    if (iChar == EOF) {return(EOF);}
+    while (putchar(iChar)==EOF) {
+      if (errno == EINTR) {continue;}
+      error_exit(errno,"read_I1st_1line(): putchar() #2: %s\n",strerror(errno));
+    }
+    if (iChar == '\n') {
+      giNextchar = getc(fp);
+      if (giNextchar!=EOF) {giHold=1;return 0;}
+      else                 {         return 1;}
+    }
+  }
+}
+
+
 /*=== Read and write only one line (for Z-option and 1st line ) ======
  * [in]  giHold     : (must be defined as a global variable)
  *       giNextchar : (must be defined as a global variable)
@@ -537,7 +619,8 @@ void print_cur_timestamp(void) {
   tmsp        ts             ;
   struct tm  *ptm            ;
   char        szBuf[LINE_BUF];
-  char        szDec[LINE_BUF]; /* for the Decimal part */
+  char        szDec[21]      ; /* for the Decimal part */
+  char        szTmz[ 7]      ; /* timestamp (timezone) */
 
   /*--- Get the current time ---------------------------------------*/
   if (clock_gettime(CLOCK_REALTIME,&tsNow) != 0) {
@@ -553,12 +636,12 @@ void print_cur_timestamp(void) {
                          szDec[0]=0;
                          break;
                 case 3 : if (ts.tv_nsec>=999500000L) {ts.tv_sec++;ts.tv_nsec=0;}
-                         snprintf(szDec,LINE_BUF,".%03ld",ts.tv_nsec/1000000);
+                         snprintf(szDec,21,".%03ld",ts.tv_nsec/1000000);
                          break;
                 case 6 : if (ts.tv_nsec>=999999500L) {ts.tv_sec++;ts.tv_nsec=0;}
-                         snprintf(szDec,LINE_BUF,".%06ld",ts.tv_nsec/   1000);
+                         snprintf(szDec,21,".%06ld",ts.tv_nsec/   1000);
                          break;
-                default: snprintf(szDec,LINE_BUF,".%09ld",ts.tv_nsec        );
+                default: snprintf(szDec,21,".%09ld",ts.tv_nsec        );
                          break;
               }
               ptm = localtime(&ts.tv_sec);
@@ -567,6 +650,29 @@ void print_cur_timestamp(void) {
                 ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
                 ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec , szDec);
               break;
+    case 'I':
+              ts.tv_sec=tsNow.tv_sec; ts.tv_nsec=tsNow.tv_nsec;
+              switch (giTimeResol) {
+                case 0 : if (ts.tv_nsec>=500000000L) {ts.tv_sec++;ts.tv_nsec=0;}
+                         szDec[0]=0;
+                         break;
+                case 3 : if (ts.tv_nsec>=999500000L) {ts.tv_sec++;ts.tv_nsec=0;}
+                         snprintf(szDec,21,",%03ld",ts.tv_nsec/1000000);
+                         break;
+                case 6 : if (ts.tv_nsec>=999999500L) {ts.tv_sec++;ts.tv_nsec=0;}
+                         snprintf(szDec,21,",%06ld",ts.tv_nsec/   1000);
+                         break;
+                default: snprintf(szDec,21,",%09ld",ts.tv_nsec        );
+                         break;
+              }
+              ptm = localtime(&ts.tv_sec);
+              if (ptm==NULL) {error_exit(255,"localtime(): returned NULL\n");}
+              strftime(szTmz, 6, "%z", ptm);
+              szTmz[6]=0; szTmz[5]=szTmz[4]; szTmz[4]=szTmz[3]; szTmz[3]=':';
+              printf("%04d-%02d-%02dT%02d:%02d:%02d%s%s ",
+                ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
+                ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec , szDec, szTmz);
+              break;
     case 'e':
               ts.tv_sec=tsNow.tv_sec; ts.tv_nsec=tsNow.tv_nsec;
               switch (giTimeResol) {
@@ -574,12 +680,12 @@ void print_cur_timestamp(void) {
                          szDec[0]=0;
                          break;
                 case 3 : if (ts.tv_nsec>=999500000L) {ts.tv_sec++;ts.tv_nsec=0;}
-                         snprintf(szDec,LINE_BUF,".%03ld",ts.tv_nsec/1000000);
+                         snprintf(szDec,21,".%03ld",ts.tv_nsec/1000000);
                          break;
                 case 6 : if (ts.tv_nsec>=999999500L) {ts.tv_sec++;ts.tv_nsec=0;}
-                         snprintf(szDec,LINE_BUF,".%06ld",ts.tv_nsec/   1000);
+                         snprintf(szDec,21,".%06ld",ts.tv_nsec/   1000);
                          break;
-                default: snprintf(szDec,LINE_BUF,".%09ld",ts.tv_nsec        );
+                default: snprintf(szDec,21,".%09ld",ts.tv_nsec        );
                          break;
               }
               ptm = localtime(&ts.tv_sec);
@@ -599,12 +705,12 @@ void print_cur_timestamp(void) {
                          szDec[0]=0;
                          break;
                 case 3 : if (ts.tv_nsec>=999500000L) {ts.tv_sec++;ts.tv_nsec=0;}
-                         snprintf(szDec,LINE_BUF,".%03ld",ts.tv_nsec/1000000);
+                         snprintf(szDec,21,".%03ld",ts.tv_nsec/1000000);
                          break;
                 case 6 : if (ts.tv_nsec>=999999500L) {ts.tv_sec++;ts.tv_nsec=0;}
-                         snprintf(szDec,LINE_BUF,".%06ld",ts.tv_nsec/   1000);
+                         snprintf(szDec,21,".%06ld",ts.tv_nsec/   1000);
                          break;
-                default: snprintf(szDec,LINE_BUF,".%09ld",ts.tv_nsec        );
+                default: snprintf(szDec,21,".%09ld",ts.tv_nsec        );
                          break;
               }
               ptm = localtime(&ts.tv_sec);
@@ -629,12 +735,12 @@ void print_cur_timestamp(void) {
                szDec[0]=0;
                break;
       case 3 : if(tsDiff.tv_nsec>=999500000L){tsDiff.tv_sec++;tsDiff.tv_nsec=0;}
-               snprintf(szDec,LINE_BUF,".%03ld",tsDiff.tv_nsec/1000000);
+               snprintf(szDec,21,".%03ld",tsDiff.tv_nsec/1000000);
                break;
       case 6 : if(tsDiff.tv_nsec>=999999500L){tsDiff.tv_sec++;tsDiff.tv_nsec=0;}
-               snprintf(szDec,LINE_BUF,".%06ld",tsDiff.tv_nsec/   1000);
+               snprintf(szDec,21,".%06ld",tsDiff.tv_nsec/   1000);
                break;
-      default: snprintf(szDec,LINE_BUF,".%09ld",tsDiff.tv_nsec        );
+      default: snprintf(szDec,21,".%09ld",tsDiff.tv_nsec        );
                break;
     }
     ptm = localtime(&tsDiff.tv_sec);
