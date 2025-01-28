@@ -29,7 +29,7 @@
 #                                The number of seconds since the UNIX
 #                                epoch (".n" is the same as -c)
 #                         -I ... "YYYY-MM-DDThh:mm:ss[,n]{+|-}hh:mm"
-#                                The ISO 8601 format
+#                                The extended ISO 8601 format
 #                                (",n" is the same as -c)
 #                         -z ... "n[.n]"
 #                                The number of seconds since this command
@@ -49,7 +49,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-01-20
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-01-28
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -138,7 +138,7 @@ void print_usage_and_exit(void) {
     "                               The number of seconds since the UNIX\n"
     "                               epoch (\".n\" is the same as -c)\n"
     "                        -I ... \"YYYY-MM-DDThh:mm:ss[,n]{+|-}hh:mm\"\n"
-    "                               The ISO 8601 format\n"
+    "                               The extended ISO 8601 format\n"
     "                               (\",n\" is the same as -c)\n"
     "                        -z ... \"n[.n]\"\n"
     "                               The number of seconds since this command\n"
@@ -153,7 +153,7 @@ void print_usage_and_exit(void) {
     "          -u ........ Set the date in UTC when -c option is set\n"
     "                      (same as that of date command)\n"
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2025-01-20 21:13:36 JST\n"
+    "Version : 2025-01-28 22:48:56 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
