@@ -98,7 +98,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-01-17
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-01-28
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -144,6 +144,8 @@
 /* Interval time of looking at the parameter on the control file */
 #define FREAD_ITRVL_SEC  0
 #define FREAD_ITRVL_USEC 100000
+/* Buffer size for the read_1line() */
+#define LINE_BUF 1024
 /* Buffer size for the control file */
 #define CTRL_FILE_BUF 64
 /* If you set the following definition to 2 or more, recovery mode will be
@@ -303,7 +305,7 @@ void print_usage_and_exit(void) {
     "                        An administrative privilege might be required to\n"
     "                        use this option.\n"
 #endif
-    "Version : 2025-01-17 19:59:32 JST\n"
+    "Version : 2025-01-28 16:32:20 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -1052,34 +1054,57 @@ int change_to_rtprocess(int iPrio) {
 int read_1line(FILE *fp, tmsp *ptsGet1stchar) {
 
   /*--- Variables --------------------------------------------------*/
-  static int iHold = 0; /* set 1 if next character is currently held */
-  static int iNextchar; /* variable for the next character           */
-  int        iChar;
+  char       szBuf[LINE_BUF]; /* Buffer for reading 1-line */
+  int        iChar;           /* Buffer for reading 1-char */
+  int        iLen;            /* Actual size of string in the buffer */
 
-  /*--- Reading and writing a line ---------------------------------*/
-  if (iHold) {iChar=iNextchar; iHold=0;} else {iChar=getc(fp);}
+  /*--- Read/Write the 1st char. if the arriving time is required --*/
   if (ptsGet1stchar != NULL) {
+    iChar=getc(fp);
     if (clock_gettime(CLOCK_FOR_ME,ptsGet1stchar) != 0) {
       error_exit(errno,"clock_gettime() in read_1line(): %s\n",strerror(errno));
     }
-  }
-  while (1) {
     switch (iChar) {
-      case EOF:
+      case EOF :
                   return(EOF);
       case '\n':
                   while (putchar('\n' )==EOF) {
                     error_exit(errno,"putchar() #R1L-1: %s\n",strerror(errno));
                   }
-                  iNextchar = getc(fp);
-                  if (iNextchar!=EOF) {iHold=1;return 0;}
-                  else                {        return 1;}
-      default:
+                  iChar=getc(fp);
+                  if (iChar==EOF) {return 1;}
+                  if (ungetc(iChar,fp)==EOF) {
+                    error_exit(errno,"ungetc() #R1L-1: %s\n",strerror(errno));
+                  }
+                  return 0;
+      default  :
                   while (putchar(iChar)==EOF) {
                     error_exit(errno,"putchar() #R1L-2: %s\n",strerror(errno));
                   }
     }
-    if (iHold) {iChar=iNextchar; iHold=0;} else {iChar=getc(fp);}
+  }
+
+  /*--- Read/Write a string until the "\n." ------------------------*/
+  while (fgets(szBuf,LINE_BUF,fp) != NULL) {
+    if (fputs(szBuf,stdout) < 0) {
+      error_exit(errno,"fputs() #R1L-1: %s\n",strerror(errno));
+    }
+    iLen = strnlen(szBuf, LINE_BUF);
+    if (szBuf[iLen-1] == '\n') {
+      iChar=getc(fp);
+      if (iChar==EOF) {return 1;}
+      if (ungetc(iChar,fp)==EOF) {
+        error_exit(errno,"ungetc() #R1L-2: %s\n",strerror(errno));
+      }
+      return 0;
+    }
+    if (iLen < LINE_BUF-1) {
+      iChar=getc(fp);
+      if (iChar==EOF) {return EOF;}
+      while (putchar(iChar)==EOF) {
+        error_exit(errno,"putchar() #R1L-3: %s\n",strerror(errno));
+      }
+    }
   }
 }
 
