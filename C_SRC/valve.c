@@ -305,7 +305,7 @@ void print_usage_and_exit(void) {
     "                        An administrative privilege might be required to\n"
     "                        use this option.\n"
 #endif
-    "Version : 2025-01-28 16:32:20 JST\n"
+    "Version : 2025-01-28 16:47:55 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -1106,6 +1106,7 @@ int read_1line(FILE *fp, tmsp *ptsGet1stchar) {
       }
     }
   }
+  return EOF;
 }
 
 /*=== Sleep until the next interval period ===========================
