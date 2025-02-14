@@ -62,7 +62,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-01-29
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-02-14
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -112,6 +112,8 @@
 #ifndef LLONG_MAX
   #define LLONG_MAX 9223372036854775807
 #endif
+/* Buffer size for the read_and_write_a_line() */
+#define LINE_BUF 1024
 
 /*--- data type definitions ----------------------------------------*/
 typedef struct timespec tmsp;
@@ -198,7 +200,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2025-01-29 00:42:00 JST\n"
+    "Version : 2025-02-14 19:23:24 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -995,32 +997,32 @@ int read_1st_field_as_a_timestamp(FILE *fp, char *pszTime) {
 int read_and_write_a_line(FILE *fp) {
 
   /*--- Variables --------------------------------------------------*/
-  int        iChar;
+  char       szBuf[LINE_BUF]; /* Buffer for reading 1-line */
+  int        iLen;            /* Actual size of string in the buffer */
+  int        iChar;           /* Buffer for reading 1-char */
 
   /*--- Reading and writing a line (normal mode) -------------------*/
   if (! giTypingmode) {
-    while (1) {
-      iChar = getc(fp);
-      switch (iChar) {
-        case EOF :
-                   if (feof(  fp)) {return -1;}
-                   if (ferror(fp)) {return -2;}
-                   else            {return -3;}
-        case '\n':
-                   if (putchar('\n' )==EOF) {
-                     error_exit(errno,"stdout write error #f1: %s\n",
-                                strerror(errno));
-                   }
-                   return 1;
-        default  :
-                   if (putchar(iChar)==EOF) {
-                     error_exit(errno,"stdout write error #f2: %s\n",
-                                strerror(errno));
-                   }
-                   break;
+    while (fgets(szBuf,LINE_BUF,fp) != NULL) {
+      if (fputs(szBuf,stdout) < 0) {
+        error_exit(errno,"fputs() #RW1L-1: %s\n",strerror(errno));
+      }
+      iLen = strnlen(szBuf, LINE_BUF);
+      if (szBuf[iLen-1] == '\n') {return 1;}
+      if (iLen < LINE_BUF-1) {
+        iChar=getc(fp);
+        if (iChar==EOF ) {if (feof(  fp)) {return -1;}
+                          if (ferror(fp)) {return -2;}
+                          else            {return -3;}}
+        while (putchar(iChar)==EOF) {
+          error_exit(errno,"putchar() #RW1L-1: %s\n",strerror(errno));
+        }
+        if (iChar=='\n') {return 1;                   }
       }
     }
-    return -3;
+    if (feof(  fp)) {return -1;}
+    if (ferror(fp)) {return -2;}
+    else            {return -3;}
   }
 
   /*--- Reading and writing a line (typing mode) -------------------*/
@@ -1032,34 +1034,43 @@ int read_and_write_a_line(FILE *fp) {
                else            {return -3;}
     case '\n':
                if (putchar('\n' )==EOF) {
-                 error_exit(errno,"stdout write error #f3: %s\n",
+                 error_exit(errno,"putchar() #RW1L-2: %s\n",
                             strerror(errno));
                }
                return 1;
     default  :
                if (putchar(iChar)==EOF) {
-                 error_exit(errno,"stdout write error #f4: %s\n",
+                 error_exit(errno,"putchar() #RW1L-3: %s\n",
                             strerror(errno));
                }
                break;
   }
-  while (1) {
-    iChar = getc(fp);
-    switch (iChar) {
-      case EOF :
-                 if (feof(  fp)) {return -1;}
-                 if (ferror(fp)) {return -2;}
-                 else            {return -3;}
-      case '\n':
-                 return 1;
-      default  :
-                 if (putchar(iChar)==EOF) {
-                   error_exit(errno,"stdout write error #f5: %s\n",
-                              strerror(errno));
-                 }
-                 break;
+  while (fgets(szBuf,LINE_BUF,fp) != NULL) {
+    iLen = strnlen(szBuf, LINE_BUF);
+    if (szBuf[iLen-1] == '\n') {
+      szBuf[iLen-1] = '\0';
+      if (fputs(szBuf,stdout) < 0) {
+        error_exit(errno,"fputs() #RW1L-2: %s\n",strerror(errno));
+      }
+      return 1;
+    }
+    if (fputs(szBuf,stdout) < 0) {
+      error_exit(errno,"fputs() #RW1L-3: %s\n",strerror(errno));
+    }
+    if (iLen < LINE_BUF-1) {
+      iChar=getc(fp);
+      if (iChar==EOF ) {if (feof(  fp)) {return -1;}
+                        if (ferror(fp)) {return -2;}
+                        else            {return -3;}}
+      if (iChar=='\n') {return 1;                   }
+      while (putchar(iChar)==EOF) {
+        error_exit(errno,"putchar() #RW1L-4: %s\n",strerror(errno));
+      }
     }
   }
+  if (feof(  fp)) {return -1;}
+  if (ferror(fp)) {return -2;}
+  else            {return -3;}
 }
 
 /*=== Read and throw away one line ===================================
