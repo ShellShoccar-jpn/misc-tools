@@ -22,7 +22,7 @@
 #                           -e ... "n[.n]"
 #                                  The number of seconds since the UNIX
 #                                  epoch (".n" is the same as -c)
-#                           -I ... "YYYY-MM-DDThh:mm:ss[,n][{+|-}hh:mm]"
+#                           -I ... "YYYY-MM-DDThh:mm:ss[,n][{{+|-}hh:mm|Z}]"
 #                                  Ext. ISO 8601 formatted time in your
 #                                  timezone (".n" is the same as -c)
 #                           -z ... "n[.n]"
@@ -62,7 +62,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-02-14
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-02-17
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -133,6 +133,7 @@ int  change_to_rtprocess(int iPrio);
 char* gpszCmdname;  /* The name of this command                    */
 int   giTypingmode; /* Typing mode by option -y is on if >0        */
 int   giVerbose;    /* speaks more verbosely by the greater number */
+int   giTZoffs;     /* Offset in second in the local timezone      */
 tmsp  gtsZero;      /* The zero-point time                         */
 
 /*=== Define the functions for printing usage and error ============*/
@@ -164,7 +165,8 @@ void print_usage_and_exit(void) {
     "                          -e ... \"n[.n]\"\n"
     "                                 The number of seconds since the UNIX\n"
     "                                 epoch (\".n\" is the same as -c)\n"
-    "                          -I ... \"YYYY-MM-DDThh:mm:ss[,n][{+|-}hh:mm]\"\n"
+    "                          -I ... \"YYYY-MM-DDThh:mm:ss[,n][{{+|-}hh:mm|Z}]"
+                                                                          "\"\n"
     "                                 Ext. ISO 8601 formatted time in your\n"
     "                                 timezone (\".n\" is the same as -c)\n"
     "                          -z ... \"n[.n]\"\n"
@@ -200,7 +202,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2025-02-14 19:23:24 JST\n"
+    "Version : 2025-02-17 17:21:44 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -309,6 +311,13 @@ if (setvbuf(stdout,NULL,(giTypingmode>0)?_IONBF:_IOLBF,0)!=0) {
 
 /*=== Try to make me a realtime process ============================*/
 if (change_to_rtprocess(iPrio)==-1) {print_usage_and_exit();}
+
+/*=== Calculate the timezone offset if the -I option is enabled ====*/
+if (iMode%4==3) {
+  /* "giTZoffset" means "localtime - UTCtime" */
+  giTZoffs = (int)difftime(mktime(localtime((time_t[]){0})),
+                           mktime(   gmtime((time_t[]){0})) );
+}
 
 /*=== Each file loop ===============================================*/
 iRet       =  0;
@@ -1260,15 +1269,15 @@ int parse_unixtime(char* pszTime, tmsp *ptsTime) {
 
 /*=== Parse an extended ISO 8601 time ================================
  * [in]  pszTime : ISO 8601 (ext.) string in the localtime
-   (/[0-9]{1,10}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([,.][0-9]{1,9})?([+-][0-9]{2}:?[0-9]{2})?/)
+   (/[0-9]{1,10}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([,.][0-9]{1,9})?([+-][0-9]{2}:?[0-9]{2}|Z)?/)
  *       ptsTime : To be set the parsed time ("timespec" structure)
  * [ret] > 0 : success
  *       ==0 : error (failure to parse)                             */
 int parse_iso8601time(char* pszTime, tmsp *ptsTime) {
 
   /*--- Variables --------------------------------------------------*/
-  char szDate[31], szNsec[10];
-  int  iLen_szDate;        /* +-- 0:now reading integer part or invalid string*/
+  char szDate[26], szNsec[10];
+  int  iTZoffs;            /* +-- 0:now reading integer part or invalid string*/
   int  i, j, k;            /* +-- 1:to_be_started reading decimals  */
   char c;                  /* +-- 2:to_be_started reading timezone  */
   int  iStatus = 0; /* <--------- 3:finished reading                */
@@ -1298,6 +1307,7 @@ int parse_iso8601time(char* pszTime, tmsp *ptsTime) {
     switch (pszTime[i]) {
       case ',' :
       case '.' : iStatus = 1; break;
+      case 'Z' :
       case '+' :
       case '-' : iStatus = 2; break;
       case 0   :
@@ -1311,7 +1321,7 @@ int parse_iso8601time(char* pszTime, tmsp *ptsTime) {
     if (giVerbose>0) {warning("%s: Invalid ISO 8601 string\n",pszTime);}
     return 0;
   }
-  memcpy(szDate, pszTime, i); iLen_szDate=i;
+  memcpy(szDate, pszTime, i); szDate[i]=0;
 
   /*--- Read the string (decimal part) -----------------------------*/
   switch (iStatus) {
@@ -1320,10 +1330,10 @@ int parse_iso8601time(char* pszTime, tmsp *ptsTime) {
              k=0;
              for (; i<j; i++) {
                c = pszTime[i];
-               if      ('0'<=c  && c<='9'        ) {szNsec[k]=c; k++;}
-               else if (c=='+'  || c=='-'        ) {iStatus=2; break;}
-               else if (c=='\t' || c==' ' || c==0) {iStatus=3; break;}
-               else                                {
+               if      ('0'<=c  && c<='9'          ) {szNsec[k]=c; k++;}
+               else if (c=='+'  || c=='-' || c=='Z') {iStatus=2; break;}
+               else if (c=='\t' || c==' ' || c==0  ) {iStatus=3; break;}
+               else                                  {
                  if (giVerbose>0) {
                    warning("%s: Invalid ISO 8601 string (decimal part)\n",
                            pszTime                                        );
@@ -1346,20 +1356,22 @@ int parse_iso8601time(char* pszTime, tmsp *ptsTime) {
 
   /*--- Read the string (timezone part) ----------------------------*/
   if (iStatus==2) {
-    j=1;
     k=0;
     while (k==0) {
-      szDate[iLen_szDate]=pszTime[i]; iLen_szDate++; i++;        /* [+-] */
+      iTZoffs  = 0;
+      if (pszTime[i]=='Z') {j=1; k=1; break;}                    /* Z    */
+      j = (pszTime[i]=='+') ? 1 : -1; i++;                       /* [+-] */
       if (pszTime[i]<'0' || '9'<pszTime[i]) {break;}
-      szDate[iLen_szDate]=pszTime[i]; iLen_szDate++; i++;        /* h    */
+      iTZoffs += (pszTime[i]-'0')*36000; i++;                    /* h    */
       if (pszTime[i]<'0' || '9'<pszTime[i]) {break;}
-      szDate[iLen_szDate]=pszTime[i]; iLen_szDate++; i++;        /* h    */
+      iTZoffs += (pszTime[i]-'0')* 3600; i++;                    /* h    */
       if (pszTime[i]==':'                 ) {i++;  }             /* :    */
       if (pszTime[i]<'0' || '9'<pszTime[i]) {break;}
-      szDate[iLen_szDate]=pszTime[i]; iLen_szDate++; i++;        /* m    */
+      iTZoffs += (pszTime[i]-'0')*  600; i++;                    /* m    */
       if (pszTime[i]<'0' || '9'<pszTime[i]) {break;}
-      szDate[iLen_szDate]=pszTime[i]; iLen_szDate++; i++;        /* m    */
+      iTZoffs += (pszTime[i]-'0')*   60; i++;                    /* m    */
       if (pszTime[i]!=' ' && pszTime[i]!='\t' && pszTime[i]!=0) {break;}
+      iTZoffs *= j;
       k=1;
     }
     if (k==0) {
@@ -1374,24 +1386,15 @@ int parse_iso8601time(char* pszTime, tmsp *ptsTime) {
   }
 
   /*--- Pack the time-string into the timespec structure -----------*/
-  szDate[iLen_szDate]=0;
-  if (j==0) {
-    if (! strptime(szDate, "%Y-%m-%dT%H:%M:%S"  , &tmDate)) {
-      if (giVerbose>1) {
-        warning("Unexpect error at strptime() #1 in parse_iso8601time()\n");
-      }
-      return 0;
+  if (! strptime(szDate, "%Y-%m-%dT%H:%M:%S", &tmDate)) {
+    if (giVerbose>1) {
+      warning("Unexpect error at strptime() #1 in parse_iso8601time()\n");
     }
-  } else {
-    if (! strptime(szDate, "%Y-%m-%dT%H:%M:%S%z", &tmDate)) {
-      if (giVerbose>1) {
-        warning("Unexpect error at strptime() #2 in parse_iso8601time()\n");
-      }
-      return 0;
-    }
+    return 0;
   }
   ptsTime->tv_sec  = mktime(&tmDate);
   ptsTime->tv_nsec = atol(szNsec);
+  if (j!=0) {ptsTime->tv_sec = ptsTime->tv_sec + giTZoffs - iTZoffs;}
 
   return 1;
 }
