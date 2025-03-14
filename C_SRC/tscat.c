@@ -2,7 +2,7 @@
 #
 # TSCAT - A "cat" Command Which Can Reprodude the Timing of Flow
 #
-# USAGE   : tscat [-c|-e|-I|-z] [-Z] [-k] [-u] [-y] [-p n] [file [...]]
+# USAGE   : tscat [-c|-e|-I|-z] [-Z] [-1kuy] [-p n] [file [...]]
 # Args    : file ........ Filepath to be send ("-" means STDIN)
 #                         The file MUST be a textfile and MUST have
 #                         a timestamp at the first field to make the
@@ -36,6 +36,10 @@
 #                         "-c" option is given. In this case, the first
 #                         line is sent to stdout immediately, and after
 #                         five seconds, the second line is sent.
+#           -1 .......... * Output one character/line (LF) at first before
+#                           outputting the incoming data.
+#                         * This option might work as a starter of the
+#                           system embedding this command.
 #           -k .......... Keep the timestamp at the head of each line
 #                         when outputting the line to the stdout.
 #           -u .......... Set the date in UTC when -c option is set
@@ -62,7 +66,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-02-17
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-03-14
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -180,6 +184,10 @@ void print_usage_and_exit(void) {
     "                        \"-c\" option is given. In this case, the first\n"
     "                        line is sent to stdout immediately, and after\n"
     "                        five seconds, the second line is sent.\n"
+    "          -1 .......... * Output one character/line (LF) at first before\n"
+    "                          outputting the incoming data.\n"
+    "                        * This option might work as a starter of the\n"
+    "                          system embedding this command.\n"
     "          -k .......... Keep the timestamp at the head of each line\n"
     "                        when outputting the line to the stdout.\n"
     "          -u .......... Set the date in UTC when -c option is set\n"
@@ -202,7 +210,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2025-02-17 17:21:44 JST\n"
+    "Version : 2025-03-14 17:59:40 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -245,6 +253,7 @@ int main(int argc, char *argv[]) {
 /*--- Variables ----------------------------------------------------*/
 int   iMode;         /* 0:"-c",  1:"-e",  2:"-z",  3:"-I",
                         4:"-cZ", 5:"-eZ", 6:"-zZ", 7:"-IZ"          */
+int   iOpt_1;        /* -1 option flag (default 0)                  */
 int   iKeepTs;       /* -k option flag (0>:Keep timestamps, =0:Drop)*/
 int   iPrio;         /* -p option number (default 1)                */
 int   iRet;          /* return code                                 */
@@ -276,18 +285,20 @@ setlocale(LC_CTYPE, "");
 
 /*--- Set default parameters of the arguments ----------------------*/
 iMode        = 0; /* 0:"-c"(default) 1:"-e" 2:"-z" 4:"-cZ" 5:"-eZ" 6:"-zZ" */
+iOpt_1       = 0; /* 0:Normal 1:Output one character/line at first         */
 iKeepTs      = 0; /* 0>:Keep timestamps, =0:Drop(default) */
 giTypingmode = 0;
 iPrio        = 1;
 giVerbose    = 0;
 /*--- Parse options which start by "-" -----------------------------*/
-while ((i=getopt(argc, argv, "ceIp:kuyvhZz")) != -1) {
+while ((i=getopt(argc, argv, "ceIp:1kuyvhZz")) != -1) {
   switch (i) {
     case 'c': iMode&=4; iMode+=0;            break;
     case 'e': iMode&=4; iMode+=1;            break;
     case 'z': iMode&=4; iMode+=2;            break;
     case 'I': iMode&=4; iMode+=3;            break;
     case 'Z': iMode&=3; iMode+=4;            break;
+    case '1': iOpt_1=1;                      break;
     case 'k': iKeepTs=1;                     break;
     case 'u': (void)setenv("TZ", "UTC0", 1); break;
     case 'y': giTypingmode=1;                break;
@@ -317,6 +328,11 @@ if (iMode%4==3) {
   /* "giTZoffset" means "localtime - UTCtime" */
   giTZoffs = (int)difftime(mktime(localtime((time_t[]){0})),
                            mktime(   gmtime((time_t[]){0})) );
+}
+
+/*=== Output the starter charater/line when -1 is enabled ==========*/
+if (iOpt_1 && putchar('\n')==EOF) {
+  error_exit(errno, "putchar() in main(): %s\n", strerror(errno));
 }
 
 /*=== Each file loop ===============================================*/

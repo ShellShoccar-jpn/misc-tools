@@ -7,7 +7,7 @@
 #          current time" means the instant when this command starts
 #          writing the line which has been read.
 #
-# USAGE   : linets [-0|-3|-6|-9] [-c|-e|-I|-z|-Z] [-du] [file [...]]
+# USAGE   : linets [-0|-3|-6|-9] [-c|-e|-I|-z|-Z] [-1du] [file [...]]
 # Args    : file ...... Filepath to be attached the current timestamp
 #                       ("-" means STDIN)
 # Options : -0,-3,-6,-9 Specify resolution unit of the time. For instance,
@@ -37,6 +37,10 @@
 #                         -Z ... "n[.n]"
 #                                The number of seconds since the first
 #                                line came (".n" is the same as -c)
+#           -1 ........ * Output one character/line (LF) at first before
+#                         outputting the incoming data.
+#                       * This option might work as a starter of the
+#                         system embedding this command.
 #           -d ........ Insert "delta-t" (the number of seconds since
 #                       started writing the previous line) into the next
 #                       to the current timestamp. So, two fields will
@@ -49,7 +53,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-01-28
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-03-14
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -116,7 +120,7 @@ int   giNextchar       ; /* for read_1line(): the next character          */
 /*--- exit with usage ----------------------------------------------*/
 void print_usage_and_exit(void) {
   fprintf(stderr,
-    "USAGE   : %s [-0|-3|-6|-9] [-c|-e|-I|-z|-Z] [-du] [file [...]]\n"
+    "USAGE   : %s [-0|-3|-6|-9] [-c|-e|-I|-z|-Z] [-1du] [file [...]]\n"
     "Args    : file ...... Filepath to be attached the current timestamp\n"
     "                      (\"-\" means STDIN)\n"
     "Options : -0,-3,-6,-9 Specify resolution unit of the time. For instance,\n"
@@ -146,6 +150,10 @@ void print_usage_and_exit(void) {
     "                        -Z ... \"n[.n]\"\n"
     "                               The number of seconds since the fisrt\n"
     "                               line came (\".n\" is the same as -c)\n"
+    "          -1 ........ * Output one character/line (LF) at first before\n"
+    "                        outputting the incoming data.\n"
+    "                      * This option might work as a starter of the\n"
+    "                        system embedding this command.\n"
     "          -d ........ Insert \"delta-t\" (the number of seconds since\n"
     "                      started writing the previous line) into the next\n"
     "                      to the current timestamp. So, two fields will\n"
@@ -153,7 +161,7 @@ void print_usage_and_exit(void) {
     "          -u ........ Set the date in UTC when -c option is set\n"
     "                      (same as that of date command)\n"
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2025-01-28 22:48:56 JST\n"
+    "Version : 2025-03-14 17:57:19 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -194,15 +202,16 @@ void error_exit(int iErrno, const char* szFormat, ...) {
 int main(int argc, char *argv[]) {
 
 /*--- Variables ----------------------------------------------------*/
-int      iRet;            /* return code                           */
-int      iRet_r1l;        /* return value by read_1line()          */
-char    *pszPath;         /* filepath on arguments                 */
-char    *pszFilename;     /* filepath (for message)                */
-int      iFileno;         /* file# of filepath                     */
-int      iFd;             /* file descriptor                       */
-FILE    *fp;              /* file handle                           */
-int      iFirstline='c';  /* >0 when x-opt and no line come yet    */
-int      i;               /* all-purpose int                       */
+int      iRet;            /* return code                            */
+int      iRet_r1l;        /* return value by read_1line()           */
+int      iOpt_1=0;        /* -1 option flag (default 0)             */
+char    *pszPath;         /* filepath on arguments                  */
+char    *pszFilename;     /* filepath (for message)                 */
+int      iFileno;         /* file# of filepath                      */
+int      iFd;             /* file descriptor                        */
+FILE    *fp;              /* file handle                            */
+int      iFirstline='c';  /* >0 when x-opt and no line come yet     */
+int      i;               /* all-purpose int                        */
 
 /*--- Initialize ---------------------------------------------------*/
 if (clock_gettime(CLOCK_REALTIME,&gtsZero) != 0) {
@@ -219,7 +228,7 @@ if (setenv("POSIXLY_CORRECT","1",1) < 0) {
 /*=== Parse arguments ==============================================*/
 
 /*--- Parse options which start by "-" -----------------------------*/
-while ((i=getopt(argc, argv, "0369ceIzZduvh")) != -1) {
+while ((i=getopt(argc, argv, "0369ceIzZ1duvh")) != -1) {
   switch (i) {
     case '0': giTimeResol =  0 ;                 break;
     case '3': giTimeResol =  3 ;                 break;
@@ -230,6 +239,7 @@ while ((i=getopt(argc, argv, "0369ceIzZduvh")) != -1) {
     case 'I': giFmtType   = 'I'; iFirstline='I'; break;
     case 'Z': giFmtType   = 'Z'; iFirstline='Z'; break;
     case 'z': giFmtType   = 'z'; iFirstline='z'; break;
+    case '1': iOpt_1      =  1 ;                 break;
     case 'd': giDeltaMode =  1 ;                 break;
     case 'u': (void)setenv("TZ", "UTC0", 1);     break;
     case 'v': giVerbose++      ;                 break;
@@ -244,6 +254,11 @@ if (giVerbose>0) {warning("verbose mode (level %d)\n",giVerbose);}
 /*=== Switch buffer mode ===========================================*/
 if (setvbuf(stdout,NULL,_IOLBF,0)!=0) {
   error_exit(255,"Failed to switch to line-buffered mode\n");
+}
+
+/*=== Output the starter charater/line when -1 is enabled ==========*/
+if (iOpt_1 && putchar('\n')==EOF) {
+  error_exit(errno, "putchar() in main(): %s\n", strerror(errno));
 }
 
 /*=== Each file loop ===============================================*/
