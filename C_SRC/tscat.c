@@ -66,7 +66,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-03-14
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-03-19
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -146,9 +146,9 @@ tmsp  gtsZero;      /* The zero-point time                         */
 void print_usage_and_exit(void) {
   fprintf(stderr,
 #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
-    "USAGE   : %s [-c|-e|-I|-z] [-Z] [-k] [-u] [-y] [-p n] [file [...]]\n"
+    "USAGE   : %s [-c|-e|-I|-z] [-Z] [-1kuy] [-p n] [file [...]]\n"
 #else
-    "USAGE   : %s [-c|-e|-I|-z] [-Z] [-k] [-u] [-y] [file [...]]\n"
+    "USAGE   : %s [-c|-e|-I|-z] [-Z] [-1kuy] [file [...]]\n"
 #endif
     "Args    : file ........ Filepath to be send (\"-\" means STDIN)\n"
     "                        The file MUST be a textfile and MUST have\n"
@@ -210,7 +210,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2025-03-14 17:59:40 JST\n"
+    "Version : 2025-03-19 19:42:00 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
