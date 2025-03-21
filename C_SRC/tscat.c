@@ -66,7 +66,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-03-19
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-03-21
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -210,7 +210,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2025-03-19 19:42:00 JST\n"
+    "Version : 2025-03-21 16:10:23 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -368,6 +368,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
     case 0: /* "-c" Calendar time mode */
              while (1) {
                switch (read_1st_field_as_a_timestamp(fp, szTime)) {
+                 case  0:
                  case  1: /* read successfully */
                           if (! parse_calendartime(szTime, &tsTime)) {
                             warning("%s: %s: Invalid calendar-time, "
@@ -414,11 +415,6 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                      break;
                           }
                           break;
-                 case  0: /* unexpected LF */
-                          warning("%s: %s: Invalid timestamp field found, "
-                                  "skip this line.\n", pszFilename, szTime);
-                          iRet = 1;
-                          break;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n", pszFilename);
                           iRet = 1;
@@ -438,6 +434,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
     case 1: /* "-e" UNIX epoch time mode */
              while (1) {
                switch (read_1st_field_as_a_timestamp(fp, szTime)) {
+                 case  0:
                  case  1: /* read successfully */
                           if (! parse_unixtime(szTime, &tsTime)) {
                             warning("%s: %s: Invalid UNIX-time, "
@@ -484,11 +481,6 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                      break;
                           }
                           break;
-                 case  0: /* unexpected LF */
-                          warning("%s: %s: Invalid timestamp field found, "
-                                  "skip this line.\n", pszFilename, szTime);
-                          iRet = 1;
-                          break;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n", pszFilename);
                           iRet = 1;
@@ -508,6 +500,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
     case 2: /* "-z" Zero time mode */
              while (1) {
                switch (read_1st_field_as_a_timestamp(fp, szTime)) {
+                 case  0:
                  case  1: /* read successfully */
                           if (! parse_unixtime(szTime, &tsTime)) {
                             warning("%s: %s: Invalid number of seconds, "
@@ -560,11 +553,6 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                      break;
                           }
                           break;
-                 case  0: /* unexpected LF */
-                          warning("%s: %s: Invalid timestamp field found, "
-                                  "skip this line.\n", pszFilename, szTime);
-                          iRet = 1;
-                          break;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n", pszFilename);
                           iRet = 1;
@@ -584,6 +572,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
     case 3: /* "-I" Extended ISO 8601 formatted time mode */
              while (1) {
                switch (read_1st_field_as_a_timestamp(fp, szTime)) {
+                 case  0:
                  case  1: /* read successfully */
                           if (! parse_iso8601time(szTime, &tsTime)) {
                             warning("%s: %s: Invalid ISO8601-time, "
@@ -630,11 +619,6 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                      break;
                           }
                           break;
-                 case  0: /* unexpected LF */
-                          warning("%s: %s: Invalid timestamp field found, "
-                                  "skip this line.\n", pszFilename, szTime);
-                          iRet = 1;
-                          break;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n", pszFilename);
                           iRet = 1;
@@ -658,6 +642,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
              }
              while (1) {
                switch (read_1st_field_as_a_timestamp(fp, szTime)) {
+                 case  0:
                  case  1: /* read successfully */
                           if (! parse_calendartime(szTime, &tsTime)) {
                             warning("%s: %s: Invalid calendar-time, "
@@ -717,11 +702,6 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                      break;
                           }
                           break;
-                 case  0: /* unexpected LF */
-                          warning("%s: %s: Invalid timestamp field found, "
-                                  "skip this line.\n", pszFilename, szTime);
-                          iRet = 1;
-                          break;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n", pszFilename);
                           iRet = 1;
@@ -745,6 +725,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
              }
              while (1) {
                switch (read_1st_field_as_a_timestamp(fp, szTime)) {
+                 case  0:
                  case  1: /* read successfully */
                           if (! parse_unixtime(szTime, &tsTime)) {
                             warning("%s: %s: Invalid timestamp, "
@@ -804,11 +785,6 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                      break;
                           }
                           break;
-                 case  0: /* unexpected LF */
-                          warning("%s: %s: Invalid timestamp field found, "
-                                  "skip this file.\n", pszFilename, szTime);
-                          iRet = 1;
-                          break;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n", pszFilename);
                           iRet = 1;
@@ -832,6 +808,7 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
              }
              while (1) {
                switch (read_1st_field_as_a_timestamp(fp, szTime)) {
+                 case  0:
                  case  1: /* read successfully */
                           if (! parse_iso8601time(szTime, &tsTime)) {
                             warning("%s: %s: Invalid ISO8601-time, "
@@ -890,11 +867,6 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                                                 __LINE__);
                                      break;
                           }
-                          break;
-                 case  0: /* unexpected LF */
-                          warning("%s: %s: Invalid timestamp field found, "
-                                  "skip this line.\n", pszFilename, szTime);
-                          iRet = 1;
                           break;
                  case -2: /* unexpected EOF */
                           warning("%s: Came to EOF suddenly\n", pszFilename);
@@ -963,7 +935,8 @@ void get_time_data_arrived(int iFd, tmsp *ptsTime) {
  *      pszTime : Pointer for the string buffer to get the timestamp on
  *                the 1st field with a white space (if it exists)
  *                (Size of the buffer you give MUST BE 43 BYTES or more!)
- * [ret] == 0 : Finished reading due to '\n'
+ * [ret] == 0 : Finished reading due to '\n', but you may use the result
+ *              in the buffer
  *       == 1 : Finished reading successfully, you may use the result in
  *              the buffer
  *       ==-1 : Finished reading because no more data in the "fp"
@@ -983,7 +956,7 @@ int read_1st_field_as_a_timestamp(FILE *fp, char *pszTime) {
       case ' ' :
       case '\t':
                  pszTime[iTslen  ]=iChar;
-                 pszTime[iTslen+1]=    0;
+                 pszTime[iTslen+1]= '\0';
                  return 1;
       case EOF :
                  if         (feof(  fp)) {
@@ -1004,6 +977,10 @@ int read_1st_field_as_a_timestamp(FILE *fp, char *pszTime) {
                    return -4;
                  }
       case '\n':
+                 pszTime[iTslen  ]= '\0';
+                 if (ungetc('\n',fp) == EOF) {
+                   error_exit(errno,"ungetc(): %s\n",strerror(errno));
+                 }
                  return 0;
       default  :
                  if (iTslen>41) {                                 continue;}
