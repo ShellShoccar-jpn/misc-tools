@@ -23,7 +23,7 @@
 #
 # * Any invalid time make me return the text "-1" with the return code 0.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2020-05-06
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-03-28
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -55,7 +55,7 @@ print_usage_and_exit () {
 	          ${0##*/} -r [unixtime_text_or_file] # Unixtime -> Cal.-time
 	Args    : datetime_text_or_file ... A time to converting
 	Options : -r ...................... Swithes mode to Unixtime -> Cal.-time
-	Version : 2020-05-06 22:42:19 JST
+	Version : 2025-03-28 19:06:41 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -121,6 +121,7 @@ BEGIN {
 
 function unixtime2YYYYMMDDhhmmss_init(localtime_flag, gm,lo) {
   max_calced_year = 1970;              # To remember every days on 01/01 from
+  min_calced_year = 1970;              # To remember every days on 01/01 from
   days_on_Jan1st_from_epoch[1970] = 0; # the Epoch which was calculated once
 
   split("31 0 31 30 31 30 31 31 30 31 30 31", days_of_month);
@@ -138,7 +139,7 @@ function unixtime2YYYYMMDDhhmmss_init(localtime_flag, gm,lo) {
 function unixtime2YYYYMMDDhhmmss(ut, Y,M,D,h,m,s,t,i,j) {
   # 0) timezone adjustment
   ut += offset;
-  if (ut < 0) {return -1;}
+  if (ut < 0) {return unixtime2YYYYMMDDhhmmss_neg(ut);}
 
   # 1) calculate hour,minute,second and number of days from the Epoch
   s = ut % 60;  t = int(ut/60);
@@ -155,6 +156,46 @@ function unixtime2YYYYMMDDhhmmss(ut, Y,M,D,h,m,s,t,i,j) {
        days_on_Jan1st_from_epoch[j+1] = i;
      }
      max_calced_year = Y;
+  }
+  for (;;Y--) {
+    if (days_from_epoch >= days_on_Jan1st_from_epoch[Y]) {
+      break;
+    }
+  }
+
+  # 3) calculate month,day
+  days_of_month[2] = (Y%4!=0)?28:(Y%100!=0)?29:(Y%400!=0)?28:29;
+  D = days_from_epoch - days_on_Jan1st_from_epoch[Y] + 1;
+  for (M=1; ; M++) {
+    if (D > days_of_month[M]) {
+      D -= days_of_month[M];
+    } else {
+      break;
+    }
+  }
+
+  return sprintf("%04d%02d%02d%02d%02d%02d",Y,M,D,h,m,s);
+}
+
+function unixtime2YYYYMMDDhhmmss_neg(ut, Y,M,D,h,m,s,t,i,j) {
+  # 0) timezone adjustment
+  ut += offset;
+
+  # 1) calculate hour,minute,second and number of days from the Epoch
+  s = (ut%60+60)%60;  t = (ut-s)/60;
+  m = ( t%60+60)%60;  t = ( t-m)/60;
+  h = ( t%24+24)%24;
+  days_from_epoch = ( t-h)/24;
+
+  # 2) calculate year
+  Y = int(days_from_epoch/365.2425)+1970-1;
+  if (Y < min_calced_year) {
+     i = days_on_Jan1st_from_epoch[min_calced_year];
+     for (j=min_calced_year-1; j>=Y; j--) {
+       i -= (j%4!=0)?365:(j%100!=0)?366:(j%400!=0)?365:366;
+       days_on_Jan1st_from_epoch[j] = i;
+     }
+     min_calced_year = Y;
   }
   for (;;Y--) {
     if (days_from_epoch >= days_on_Jan1st_from_epoch[Y]) {
