@@ -23,7 +23,7 @@
 #
 # * Any invalid time make me return the text "-1" with the return code 0.
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-03-28
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-03-30
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -55,7 +55,7 @@ print_usage_and_exit () {
 	          ${0##*/} -r [unixtime_text_or_file] # Unixtime -> Cal.-time
 	Args    : datetime_text_or_file ... A time to converting
 	Options : -r ...................... Swithes mode to Unixtime -> Cal.-time
-	Version : 2025-03-28 19:06:41 JST
+	Version : 2025-03-30 21:06:34 JST
 	          (POSIX Bourne Shell/POSIX commands)
 	USAGE
   exit 1
@@ -93,10 +93,10 @@ BEGIN {
       fromstdin = 1;
       break;
     } else if ((revmode == 0) && match(ARGV[i], /^[0-9]+$/)) {
-      printf("%d\n",YYYYMMDDhhmmss2unixtime(ARGV[i]));
+      printf("%s\n",YYYYMMDDhhmmss2unixtime(ARGV[i]));
     } else if (revmode == 0) {
       while (getline < ARGV[i]) {
-        printf("%d\n",YYYYMMDDhhmmss2unixtime($1));
+        printf("%s\n",YYYYMMDDhhmmss2unixtime($1));
       }
     } else if ((revmode >  0) && match(ARGV[i], /^-?[0-9]+$/)) {
       print unixtime2YYYYMMDDhhmmss(ARGV[i]);
@@ -110,7 +110,7 @@ BEGIN {
   # 3) convert data from the stdin if necessary
   if ((fromstdin > 0) && (revmode == 0)) {
     while ("cat" | getline) {
-      printf("%d\n",YYYYMMDDhhmmss2unixtime($1));
+      printf("%s\n",YYYYMMDDhhmmss2unixtime($1));
     }
   } else if (fromstdin > 0)              {
     while ("cat" | getline) {
@@ -197,8 +197,8 @@ function unixtime2YYYYMMDDhhmmss_neg(ut, Y,M,D,h,m,s,t,i,j) {
      }
      min_calced_year = Y;
   }
-  for (;;Y--) {
-    if (days_from_epoch >= days_on_Jan1st_from_epoch[Y]) {
+  for (;;Y++) {
+    if (days_from_epoch <= days_on_Jan1st_from_epoch[Y]) {
       break;
     }
   }
@@ -250,6 +250,6 @@ function YYYYMMDDhhmmss2unixtime(YYYYMMDDhhmmss, Y,M,D,h,m,s,l) {
   if (M<3) {M+=12; Y--;}
 
   # 4) calculate unixtime
-  return (365*Y+int(Y/4)-int(Y/100)+int(Y/400)+int(306*(M+1)/10)-428+D-719163)*86400+(h*3600)+(m*60)+s-offset;
+  return sprintf("%.0f",(365*Y+int(Y/4)-int(Y/100)+int(Y/400)+int(306*(M+1)/10)-428+D-719163)*86400+(h*3600)+(0*60)+s-offset);
 }
 ' ${1+"$@"}
