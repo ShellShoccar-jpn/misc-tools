@@ -19,16 +19,20 @@
 #                                  timezone (".n" is the digits under
 #                                  second. You can specify up to nano
 #                                  second.)
-#                           -e ... "n[.n]"
+#                           -e ... "[+|-]n[.n]"
 #                                  The number of seconds since the UNIX
 #                                  epoch (".n" is the same as -c)
 #                           -I ... "YYYY-MM-DDThh:mm:ss[,n][{{+|-}hh:mm|Z}]"
 #                                  Ext. ISO 8601 formatted time in your
 #                                  timezone (".n" is the same as -c)
-#                           -z ... "n[.n]"
+#                           -z ... "[+|-]n[.n]"
 #                                  The number of seconds since this
 #                                  command has startrd (".n" is the same
 #                                  as -c)
+#                                  If a negative number is given, this
+#                                  command will reset the reference time
+#                                  to when the negative number string was
+#                                  received.
 #           -Z .......... Define the time when the first line came as 0.
 #                         For instance, imagine that the first field of
 #                         the first line is "20200229235959," and the
@@ -66,7 +70,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-03-21
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-04-02
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -166,17 +170,21 @@ void print_usage_and_exit(void) {
     "                                 timezone (\".n\" is the digits under\n"
     "                                 second. You can specify up to nano\n"
     "                                 second.)\n"
-    "                          -e ... \"n[.n]\"\n"
+    "                          -e ... \"[+|-]n[.n]\"\n"
     "                                 The number of seconds since the UNIX\n"
     "                                 epoch (\".n\" is the same as -c)\n"
     "                          -I ... \"YYYY-MM-DDThh:mm:ss[,n][{{+|-}hh:mm|Z}]"
                                                                           "\"\n"
     "                                 Ext. ISO 8601 formatted time in your\n"
     "                                 timezone (\".n\" is the same as -c)\n"
-    "                          -z ... \"n[.n]\"\n"
+    "                          -z ... \"[+|-]n[.n]\"\n"
     "                                 The number of seconds since this\n"
     "                                 command has started (\".n\" is the same\n"
     "                                 as -c)\n"
+    "                                 If a negative number is given, this\n"
+    "                                 command will reset the reference time\n"
+    "                                 to when the negative number string was\n"
+    "                                 received.\n"
     "          -Z .......... Define the time when the first line came as 0.\n"
     "                        For instance, imagine that the first field of\n"
     "                        the first line is \"20200229235959,\" and the\n"
@@ -210,7 +218,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2025-03-21 16:10:23 JST\n"
+    "Version : 2025-04-02 17:33:34 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -528,6 +536,11 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                             tsOffset.tv_sec  = gtsZero.tv_sec ;
                             tsOffset.tv_nsec = gtsZero.tv_nsec;
                             iGotOffset=2;
+                          } else if (tsTime.tv_sec < 0) {
+                            if (clock_gettime(CLOCK_REALTIME,&tsOffset) != 0) {
+                              error_exit(errno,"clock_gettime() at %d: %s\n",
+                                         __LINE__,strerror(errno)            );
+                            }
                           }
                           spend_my_spare_time(&tsTime, &tsOffset);
                           if (iKeepTs) {
@@ -760,6 +773,13 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                               tsOffset.tv_nsec = gtsZero.tv_nsec-tsTime.tv_nsec;
                             }
                             iGotOffset=2;
+                          } else if (iGotOffset   ==2 &&
+                                     iMode        ==6 &&
+                                     tsTime.tv_sec< 0   ) {
+                            if (clock_gettime(CLOCK_REALTIME,&tsOffset) != 0) {
+                              error_exit(errno,"clock_gettime() at %d: %s\n",
+                                         __LINE__,strerror(errno)            );
+                            }
                           }
                           spend_my_spare_time(&tsTime, &tsOffset);
                           if (iKeepTs) {
@@ -1200,13 +1220,15 @@ int parse_calendartime(char* pszTime, tmsp *ptsTime) {
 int parse_unixtime(char* pszTime, tmsp *ptsTime) {
 
   /*--- Variables --------------------------------------------------*/
-  char szSec[20], szNsec[10];
+  char szSec[21], szNsec[10];
   int  i, j, k;            /* +-- 0:(reading integer part)          */
   char c;                  /* +-- 1:finish reading without_decimals */
   int  iStatus = 0; /* <--------- 2:to_be_started reading decimals  */
 
   /*--- Separate pszTime into seconds and nanoseconds --------------*/
-  for (i=0; i<19; i++) {
+  i=0; j=19;
+  if (pszTime[i]=='+'||pszTime[i]=='-') {szSec[i]=pszTime[i];i++;j++;}
+  for (   ; i<j; i++) {
     c = pszTime[i];
     if      ('0'<=c && c<='9'         ) {szSec[i]=c;                       }
     else if (c=='.'                   ) {szSec[i]=0; iStatus=2; i++; break;}
@@ -1218,10 +1240,10 @@ int parse_unixtime(char* pszTime, tmsp *ptsTime) {
                                     return 0;
                                    }
   }
-  if ((iStatus==0) && (i==19)) {
-    switch (pszTime[19]) {
-      case '.': szSec[19]=0; iStatus=2; i++; break;
-      case  0 : szSec[19]=0; iStatus=1;      break;
+  if ((iStatus==0) && (i==j)) {
+    switch (pszTime[j]) {
+      case '.': szSec[j]=0; iStatus=2; i++; break;
+      case  0 : szSec[j]=0; iStatus=1;      break;
       default : warning("The integer part of the timestamp is too big "
                         "as a UNIX-time\n");
                 return 0;
@@ -1251,11 +1273,8 @@ int parse_unixtime(char* pszTime, tmsp *ptsTime) {
   }
 
   /*--- Pack the time-string into the timespec structure -----------*/
-  ptsTime->tv_sec = (time_t)atoll(szSec);
-  if (ptsTime->tv_sec<0) {
-    ptsTime->tv_sec = (sizeof(time_t)>=8) ? LLONG_MAX : LONG_MAX;
-  }
-  ptsTime->tv_nsec = atol(szNsec);
+  ptsTime->tv_sec  = (time_t)atoll(szSec);
+  ptsTime->tv_nsec =         atol(szNsec);
 
   return 1;
 }
