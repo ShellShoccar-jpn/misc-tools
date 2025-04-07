@@ -70,7 +70,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-04-02
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-04-08
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -218,7 +218,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2025-04-02 17:33:34 JST\n"
+    "Version : 2025-04-08 02:33:54 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -1206,7 +1206,14 @@ int parse_calendartime(char* pszTime, tmsp *ptsTime) {
     }
     return 0;
   }
+  errno=0;
   ptsTime->tv_sec  = mktime(&tmDate);
+  if (errno) {
+    if (giVerbose>1) {
+      warning("%s: Invalid calendartime string: %s\n", pszTime,strerror(errno));
+    }
+    return 0;
+  }
   ptsTime->tv_nsec = atol(szNsec);
 
   return 1;
@@ -1404,7 +1411,14 @@ int parse_iso8601time(char* pszTime, tmsp *ptsTime) {
     }
     return 0;
   }
+  errno=0;
   ptsTime->tv_sec  = mktime(&tmDate);
+  if (errno) {
+    if (giVerbose>1) {
+      warning("%s: Invalid ISO 8601 string: %s\n", pszTime, strerror(errno));
+    }
+    return 0;
+  }
   ptsTime->tv_nsec = atol(szNsec);
   if (j!=0) {ptsTime->tv_sec = ptsTime->tv_sec + giTZoffs - iTZoffs;}
 
