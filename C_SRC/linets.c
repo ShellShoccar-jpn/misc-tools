@@ -53,7 +53,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-03-14
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-04-15
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -161,7 +161,7 @@ void print_usage_and_exit(void) {
     "          -u ........ Set the date in UTC when -c option is set\n"
     "                      (same as that of date command)\n"
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2025-03-14 17:57:19 JST\n"
+    "Version : 2025-04-15 14:52:16 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -241,7 +241,7 @@ while ((i=getopt(argc, argv, "0369ceIzZ1duvh")) != -1) {
     case 'z': giFmtType   = 'z'; iFirstline='z'; break;
     case '1': iOpt_1      =  1 ;                 break;
     case 'd': giDeltaMode =  1 ;                 break;
-    case 'u': (void)setenv("TZ", "UTC0", 1);     break;
+    case 'u': (void)setenv("TZ", "UTC", 1);      break;
     case 'v': giVerbose++      ;                 break;
     case 'h': print_usage_and_exit();
     default : print_usage_and_exit();

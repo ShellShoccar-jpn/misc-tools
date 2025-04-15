@@ -70,7 +70,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-04-08
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-04-15
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -218,7 +218,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2025-04-08 02:33:54 JST\n"
+    "Version : 2025-04-15 14:54:42 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -301,20 +301,20 @@ giVerbose    = 0;
 /*--- Parse options which start by "-" -----------------------------*/
 while ((i=getopt(argc, argv, "ceIp:1kuyvhZz")) != -1) {
   switch (i) {
-    case 'c': iMode&=4; iMode+=0;            break;
-    case 'e': iMode&=4; iMode+=1;            break;
-    case 'z': iMode&=4; iMode+=2;            break;
-    case 'I': iMode&=4; iMode+=3;            break;
-    case 'Z': iMode&=3; iMode+=4;            break;
-    case '1': iOpt_1=1;                      break;
-    case 'k': iKeepTs=1;                     break;
-    case 'u': (void)setenv("TZ", "UTC0", 1); break;
-    case 'y': giTypingmode=1;                break;
+    case 'c': iMode&=4; iMode+=0;           break;
+    case 'e': iMode&=4; iMode+=1;           break;
+    case 'z': iMode&=4; iMode+=2;           break;
+    case 'I': iMode&=4; iMode+=3;           break;
+    case 'Z': iMode&=3; iMode+=4;           break;
+    case '1': iOpt_1=1;                     break;
+    case 'k': iKeepTs=1;                    break;
+    case 'u': (void)setenv("TZ", "UTC", 1); break;
+    case 'y': giTypingmode=1;               break;
     #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
       case 'p': if (sscanf(optarg,"%d",&iPrio) != 1) {print_usage_and_exit();}
-                                               break;
+                                              break;
     #endif
-    case 'v': giVerbose++;                   break;
+    case 'v': giVerbose++;                  break;
     case 'h': print_usage_and_exit();
     default : print_usage_and_exit();
   }

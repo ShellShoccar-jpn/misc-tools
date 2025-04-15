@@ -108,7 +108,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written Shell-Shoccar Japan (@shellshoccarjpn) on 2024-06-23
+# Written Shell-Shoccar Japan (@shellshoccarjpn) on 2025-04-15
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -292,7 +292,7 @@ void print_usage_and_exit(void) {
 #endif
     "Retuen  : Return 0 only when finished successfully\n"
     "\n"
-    "Version : 2024-06-23 13:28:01 JST\n"
+    "Version : 2025-04-15 14:51:46 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -363,19 +363,19 @@ setlocale(LC_CTYPE, "");
 /*--- Parse options which start by "-" -----------------------------*/
 while ((i=getopt(argc, argv, "0369ceIp:uvh")) != -1) {
   switch (i) {
-    case '0': giTimeResol =  0 ;                 break;
-    case '3': giTimeResol =  3 ;                 break;
-    case '6': giTimeResol =  6 ;                 break;
-    case '9': giTimeResol =  9 ;                 break;
+    case '0': giTimeResol =  0 ;            break;
+    case '3': giTimeResol =  3 ;            break;
+    case '6': giTimeResol =  6 ;            break;
+    case '9': giTimeResol =  9 ;            break;
     case 'c': 
     case 'e': 
-    case 'I': giFmtType   =  i ;                 break;
+    case 'I': giFmtType   =  i ;            break;
     #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
       case 'p': if (sscanf(optarg,"%d",&giPrio) != 1) {print_usage_and_exit();}
-                                               break;
+                                              break;
     #endif
-    case 'u': (void)setenv("TZ", "UTC0", 1);     break;
-    case 'v': giVerbose++;                   break;
+    case 'u': (void)setenv("TZ", "UTC", 1); break;
+    case 'v': giVerbose++;                  break;
     case 'h': print_usage_and_exit();
     default : print_usage_and_exit();
   }

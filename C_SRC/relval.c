@@ -2,7 +2,7 @@
 #
 # RELVAL - Limit the Flow Rate of the UNIX Pipeline Like a Relief Valve
 #
-# USAGE   : relval [-c|-e|-z] [-u] [-k] [-d fd|file] ratelimit [file [...]]
+# USAGE   : relval [-c|-e|-z] [-ku] [-d fd|file] ratelimit [file [...]]
 # Args    : file ........ Filepath to be sent ("-" means STDIN)
 #                         The file MUST be a textfile and MUST have
 #                         a timestamp at the first field to make the
@@ -12,20 +12,22 @@
 #                         And, the string from the top of the line to
 #                         the charater will be cut before outgoing to
 #                         the stdout.
-#           ratelimit ... Dataflow limit. You can specify it by the following
-#                         two methods.
+#           ratelimit ... Dataflow limit. You can specify it by the
+#                         following two methods.
 #                           1. interval time
 #                              * One line will be allowed to pass through
 #                                in the time you specified.
 #                              * The usage is "time[unit]."
-#                                - "time" is the numerical part. You can
-#                                  use an integer or a decimal.
+#                                - "time" is the numerical part. You
+#                                  can use an integer or a decimal.
 #                                - "unit" is the part of the unit of time.
-#                                  You can choose one of "s," "ms," "us,"
-#                                  or "ns." The default is "s."
-#                              * If you set "1.24ms," this command allows
-#                                up to one line of the source textdata
-#                                to pass through every 1.24 milliseconds.
+#                                  You can choose one of "s,"
+#                                  "ms," "us," or "ns." The default
+#                                  is "s."
+#                              * If you set "1.24ms," this command
+#                                allows up to one line of the source
+#                                textdata to pass through every 1.24
+#                                milliseconds.
 #                           2. number per time
 #                              * Text data of a specified number of lines
 #                                are allowed to pass through in a specified
@@ -34,17 +36,18 @@
 #                                - "number" is the part to specify the
 #                                  numner of lines. You can set only a
 #                                  natural number from 1 to 65535.
-#                                - "/" is the delimiter to seperate parts.
-#                                  You must insert any whitespace characters
-#                                  before and after this slash letter.
-#                                - "time" is the part that specifies the
-#                                  period. The usage is the same as
+#                                - "/" is the delimiter to seperate
+#                                  parts. You must insert any whitespace
+#                                  characters before and after this slash
+#                                  letter.
+#                                - "time" is the part that specifies
+#                                  the period. The usage is the same as
 #                                  the interval time we explained above.
-#                              * If you set "10/1.5," this command allows
-#                                up to 10 lines to pass through every 1.5
-#                                seconds.
-# Options : -c,-e,-z .... Specify the format for timestamp. You can choose
-#                         one of them.
+#                              * If you set "10/1.5," this command
+#                                allows up to 10 lines to pass through
+#                                every 1.5 seconds.
+# Options : -c,-e,-z .... Specify the format for timestamp. You can
+#                         choose one of them.
 #                           -c ... "YYYYMMDDhhmmss[.n]" (default)
 #                                  Calendar time (standard time) in your
 #                                  timezone (".n" is the digits under
@@ -55,12 +58,12 @@
 #                                  epoch (".n" is the same as -x)
 #                           -z ... "n[.n]"
 #                                  The number of seconds since this
-#                                  command has startrd (".n" is the same
-#                                  as -x)
+#                                  command has startrd (".n" is the
+#                                  same as -x)
 #           -u .......... Set the date in UTC when -c option is set
 #                         (same as that of date command)
 #           -k .......... Keep the timestamp when outputting each line.\n
-#           -d fd/file .. If you set this option, the lines that will be
+#           -d fd|file .. If you set this option, the lines that will be
 #                         dropped will be sent to the specified file
 #                         descriptor or file.
 #                         * When you set an integer, this command regards
@@ -77,7 +80,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-06-23
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-04-15
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -89,9 +92,13 @@
 #
 ####################################################################*/
 
+
+
 /*####################################################################
 # Initial Configuration
 ####################################################################*/
+
+
 /*=== Initial Setting ==============================================*/
 
 /*--- headers ------------------------------------------------------*/
@@ -111,11 +118,11 @@
 #include <time.h>
 #include <unistd.h>
 
-
 /*--- headers ------------------------------------------------------*/
 /* Buffer size for the control file */
 #define CTRL_FILE_BUF 64
 #define BILLION 1000000000
+#define RINGBUF_NUM_MAX 65535
 
 /*--- data type definitions ----------------------------------------*/
 typedef struct timespec tmsp;
@@ -143,7 +150,7 @@ char*   gpszCmdname; /* The name of this command                    */
 /*--- exit with usage ----------------------------------------------*/
 void print_usage_and_exit(void) {
   fprintf(stderr,
-    " USAGE   : %s [-c|-e|-z] [-u] [-k] [-d fd|file] ratelimit [file [...]]\n"
+    " USAGE   : %s [-c|-e|-z] [-ku] [-d fd|file] ratelimit [file [...]]\n"
     " Args    : file ........ Filepath to be sent (\"-\" means STDIN)\n"
     "                         The file MUST be a textfile and MUST have\n"
     "                         a timestamp at the first field to make the\n"
@@ -153,39 +160,42 @@ void print_usage_and_exit(void) {
     "                         And, the string from the top of the line to\n"
     "                         the charater will be cut before outgoing to\n"
     "                         the stdout.\n"
-    "           ratelimit ... Dataflow limit. You can specify it by the following\n"
-    "                         two methods.\n"
+    "           ratelimit ... Dataflow limit. You can specify it by the\n"
+    "                         following two methods.\n"
     "                           1. interval time\n"
     "                              * One line will be allowed to pass through\n"
     "                                in the time you specified.\n"
     "                              * The usage is \"time[unit].\"\n"
-    "                                - \"time\" is the numerical part. You can\n"
-    "                                  use an integer or a decimal.\n"
-    "                                - \"unit\" is the part of the unit of time.\n"
-    "                                  You can choose one of \"s,\" \"ms,\" \"us,\"\n"
-    "                                  or \"ns.\" The default is \"s.\"\n"
-    "                              * If you set \"1.24ms,\" this command allows\n"
-    "                                up to one line of the source textdata\n"
-    "                                to pass through every 1.24 milliseconds.\n"
+    "                                - \"time\" is the numerical part. You\n"
+    "                                  can use an integer or a decimal.\n"
+    "                                - \"unit\" is the part of the unit of\n"
+    "                                  time. You can choose one of \"s,\"\n"
+    "                                  \"ms,\" \"us,\" or \"ns.\" The default\n"
+    "                                  is \"s.\n"
+    "                              * If you set \"1.24ms,\" this command\n"
+    "                                allows up to one line of the source\n"
+    "                                textdata to pass through every 1.24\n"
+    "                                milliseconds.\n"
     "                           2. number per time\n"
     "                              * Text data of a specified number of lines\n"
-    "                                are allowed to pass through in a specified\n"
-    "                                time.\n"
+    "                                are allowed to pass through in a\n"
+    "                                specified time.\n"
     "                              * The usage is \"number/time.\"\n"
     "                                - \"number\" is the part to specify the\n"
     "                                  numner of lines. You can set only a\n"
     "                                  natural number from 1 to 65535.\n"
-    "                                - \"/\" is the delimiter to seperate parts.\n"
-    "                                  You must insert any whitespace characters\n"
-    "                                  before and after this slash letter.\n"
-    "                                - \"time\" is the part that specifies the\n"
-    "                                  period. The usage is the same as\n"
+    "                                - \"/\" is the delimiter to seperate\n"
+    "                                  parts. You must insert any whitespace\n"
+    "                                  characters before and after this slash\n"
+    "                                  letter.\n"
+    "                                - \"time\" is the part that specifies\n"
+    "                                  the period. The usage is the same as\n"
     "                                  the interval time we explained above.\n"
-    "                              * If you set \"10/1.5,\" this command allows\n"
-    "                                up to 10 lines to pass through every 1.5\n"
-    "                                seconds.\n"
-    " Options : -c,-e,-z .... Specify the format for timestamp. You can choose\n"
-    "                         one of them.\n"
+    "                              * If you set \"10/1.5,\" this command\n"
+    "                                allows up to 10 lines to pass through\n"
+    "                                every 1.5 seconds.\n"
+    " Options : -c,-e,-z .... Specify the format for timestamp. You can\n"
+    "                         choose one of them.\n"
     "                           -c ... \"YYYYMMDDhhmmss[.n]\" (default)\n"
     "                                  Calendar time (standard time) in your\n"
     "                                  timezone (\".n\" is the digits under\n"
@@ -196,12 +206,12 @@ void print_usage_and_exit(void) {
     "                                  epoch (\".n\" is the same as -x)\n"
     "                           -z ... \"n[.n]\"\n"
     "                                  The number of seconds since this\n"
-    "                                  command has startrd (\".n\" is the same\n"
-    "                                  as -x)\n"
+    "                                  command has startrd (\".n\" is the\n"
+    "                                  same as -x)\n"
     "           -u .......... Set the date in UTC when -c option is set\n"
     "                         (same as that of date command)\n"
     "           -k .......... Keep the timestamp when outputting each line.\n"
-    "           -d fd/file .. If you set this option, the lines that will be\n"
+    "           -d fd|file .. If you set this option, the lines that will be\n"
     "                         dropped will be sent to the specified file\n"
     "                         descriptor or file.\n"
     "                         * When you set an integer, this command regards\n"
@@ -212,7 +222,7 @@ void print_usage_and_exit(void) {
     "                         * When you set another type of string, this\n"
     "                           command regards it as a filename.\n"
     "\n"
-    "Version : 2024-06-23 15:46:48 JST\n"
+    "Version : 2025-04-15 14:55:29 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "USP-NCNT prj. / Shell-Shoccar Japan (@shellshoccarjpn),\n"
@@ -244,6 +254,8 @@ void error_exit(int iErrno, const char* szFormat, ...) {
   exit(iErrno);
 }
 
+
+
 /*####################################################################
 # Main
 ####################################################################*/
@@ -252,28 +264,28 @@ void error_exit(int iErrno, const char* szFormat, ...) {
 int main(int argc, char *argv[]) {
 
 /*--- Variables ----------------------------------------------------*/
-int      i;               /* all-purpose int                        */
-int      iDrainFd;        /* File Descriptor for Drain              */
-int      iFd;             /* file descriptor                        */
-int      iFileno;         /* file# of filepath                      */
-int      iLastitemCode;   /* last memorized item in the buffer      */
-int      iMaxlines;       /* the max number of lines allowed        */
-int      iMode;           /* 0:"-c" 1:"-e" 2:"-z"                   */
-int      iNumVacantBuf;   /* Number of vacant items in the buffer   */
-int      iRet;            /* return code                            */
-int      iUnstamped;      /* 0:"-k" 1:default stop outputting time  */
-int64_t  i8Duration;      /* the time to reset iMaxlines            */
-char     szTime[34];      /* Buffer for the 1st field of lines      */
-char     szDummy[2];      /* A dummy str (used in sscanf())         */
-char*    psz;             /* all-purpose char pointer               */
-char*    pszDrainname;    /* Filename for Drain                     */
-char*    pszFilename;     /* filepath (for message)                 */
-char*    pszPath;         /* filepath on arguments                  */
-FILE*    fp;              /* file handle                            */
-FILE*    fpDrain;         /* file handle for the drain              */
-tmsp     tsTime;          /* Parsed time for the 1st field          */
-tmsp     tsRef;           /* Ref-time to erase the stale items      */
-tmsp*    ptsRingBuf;      /* To memorize timestamp of passed lines  */
+int     i;              /* all-purpose int                          */
+int     iDrainFd;       /* File Descriptor for Drain                */
+int     iFd;            /* file descriptor                          */
+int     iFileno;        /* file# of filepath                        */
+int     iKeepTs;        /* -k option (>0:Keep timestamps, ==0:Drop) */
+int     iLastitemCode;  /* last memorized item in the buffer        */
+int     iMaxlines;      /* the max number of lines allowed          */
+int     iMode;          /* 0:"-c" 1:"-e" 2:"-z"                     */
+int     iNumVacantBuf;  /* Number of vacant items in the buffer     */
+int     iRet;           /* return code                              */
+int64_t i8Duration;     /* the time to reset iMaxlines              */
+char    szTime[34];     /* Buffer for the 1st field of lines        */
+char    szDummy[2];     /* A dummy str (used in sscanf())           */
+char*   psz;            /* all-purpose char pointer                 */
+char*   pszDrainname;   /* Filename for Drain                       */
+char*   pszFilename;    /* filepath (for message)                   */
+char*   pszPath;        /* filepath on arguments                    */
+FILE*   fp;             /* file handle                              */
+FILE*   fpDrain;        /* file handle for the drain                */
+tmsp    tsTime;         /* Parsed time for the 1st field            */
+tmsp    tsRef;          /* Ref-time to erase the stale items        */
+tmsp*   ptsRingBuf;     /* To memorize timestamp of passed lines    */
 
 /*--- Initialize ---------------------------------------------------*/
 gpszCmdname = argv[0];
@@ -288,26 +300,26 @@ setlocale(LC_CTYPE, "");
 /*=== Parse arguments ==============================================*/
 
 /*--- Set default parameters of the arguments ----------------------*/
-iMode        = 0; /* 0:"-c"(default) 1:"-e" 2:"-z" */
-giVerbose    = 0;
-i8Duration   = BILLION;
+iMode        =  0;      /* 0:"-c"(default) 1:"-e" 2:"-z" */
+giVerbose    =  0;
+i8Duration   = BILLION; /* 1 second */
 iDrainFd     = -1;
-iMaxlines    = 1;
-iUnstamped   = 1;
+iMaxlines    =  1;
+iKeepTs      =  0;
 pszDrainname = NULL;
 
 /*--- Parse options which start with "-" ---------------------------*/
 while((i=getopt(argc, argv, "cezukd:hv")) != -1) {
   switch(i){
-    case 'c': iMode=0;                       break;
-    case 'e': iMode=1;                       break;
-    case 'z': iMode=2;                       break;
-    case 'u': (void)setenv("TZ", "UTC0", 1); break;
-    case 'k': iUnstamped=0;                  break;
+    case 'c': iMode=0;                      break;
+    case 'e': iMode=1;                      break;
+    case 'z': iMode=2;                      break;
+    case 'u': (void)setenv("TZ", "UTC", 1); break;
+    case 'k': iKeepTs=1;                    break;
     case 'd': if (sscanf(optarg,"%d%1s",&iDrainFd,szDummy) != 1) {iDrainFd=-1;}
               if (iDrainFd>=0) {pszDrainname=NULL;} else {pszDrainname=optarg;}
               break;
-    case 'v': giVerbose++; break;
+    case 'v': giVerbose++;                  break;
     case 'h': print_usage_and_exit();
     default : print_usage_and_exit();
   }
@@ -325,8 +337,8 @@ if ((psz = strchr(argv[0],'/')) != NULL){
   psz = argv[0];
 }
 i8Duration = parse_duration(psz);
-if (iMaxlines < 1 || 65535 < iMaxlines){print_usage_and_exit();} 
-if (i8Duration <= -2)                  {print_usage_and_exit();}
+if (iMaxlines<1 || RINGBUF_NUM_MAX<iMaxlines) {print_usage_and_exit();} 
+if (i8Duration <= -2                        ) {print_usage_and_exit();}
 argc--;
 argv++;
 
@@ -362,6 +374,7 @@ while (argc > 0 || iFileno == 0) {
   if (argc == 0) {pszPath="-";          }
   else           {pszPath=argv[iFileno];}
   argc--;
+
   /*--- Open one of the input files --------------------------------*/
   if (strcmp(pszPath, "-") == 0) {
     pszFilename = "stdin"                ;
@@ -449,9 +462,9 @@ while (argc > 0 || iFileno == 0) {
                               }
                               break;
                             } else {
-                              if (iUnstamped == 0) {
+                              if (iKeepTs) {
                                 if (fputs(szTime, fpDrain) == EOF) {
-                                  error_exit(1, "Access error for the drain\n");
+                                  error_exit(1, "Access error at the drain\n");
                                 }
                               }
                               switch (read_and_drain_a_line(fp,fpDrain)) {
@@ -478,9 +491,9 @@ while (argc > 0 || iFileno == 0) {
                           iLastitemCode = (iLastitemCode+1) % iMaxlines;
                           ptsRingBuf[iLastitemCode].tv_sec  = tsTime.tv_sec;
                           ptsRingBuf[iLastitemCode].tv_nsec = tsTime.tv_nsec;
-                          if (iUnstamped == 0) {
+                          if (iKeepTs) {
                             if (fputs(szTime, stdout) == EOF) {
-                              error_exit(1, "Access error for the stdout\n");
+                              error_exit(1, "Access error at the stdout\n");
                             }
                           }
                           switch (read_and_write_a_line(fp)) {
@@ -585,9 +598,9 @@ while (argc > 0 || iFileno == 0) {
                               }
                               break;
                             } else {
-                              if (iUnstamped == 0) {
+                              if (iKeepTs) {
                                 if (fputs(szTime, fpDrain) == EOF) {
-                                  error_exit(1, "Access error for the drain\n");
+                                  error_exit(1, "Access error at the drain\n");
                                 }
                               }
                               switch (read_and_drain_a_line(fp,fpDrain)) {
@@ -614,9 +627,9 @@ while (argc > 0 || iFileno == 0) {
                           iLastitemCode = (iLastitemCode+1) % iMaxlines;
                           ptsRingBuf[iLastitemCode].tv_sec  = tsTime.tv_sec;
                           ptsRingBuf[iLastitemCode].tv_nsec = tsTime.tv_nsec;
-                          if (iUnstamped == 0) {
+                          if (iKeepTs) {
                             if (fputs(szTime, stdout) == EOF) {
-                              error_exit(1, "Access error for the stdout\n");
+                              error_exit(1, "Access error at the stdout\n");
                             }
                           }
                           switch (read_and_write_a_line(fp)) {
@@ -670,6 +683,8 @@ CLOSE_THISFILE:
 }
 /*=== Finish normally ==============================================*/
 return(iRet);}
+
+
 
 /*####################################################################
 # Functions
@@ -759,6 +774,7 @@ int parse_calendartime(char* pszTime, tmsp *ptsTime) {
 
   return 1;
 }
+
 
 /*=== Parse a UNIX-time ==============================================
  * [in]  pszTime : UNIX-time string (/[0-9]{1,19}(\.[0-9]{1,9})?/)
@@ -989,6 +1005,7 @@ int skip_over_a_line(FILE *fp) {
   }
 }
 
+
 /*=== Parse the duration =============================================
  * [in] pszDuration : The string to be parsed as a duration
  * [ret] >= 0  : Interval value (in nanosecound)
@@ -1039,6 +1056,7 @@ int64_t parse_duration(char *pszDuration) {
   return -2;
 }
 
+
 /*=== Allocate memory for a ring buffer ==============================
  * [in]  iSize : The size of the ring buffer
  * [ret] Pointer for the ring buffer when it succeeded in memory
@@ -1067,6 +1085,7 @@ void release_ring_buf(tmsp* pts) {
   free(pts);
   return;
 }
+
 
 /*=== Erase items that are deemed stale ==============================
  * [in]  iBufsize : The size of the ring buffer
