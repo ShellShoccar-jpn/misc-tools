@@ -53,7 +53,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-04-15
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-04-20
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -75,13 +75,14 @@
 
 /*--- headers ------------------------------------------------------*/
 #include <errno.h>
+#include <fcntl.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 #include <unistd.h>
 #include <time.h>
-#include <fcntl.h>
 
 /*--- macro constants ----------------------------------------------*/
 /* Buffer size for a timestamp string */
@@ -161,7 +162,7 @@ void print_usage_and_exit(void) {
     "          -u ........ Set the date in UTC when -c option is set\n"
     "                      (same as that of date command)\n"
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2025-04-15 14:52:16 JST\n"
+    "Version : 2025-04-20 23:07:12 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -389,14 +390,22 @@ int read_c1st_1line(FILE *fp) {
   if ((ptm=localtime(&tsNow.tv_sec)) == NULL) {
     error_exit(255,"read_c1st_1line(): localtime(): returned NULL\n");
   }
-  printf("%04d%02d%02d%02d%02d%02d",
-    ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
-    ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec  );
   switch (giTimeResol) {
-    case 0 : putchar(' ')                                          ; break;
-    case 3 : printf(".%03d " , (int)(tsNow.tv_nsec+500000)/1000000); break;
-    case 6 : printf(".%06d " , (int)(tsNow.tv_nsec+   500)/   1000); break;
-    case 9 : printf(".%09ld ",       tsNow.tv_nsec                ); break;
+    case 0 : printf("%04d%02d%02d%02d%02d%02d "      ,
+               ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
+               ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec  ); break;
+    case 3 : printf("%04d%02d%02d%02d%02d%02d.%03d " ,
+               ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
+               ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec ,
+               (int)(tsNow.tv_nsec+500000)/1000000            ); break;
+    case 6 : printf("%04d%02d%02d%02d%02d%02d.%06d " ,
+               ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
+               ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec ,
+               (int)(tsNow.tv_nsec+   500)/   1000            ); break;
+    case 9 : printf("%04d%02d%02d%02d%02d%02d.%09ld ",
+               ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
+               ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec ,
+                     tsNow.tv_nsec                            ); break;
     default: error_exit(255,"read_e1st_1line(): Unknown resolution\n");
   }
   if (giDeltaMode) {
@@ -441,8 +450,6 @@ int read_e1st_1line(FILE *fp) {
 
   /*--- Variables --------------------------------------------------*/
   tmsp       tsNow          ;
-  struct tm *ptm            ;
-  char       szBuf[LINE_BUF];
   int        iChar          ;
 
   /*--- Reading and writing a line (1st letter of the line) --------*/
@@ -452,16 +459,14 @@ int read_e1st_1line(FILE *fp) {
     error_exit(errno,"read_e1st_1line(): clock_gettime(): %s\n",
                      strerror(errno)                            );
   }
-  if ((ptm=localtime(&tsNow.tv_sec)) == NULL) {
-    error_exit(255,"read_e1st_1line(): localtime(): returned NULL\n");
-  }
-  strftime(szBuf, LINE_BUF, "%s", ptm);
-  printf("%s", szBuf);
   switch (giTimeResol) {
-    case 0 : putchar(' ')                                          ; break;
-    case 3 : printf(".%03d " , (int)(tsNow.tv_nsec+500000)/1000000); break;
-    case 6 : printf(".%06d " , (int)(tsNow.tv_nsec+   500)/   1000); break;
-    case 9 : printf(".%09ld ",       tsNow.tv_nsec                ); break;
+    case 0 : printf("%jd "      ,(intmax_t)tsNow.tv_sec             ); break;
+    case 3 : printf("%jd.%03d " ,(intmax_t)tsNow.tv_sec,
+                                 (int)(tsNow.tv_nsec+500000)/1000000); break;
+    case 6 : printf("%jd.%06d " ,(intmax_t)tsNow.tv_sec,
+                                 (int)(tsNow.tv_nsec+   500)/   1000); break;
+    case 9 : printf("%jd.%09ld ",(intmax_t)tsNow.tv_sec,
+                                       tsNow.tv_nsec                ); break;
     default: error_exit(255,"read_e1st_1line(): Unknown resolution\n");
   }
   if (giDeltaMode) {
@@ -508,7 +513,6 @@ int read_I1st_1line(FILE *fp) {
   tmsp       tsNow    ;
   struct tm *ptm      ;
   int        iChar    ;
-  char       szDec[21]; /* for the Decimal part */
   char       szTmz[ 7]; /* timestamp (timezone) */
 
   /*--- Reading and writing a line (1st letter of the line) --------*/
@@ -521,22 +525,27 @@ int read_I1st_1line(FILE *fp) {
   if ((ptm=localtime(&tsNow.tv_sec)) == NULL) {
     error_exit(255,"read_I1st_1line(): localtime(): returned NULL\n");
   }
-  switch (giTimeResol) {
-    case 0 : szDec[0]=0                                                      ;
-             break;
-    case 3 : snprintf(szDec,21,",%03d" , (int)(tsNow.tv_nsec+500000)/1000000);
-             break;
-    case 6 : snprintf(szDec,21,",%06d" , (int)(tsNow.tv_nsec+   500)/   1000);
-             break;
-    case 9 : snprintf(szDec,21,",%09ld",       tsNow.tv_nsec                );
-             break;
-    default: error_exit(255,"read_e1st_1line(): Unknown resolution\n");
-  }
   strftime(szTmz, 6, "%z", ptm);
   szTmz[6]=0; szTmz[5]=szTmz[4]; szTmz[4]=szTmz[3]; szTmz[3]=':';
-  printf("%04d-%02d-%02dT%02d:%02d:%02d%s%s ",
-    ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
-    ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec , szDec, szTmz);
+  switch (giTimeResol) {
+    case 0 : printf("%04d-%02d-%02dT%02d:%02d:%02d%s ",
+               ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
+               ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec ,
+                                                    szTmz     ); break;
+    case 3 : printf("%04d-%02d-%02dT%02d:%02d:%02d,%03d%s " ,
+               ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
+               ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec ,
+               (int)(tsNow.tv_nsec+500000)/1000000, szTmz     ); break;
+    case 6 : printf("%04d-%02d-%02dT%02d:%02d:%02d,%06d%s " ,
+               ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
+               ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec ,
+               (int)(tsNow.tv_nsec+   500)/   1000, szTmz     ); break;
+    case 9 : printf("%04d-%02d-%02dT%02d:%02d:%02d,%09ld%s ",
+               ptm->tm_year+1900, ptm->tm_mon+1, ptm->tm_mday,
+               ptm->tm_hour     , ptm->tm_min  , ptm->tm_sec ,
+                     tsNow.tv_nsec                , szTmz     ); break;
+    default: error_exit(255,"read_e1st_1line(): Unknown resolution\n");
+  }
   if (giDeltaMode) {
     printf("0 ");
     gtsPrev.tv_sec=tsNow.tv_sec; gtsPrev.tv_nsec=tsNow.tv_nsec;
