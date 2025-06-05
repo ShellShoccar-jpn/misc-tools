@@ -139,9 +139,15 @@
 #                  and gives your program a simpler look.
 # Return  : Return 0 only when finished successfully
 #
+# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -DCLOCK_NANOSLEEP_SUPPORT
+#                  (if it doesn't work)
+# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt -DCLOCK_NANOSLEEP_SUPPORT
+#                  (if it doesn't work)
+# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
+#                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-04-20
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-06-05
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -346,7 +352,7 @@ void print_usage_and_exit(void) {
     "                 time of the wait as a time relative to another time,\n"
     "                 and gives your program a simpler look.\n"
     "Return  : Return 0 only when finished successfully\n"
-    "Version : 2025-04-20 02:54:37 JST\n"
+    "Version : 2025-06-05 14:48:04 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -391,6 +397,9 @@ int        iOpt_e;     /* -e option flag                            */
 int        iOpt_l;     /* -l option flag                            */
 int        iPrio;      /* -p option number (default 1)              */
 tmsp       tsAbstime;  /* Parsed abstime                            */
+#ifndef CLOCK_NANOSLEEP_SUPPORT
+tmsp       tsNow;      /* Current time                              */
+#endif
 tmsp       tsLength;   /* Length of time from the abstime Length of time from the abstime           */
 struct tm* ptmAbstime; /* Parsed abstime                            */
 char       szTmz[7];   /* timezone string                           */
@@ -477,7 +486,21 @@ if (iOpt_l) {
 
 /*=== Wait for the abstime to arrive ===============================*/
 if (change_to_rtprocess(iPrio)==-1) {print_usage_and_exit();}
+#ifdef CLOCK_NANOSLEEP_SUPPORT
 clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &tsAbstime, NULL);
+#else
+if (clock_gettime(CLOCK_REALTIME, &tsNow) != 0) {
+  error_exit(errno, "clock_gettime() failed at %d\n", __LINE__);
+}
+tsLength.tv_sec  = tsAbstime.tv_sec  - tsNow.tv_sec ;
+tsLength.tv_nsec = tsAbstime.tv_nsec - tsNow.tv_nsec;
+if (tsLength.tv_nsec<0) {tsLength.tv_nsec+=1000000000L; tsLength.tv_sec--;}
+if (nanosleep(&tsLength, NULL) != 0) {
+  if (errno != EINVAL) {
+    error_exit(errno, "nanosleep() failed at %d\n", __LINE__);
+  }
+}
+#endif
 
 /*=== Finish normally ==============================================*/
 return 0;}

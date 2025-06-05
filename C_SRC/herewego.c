@@ -104,11 +104,15 @@
 #                       but if failed, it will try the smaller numbers.
 # Retuen  : Return 0 only when finished successfully
 #
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt
+# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -DCLOCK_NANOSLEEP_SUPPORT
+#                  (if it doesn't work)
+# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt -DCLOCK_NANOSLEEP_SUPPORT
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
+#                  (if it doesn't work)
+# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt
 #
-# Written Shell-Shoccar Japan (@shellshoccarjpn) on 2025-04-15
+# Written Shell-Shoccar Japan (@shellshoccarjpn) on 2025-06-05
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -292,7 +296,7 @@ void print_usage_and_exit(void) {
 #endif
     "Retuen  : Return 0 only when finished successfully\n"
     "\n"
-    "Version : 2025-04-15 14:51:46 JST\n"
+    "Version : 2025-06-05 15:07:51 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -338,6 +342,10 @@ int64_t    i8;              /* all-purpose int64_t                */
 char*      psz;             /* all-purpose char*                  */
 tmsp       tsT0;            /* Time this command booted ~ exiting */
 tmsp       tsRep;           /* Time to report at exiting          */
+#ifndef CLOCK_NANOSLEEP_SUPPORT
+tmsp       tsLength;        /* Length of time                     */
+tmsp       tsNow;           /* Current time                       */
+#endif
 char*      pszArg;          /* String to parsr an argument        */
 struct tm* ptm;             /* a pointer of "tm" structure        */
 char       szTs[LINE_BUF];  /* timestamp to be reported           */
@@ -514,13 +522,30 @@ switch (giFmtType) {
 }
 
 /*=== Sleep until the time to exit =================================*/
-switch (clock_nanosleep(CLOCK_REALTIME,TIMER_ABSTIME,&tsT0,NULL)) {
-  case 0    : break;
-  case EINTR: error_exit(1,"Exit because some signal interrupted my sleep.\n");
-              break;
-  default   : error_exit(1,"clock_nanosleep() failed\n");
-              break;
+#ifdef CLOCK_NANOSLEEP_SUPPORT
+if (clock_nanosleep(CLOCK_REALTIME,TIMER_ABSTIME,&tsT0,NULL) != 0) {
+  if (errno == EINTR) {
+    error_exit(EINTR,"Exit because some signal interrupted my sleep.\n");
+  }
+  error_exit(errno,"clock_nanosleep() failed at %d\n", __LINE__);
 }
+#else
+if (clock_gettime(CLOCK_REALTIME, &tsNow) != 0) {
+  error_exit(errno, "clock_gettime() failed at %d\n", __LINE__);
+}
+tsLength.tv_sec  = tsT0.tv_sec  - tsNow.tv_sec ;
+tsLength.tv_nsec = tsT0.tv_nsec - tsNow.tv_nsec;
+if (tsLength.tv_nsec<0) {tsLength.tv_nsec+=1000000000L; tsLength.tv_sec--;}
+if (nanosleep(&tsLength,NULL) != 0) {
+  if (errno == EINTR) {
+    error_exit(EINTR,"Exit because some signal interrupted my sleep.\n");
+  }
+  if (errno == EINVAL) {
+    error_exit(EINVAL,"Exit because the exit time is the past.\n");
+  }
+  error_exit(errno,"nanosleep() failed at %d\n", __LINE__);
+}
+#endif
 
 /*=== Print the timestamp ==========================================*/
 puts(szTs);
