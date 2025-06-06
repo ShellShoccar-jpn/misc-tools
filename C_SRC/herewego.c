@@ -296,7 +296,7 @@ void print_usage_and_exit(void) {
 #endif
     "Retuen  : Return 0 only when finished successfully\n"
     "\n"
-    "Version : 2025-06-06 13:13:15 JST\n"
+    "Version : 2025-06-06 13:22:47 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -537,10 +537,13 @@ tsLength.tv_sec  = tsT0.tv_sec  - tsNow.tv_sec ;
 tsLength.tv_nsec = tsT0.tv_nsec - tsNow.tv_nsec;
 if (tsLength.tv_nsec<0) {tsLength.tv_nsec+=1000000000L; tsLength.tv_sec--;}
 if (nanosleep(&tsLength,NULL) != 0) {
-  if (errno == EINTR) {
+  if        (errno == EINVAL) {
+    /* do nothing, it is okay. */
+  } else if (errno == EINTR ) {
     error_exit(EINTR,"Exit because some signal interrupted my sleep.\n");
+  } else {
+    error_exit(errno,"nanosleep() failed at %d\n", __LINE__);
   }
-  error_exit(errno,"nanosleep() failed at %d\n", __LINE__);
 }
 #endif
 
