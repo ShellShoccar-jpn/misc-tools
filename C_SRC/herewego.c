@@ -112,7 +112,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt
 #
-# Written Shell-Shoccar Japan (@shellshoccarjpn) on 2025-06-05
+# Written Shell-Shoccar Japan (@shellshoccarjpn) on 2025-06-06
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -296,7 +296,7 @@ void print_usage_and_exit(void) {
 #endif
     "Retuen  : Return 0 only when finished successfully\n"
     "\n"
-    "Version : 2025-06-05 15:07:51 JST\n"
+    "Version : 2025-06-06 13:13:15 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -539,9 +539,6 @@ if (tsLength.tv_nsec<0) {tsLength.tv_nsec+=1000000000L; tsLength.tv_sec--;}
 if (nanosleep(&tsLength,NULL) != 0) {
   if (errno == EINTR) {
     error_exit(EINTR,"Exit because some signal interrupted my sleep.\n");
-  }
-  if (errno == EINVAL) {
-    error_exit(EINVAL,"Exit because the exit time is the past.\n");
   }
   error_exit(errno,"nanosleep() failed at %d\n", __LINE__);
 }
