@@ -139,15 +139,15 @@
 #                  and gives your program a simpler look.
 # Return  : Return 0 only when finished successfully
 #
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -DCLOCK_NANOSLEEP_SUPPORT
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -DCLOCK_NANOSLEEP_SUPPORT
 #                  (if it doesn't work)
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt -DCLOCK_NANOSLEEP_SUPPORT
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -lrt -DCLOCK_NANOSLEEP_SUPPORT
 #                  (if it doesn't work)
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__
 #                  (if it doesn't work)
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -lrt
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-06-05
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-09-24
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -168,8 +168,17 @@
 /*=== Initial Setting ==============================================*/
 
 /*--- headers ------------------------------------------------------*/
-#if defined(__linux) || defined(__linux__)
-  /* This definition is for strptime() on Linux */
+/* Solaris 11.3's <sys/feature_tests.h> only recognizes the exact
+ * values _XOPEN_SOURCE==600 / _POSIX_C_SOURCE==200112L for its UNIX 03
+ * detection and has no notion of POSIX.1-2008/SUSv4 at all; requesting
+ * 700 there trips its strict conformance-level check and aborts the
+ * build, so __EXTENSIONS__ (which sidesteps that check entirely and
+ * exposes every POSIX/XSI/BSD interface regardless of C standard
+ * level) is used there instead. Everywhere else, _XOPEN_SOURCE 700 is
+ * used directly, for strptime().                                    */
+#if defined(__sun) || defined(__SVR4)
+  #define __EXTENSIONS__
+#else
   #define _XOPEN_SOURCE 700
 #endif
 #include <errno.h>
@@ -352,7 +361,7 @@ void print_usage_and_exit(void) {
     "                 time of the wait as a time relative to another time,\n"
     "                 and gives your program a simpler look.\n"
     "Return  : Return 0 only when finished successfully\n"
-    "Version : 2025-06-05 14:48:04 JST\n"
+    "Version : 2026-09-24 01:09:03 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -424,14 +433,14 @@ iPrio =1;
 /*--- Parse options which start by "-" -----------------------------*/
 while ((i=getopt(argc, argv, "elup:vh")) != -1) {
   switch (i) {
-    case 'e': iOpt_e=1;                     break;
-    case 'l': iOpt_l=1;                     break;
-    case 'u': (void)setenv("TZ", "UTC", 1); break;
+    case 'e': iOpt_e=1;                      break;
+    case 'l': iOpt_l=1;                      break;
+    case 'u': (void)setenv("TZ", "UTC0", 1); break;
     #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
       case 'p': if (sscanf(optarg,"%d",&iPrio) != 1) {print_usage_and_exit();}
                                               break;
     #endif
-    case 'v': giVerbose++;                  break;
+    case 'v': giVerbose++;                   break;
     case 'h': print_usage_and_exit();
     default : print_usage_and_exit();
   }

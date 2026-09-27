@@ -14,7 +14,8 @@
 #                       n.50, and n.75 (n means any time) are the nice
 #                       round times for the argument.
 #                     * The default unit is second. You can also add a
-#                       unit word as in "s," "ms," "us," or "ns." So
+#                       unit word as in "s," "ms," "us," "ns," "m," "h,"
+#                       or "d." So
 #                       you can set any of the followings:
 #                       "1.23," "1.23s," "1230ms," "1230000us" ...
 #                       These are all same meanings.
@@ -30,7 +31,8 @@
 #                       0.05 second earlier than n.50, that is one of
 #                       the nice round times.
 #                     * The default unit is second. You can also add a
-#                       unit word as in "s," "ms," "us," or "ns." So
+#                       unit word as in "s," "ms," "us," "ns," "m," "h,"
+#                       or "d." So
 #                       you can set any of the followings:
 #                       "1-1.23," "1-1.23s," "1-1230ms" ...
 #                       These are all same meanings.
@@ -65,7 +67,8 @@
 #                       SHOULD SET THIS PARAMETER with a realistic
 #                       duration in almost all situations.
 #                     * The default unit is second. You can also add a
-#                       unit word as in "s," "ms," "us," or "ns." So
+#                       unit word as in "s," "ms," "us," "ns," "m," "h,"
+#                       or "d." So
 #                       you can set any of the followings:
 #                       "+1.23," "+1.23s," "+1230ms," "+1230000us"...
 #                       These are all same meanings.
@@ -104,15 +107,15 @@
 #                       but if failed, it will try the smaller numbers.
 # Retuen  : Return 0 only when finished successfully
 #
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -DCLOCK_NANOSLEEP_SUPPORT
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -DCLOCK_NANOSLEEP_SUPPORT
 #                  (if it doesn't work)
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt -DCLOCK_NANOSLEEP_SUPPORT
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -lrt -DCLOCK_NANOSLEEP_SUPPORT
 #                  (if it doesn't work)
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__
 #                  (if it doesn't work)
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -lrt
 #
-# Written Shell-Shoccar Japan (@shellshoccarjpn) on 2025-06-06
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-09-24
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -133,10 +136,27 @@
 /*=== Initial Setting ==============================================*/
 
 /*--- headers ------------------------------------------------------*/
+/* Solaris 11.3's <sys/feature_tests.h> only recognizes the exact
+ * values _XOPEN_SOURCE==600 / _POSIX_C_SOURCE==200112L for its UNIX 03
+ * detection and has no notion of POSIX.1-2008/SUSv4 at all; requesting
+ * 700/200809L there trips its strict conformance-level check and
+ * aborts the build, so __EXTENSIONS__ (which sidesteps that check
+ * entirely and exposes every POSIX/XSI/BSD interface regardless of C
+ * standard level) is used there instead. Everywhere else, we ask for
+ * _XOPEN_SOURCE 700 rather than _POSIX_C_SOURCE 200809L alone: on
+ * FreeBSD, _POSIX_C_SOURCE alone leaves __XSI_VISIBLE unset, hiding
+ * XSI interfaces (e.g. SA_SIGINFO/sa_sigaction, S_IFMT/S_IFREG) that
+ * some of these commands need; _XOPEN_SOURCE 700 enables both.       */
+#if defined(__sun) || defined(__SVR4)
+  #define __EXTENSIONS__
+#else
+  #define _XOPEN_SOURCE 700 /* for setenv() */
+#endif
 #include <errno.h>
 #include <limits.h>
 #include <locale.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -209,7 +229,8 @@ void print_usage_and_exit(void) {
     "                      n.50, and n.75 (n means any time) are the nice\n"
     "                      round times for the argument.\n"
     "                    * The default unit is second. You can also add a\n"
-    "                      unit word as in \"s,\" \"ms,\" \"us,\" or \"ns.\" So\n"
+    "                      unit word as in \"s,\" \"ms,\" \"us,\" \"ns,\" \"m,\"\n"
+    "                      \"h,\" or \"d.\" So\n"
     "                      you can set any of the followings:\n"
     "                      \"1.23,\" \"1.23s,\" \"1230ms,\" \"1230000us\" ...\n"
     "                      These are all same meanings.\n"
@@ -225,7 +246,8 @@ void print_usage_and_exit(void) {
     "                      0.05 second earlier than n.50, that is one of\n"
     "                      the nice round times.\n"
     "                    * The default unit is second. You can also add a\n"
-    "                      unit word as in \"s,\" \"ms,\" \"us,\" or \"ns.\" So\n"
+    "                      unit word as in \"s,\" \"ms,\" \"us,\" \"ns,\" \"m,\"\n"
+    "                      \"h,\" or \"d.\" So\n"
     "                      you can set any of the followings:\n"
     "                      \"1-1.23,\" \"1-1.23s,\" \"1-1230ms\" ...\n"
     "                      These are all same meanings.\n"
@@ -296,7 +318,7 @@ void print_usage_and_exit(void) {
 #endif
     "Retuen  : Return 0 only when finished successfully\n"
     "\n"
-    "Version : 2025-06-06 13:22:47 JST\n"
+    "Version : 2026-09-24 01:09:03 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -371,19 +393,19 @@ setlocale(LC_CTYPE, "");
 /*--- Parse options which start by "-" -----------------------------*/
 while ((i=getopt(argc, argv, "0369ceIp:uvh")) != -1) {
   switch (i) {
-    case '0': giTimeResol =  0 ;            break;
-    case '3': giTimeResol =  3 ;            break;
-    case '6': giTimeResol =  6 ;            break;
-    case '9': giTimeResol =  9 ;            break;
-    case 'c': 
-    case 'e': 
-    case 'I': giFmtType   =  i ;            break;
+    case '0': giTimeResol =  0 ;             break;
+    case '3': giTimeResol =  3 ;             break;
+    case '6': giTimeResol =  6 ;             break;
+    case '9': giTimeResol =  9 ;             break;
+    case 'c':
+    case 'e':
+    case 'I': giFmtType   =  i ;             break;
     #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
       case 'p': if (sscanf(optarg,"%d",&giPrio) != 1) {print_usage_and_exit();}
                                               break;
     #endif
-    case 'u': (void)setenv("TZ", "UTC", 1); break;
-    case 'v': giVerbose++;                  break;
+    case 'u': (void)setenv("TZ", "UTC0", 1); break;
+    case 'v': giVerbose++;                   break;
     case 'h': print_usage_and_exit();
     default : print_usage_and_exit();
   }
@@ -603,6 +625,24 @@ int64_t parse_duration(char *pszArg) {
   if (strcmp(szUnit, "ns")==0) {
     if (dNum > ((double)INT_MAX * 1000000000)) {return -2;}
     return       (int64_t)(dNum *          1);
+  }
+
+  /* as a minute value */
+  if (strcmp(szUnit, "m" )==0) {
+    if (dNum > ((double)INT_MAX /         60)) {return -2;}
+    return       (int64_t)(dNum *   60000000000LL);
+  }
+
+  /* as an hour value */
+  if (strcmp(szUnit, "h" )==0) {
+    if (dNum > ((double)INT_MAX /       3600)) {return -2;}
+    return       (int64_t)(dNum * 3600000000000LL);
+  }
+
+  /* as a day value */
+  if (strcmp(szUnit, "d" )==0) {
+    if (dNum > ((double)INT_MAX /      86400)) {return -2;}
+    return       (int64_t)(dNum * 86400000000000LL);
   }
 
   /*--- Otherwise, it is not a value -------------------------------*/

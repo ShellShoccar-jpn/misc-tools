@@ -49,11 +49,11 @@
 #                       (same as that of date command)
 # Retuen  : Return 0 only when finished successfully
 #
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -lrt
 #                  (if it doesn't work)
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-04-20
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-09-24
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -74,6 +74,22 @@
 /*=== Initial Setting ==============================================*/
 
 /*--- headers ------------------------------------------------------*/
+/* Solaris 11.3's <sys/feature_tests.h> only recognizes the exact
+ * values _XOPEN_SOURCE==600 / _POSIX_C_SOURCE==200112L for its UNIX 03
+ * detection and has no notion of POSIX.1-2008/SUSv4 at all; requesting
+ * 700/200809L there trips its strict conformance-level check and
+ * aborts the build, so __EXTENSIONS__ (which sidesteps that check
+ * entirely and exposes every POSIX/XSI/BSD interface regardless of C
+ * standard level) is used there instead. Everywhere else, we ask for
+ * _XOPEN_SOURCE 700 rather than _POSIX_C_SOURCE 200809L alone: on
+ * FreeBSD, _POSIX_C_SOURCE alone leaves __XSI_VISIBLE unset, hiding
+ * XSI interfaces (e.g. SA_SIGINFO/sa_sigaction, S_IFMT/S_IFREG) that
+ * some of these commands need; _XOPEN_SOURCE 700 enables both.       */
+#if defined(__sun) || defined(__SVR4)
+  #define __EXTENSIONS__
+#else
+  #define _XOPEN_SOURCE 700 /* for setenv() */
+#endif
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -162,7 +178,7 @@ void print_usage_and_exit(void) {
     "          -u ........ Set the date in UTC when -c option is set\n"
     "                      (same as that of date command)\n"
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2025-04-20 23:07:12 JST\n"
+    "Version : 2026-09-24 01:09:03 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -242,7 +258,7 @@ while ((i=getopt(argc, argv, "0369ceIzZ1duvh")) != -1) {
     case 'z': giFmtType   = 'z'; iFirstline='z'; break;
     case '1': iOpt_1      =  1 ;                 break;
     case 'd': giDeltaMode =  1 ;                 break;
-    case 'u': (void)setenv("TZ", "UTC", 1);      break;
+    case 'u': (void)setenv("TZ", "UTC0", 1);     break;
     case 'v': giVerbose++      ;                 break;
     case 'h': print_usage_and_exit();
     default : print_usage_and_exit();

@@ -19,9 +19,9 @@
 # Retuen  : Return 0 only when timestamps of all files were able to be
 #           gotten.
 #
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-04-15
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-09-24
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -41,7 +41,24 @@
 /*=== Initial Setting ==============================================*/
 
 /*--- macro constants ----------------------------------------------*/
-#define _POSIX_C_SOURCE 200809L
+/* Solaris 11.3's <sys/feature_tests.h> only recognizes the exact
+ * values _XOPEN_SOURCE==600 / _POSIX_C_SOURCE==200112L for its UNIX 03
+ * detection and has no notion of POSIX.1-2008/SUSv4 at all; requesting
+ * 700/200809L there trips its strict conformance-level check and
+ * aborts the build, so __EXTENSIONS__ (which sidesteps that check
+ * entirely and exposes every POSIX/XSI/BSD interface regardless of C
+ * standard level) is used there instead. Everywhere else, we ask for
+ * _XOPEN_SOURCE 700 rather than _POSIX_C_SOURCE 200809L alone: on
+ * FreeBSD, _POSIX_C_SOURCE alone leaves __XSI_VISIBLE unset, hiding
+ * XSI interfaces (e.g. SA_SIGINFO/sa_sigaction, S_IFMT/S_IFREG) that
+ * some of these commands need; _XOPEN_SOURCE 700 enables both.       */
+#if defined(__sun) || defined(__SVR4)
+  #define __EXTENSIONS__
+#else
+  #define _XOPEN_SOURCE 700 /* for the nanosecond-resolution
+                                st_atim/st_mtim/st_ctim members of
+                                struct stat (POSIX.1-2008 only)      */
+#endif
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -74,7 +91,7 @@ void print_usage_and_exit(void) {
     "          * The latter format is set by -l option.\n"
     "Retuen  : Return 0 only when timestamps of all files were able to be\n"
     "          gotten. \n"
-    "Version : 2025-04-15 14:50:13 JST\n"
+    "Version : 2026-09-24 01:09:03 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -139,12 +156,12 @@ iNanosec = 0; /* 0:second only 1:nanosecond */
 /*--- Parse options which start by "-" -----------------------------*/
 while ((i=getopt(argc, argv, "9cehIuv")) != -1) {
   switch (i) {
-    case '9': iNanosec = 1;                 break;
-    case 'c': iFmttype = 0;                 break;
-    case 'e': iFmttype = 1;                 break;
-    case 'I': iFmttype = 2;                 break;
-    case 'u': (void)setenv("TZ", "UTC", 1); break;
-    case 'v': giVerbose++;                  break;
+    case '9': iNanosec = 1;                  break;
+    case 'c': iFmttype = 0;                  break;
+    case 'e': iFmttype = 1;                  break;
+    case 'I': iFmttype = 2;                  break;
+    case 'u': (void)setenv("TZ", "UTC0", 1); break;
+    case 'v': giVerbose++;                   break;
     case 'h': print_usage_and_exit();
     default : print_usage_and_exit();
   }

@@ -16,9 +16,9 @@
 #                      Default is "\n."
 # Retuen  : 0 only when finished successfully
 #
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-06-23
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-09-24
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -41,6 +41,22 @@
 #define BLKSIZE 8192
 #define TRMSIZE  128
 /*--- headers ------------------------------------------------------*/
+/* Solaris 11.3's <sys/feature_tests.h> only recognizes the exact
+ * values _XOPEN_SOURCE==600 / _POSIX_C_SOURCE==200112L for its UNIX 03
+ * detection and has no notion of POSIX.1-2008/SUSv4 at all; requesting
+ * 700/200809L there trips its strict conformance-level check and
+ * aborts the build, so __EXTENSIONS__ (which sidesteps that check
+ * entirely and exposes every POSIX/XSI/BSD interface regardless of C
+ * standard level) is used there instead. Everywhere else, we ask for
+ * _XOPEN_SOURCE 700 rather than _POSIX_C_SOURCE 200809L alone: on
+ * FreeBSD, _POSIX_C_SOURCE alone leaves __XSI_VISIBLE unset, hiding
+ * XSI interfaces (e.g. SA_SIGINFO/sa_sigaction, S_IFMT/S_IFREG) that
+ * some of these commands need; _XOPEN_SOURCE 700 enables both.       */
+#if defined(__sun) || defined(__SVR4)
+  #define __EXTENSIONS__
+#else
+  #define _XOPEN_SOURCE 700 /* for sigaction() */
+#endif
 #include <errno.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -71,9 +87,9 @@ void print_usage_and_exit(void) {
     "                     This option works only when STDIN is connected\n"
     "                     to a terminal.\n"
     "          -t str ... Replace the terminator after a bunch with <str>.\n"
-    "                     Default is \"\n.\"\n"
+    "                     Default is \"\\n.\"\n"
     "Retuen  : 0 only when finished successfully\n"
-    "Version : 2024-06-23 13:28:01 JST\n"
+    "Version : 2026-09-24 01:09:03 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -238,7 +254,9 @@ while ((iSize_r=(int)read(STDIN_FILENO,gszBuf,BLKSIZE+1))>0) {
     iOffset+=iSize_w;
   }
   /*--- Insert the LF if the non-full and non-LF-terminated --------*/
-  if (!( iSize_r==0 || (iSize_r==1 && gszBuf[0]=='\n') || iSize_r>BLKSIZE)) {
+  if (!( iSize_r==0
+      || (iSize_r==1 && gszBuf[0]=='\n' && iSize_trm==1 && szTrm[0]=='\n')
+      || iSize_r>BLKSIZE)) {
     iRemain=iSize_trm;
     for (iOffset=0; iRemain>0; iRemain-=iSize_w) {
       if ((iSize_w=(int)write(STDOUT_FILENO,szTrm+iOffset,iRemain))<0) {

@@ -66,11 +66,11 @@
 #                         but if failed, it will try the smaller numbers.
 # Return  : Return 0 only when finished successfully
 #
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -lrt
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -lrt
 #                  (if it doesn't work)
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-04-15
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-09-24
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -91,8 +91,17 @@
 /*=== Initial Setting ==============================================*/
 
 /*--- headers ------------------------------------------------------*/
-#if defined(__linux) || defined(__linux__)
-  /* This definition is for strptime() on Linux */
+/* Solaris 11.3's <sys/feature_tests.h> only recognizes the exact
+ * values _XOPEN_SOURCE==600 / _POSIX_C_SOURCE==200112L for its UNIX 03
+ * detection and has no notion of POSIX.1-2008/SUSv4 at all; requesting
+ * 700 there trips its strict conformance-level check and aborts the
+ * build, so __EXTENSIONS__ (which sidesteps that check entirely and
+ * exposes every POSIX/XSI/BSD interface regardless of C standard
+ * level) is used there instead. Everywhere else, _XOPEN_SOURCE 700 is
+ * used directly, for strptime()/strnlen().                          */
+#if defined(__sun) || defined(__SVR4)
+  #define __EXTENSIONS__
+#else
   #define _XOPEN_SOURCE 700
 #endif
 #include <errno.h>
@@ -218,7 +227,7 @@ void print_usage_and_exit(void) {
     "                        Larger numbers maybe require a privileged user,\n"
     "                        but if failed, it will try the smaller numbers.\n"
 #endif
-    "Version : 2025-04-15 14:54:42 JST\n"
+    "Version : 2026-09-24 01:09:03 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -301,20 +310,20 @@ giVerbose    = 0;
 /*--- Parse options which start by "-" -----------------------------*/
 while ((i=getopt(argc, argv, "ceIp:1kuyvhZz")) != -1) {
   switch (i) {
-    case 'c': iMode&=4; iMode+=0;           break;
-    case 'e': iMode&=4; iMode+=1;           break;
-    case 'z': iMode&=4; iMode+=2;           break;
-    case 'I': iMode&=4; iMode+=3;           break;
-    case 'Z': iMode&=3; iMode+=4;           break;
-    case '1': iOpt_1=1;                     break;
-    case 'k': iKeepTs=1;                    break;
-    case 'u': (void)setenv("TZ", "UTC", 1); break;
-    case 'y': giTypingmode=1;               break;
+    case 'c': iMode&=4; iMode+=0;            break;
+    case 'e': iMode&=4; iMode+=1;            break;
+    case 'z': iMode&=4; iMode+=2;            break;
+    case 'I': iMode&=4; iMode+=3;            break;
+    case 'Z': iMode&=3; iMode+=4;            break;
+    case '1': iOpt_1=1;                      break;
+    case 'k': iKeepTs=1;                     break;
+    case 'u': (void)setenv("TZ", "UTC0", 1); break;
+    case 'y': giTypingmode=1;                break;
     #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
       case 'p': if (sscanf(optarg,"%d",&iPrio) != 1) {print_usage_and_exit();}
                                               break;
     #endif
-    case 'v': giVerbose++;                  break;
+    case 'v': giVerbose++;                   break;
     case 'h': print_usage_and_exit();
     default : print_usage_and_exit();
   }
@@ -1206,12 +1215,13 @@ int parse_calendartime(char* pszTime, tmsp *ptsTime) {
     }
     return 0;
   }
-  errno=0;
   ptsTime->tv_sec  = mktime(&tmDate);
-  if (errno) {
-    if (giVerbose>1) {
-      warning("%s: Invalid calendartime string: %s\n", pszTime,strerror(errno));
-    }
+  if (ptsTime->tv_sec == (time_t)-1) {
+    /* mktime() is only specified to return (time_t)-1 on failure; it
+     * is NOT specified to leave errno unchanged on success (and in
+     * practice it can be left set by unrelated internal work, such
+     * as loading timezone data), so errno must not be used here.   */
+    if (giVerbose>1) {warning("%s: Invalid calendartime string\n", pszTime);}
     return 0;
   }
   ptsTime->tv_nsec = atol(szNsec);
@@ -1405,18 +1415,17 @@ int parse_iso8601time(char* pszTime, tmsp *ptsTime) {
   }
 
   /*--- Pack the time-string into the timespec structure -----------*/
+  memset(&tmDate, 0, sizeof(tmDate));
   if (! strptime(szDate, "%Y-%m-%dT%H:%M:%S", &tmDate)) {
     if (giVerbose>1) {
       warning("Unexpect error at strptime() #1 in parse_iso8601time()\n");
     }
     return 0;
   }
-  errno=0;
   ptsTime->tv_sec  = mktime(&tmDate);
-  if (errno) {
-    if (giVerbose>1) {
-      warning("%s: Invalid ISO 8601 string: %s\n", pszTime, strerror(errno));
-    }
+  if (ptsTime->tv_sec == (time_t)-1) {
+    /* see the comment on the same check in parse_calendartime()     */
+    if (giVerbose>1) {warning("%s: Invalid ISO 8601 string\n", pszTime);}
     return 0;
   }
   ptsTime->tv_nsec = atol(szNsec);

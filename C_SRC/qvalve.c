@@ -4,24 +4,32 @@
 #
 # USAGE   : qvalve [-c|-l] [-t] [-1] [-p n] quantity [file [...]]
 #           qvalve [-c|-l] [-t] [-1] [-p n] controlfile [file [...]]
-# Args    : quantity ...  * Quantity this command allows to pass through.
+# Args    : quantity ...  * Quantity this command allows to pass through
+#                           in total.
 #                         * The quantity is the number of bytes (for the
 #                           -c option) or lines (for the -l option).
 #                         * You can specify it by the following format.
 #                           + [+]number[prefix]
 #                             "+":
 #                               - If you attach the plus symbol "+,"
-#                                 this command adds the quantity to the
-#                                 current value of the internal counter,
-#                                 which means how many bytes/lines should
-#                                 be passed through.
-#                               - Thus, if you set 10 when the 5 bytes/
-#                                 lines still remain to be outputted, the
-#                                 value in the counter will be set to 15.
+#                                 this command adds the number to the
+#                                 current target amount (the total number
+#                                 of bytes/lines this command is supposed
+#                                 to send through), regardless of how many
+#                                 of them have already been sent so far.
+#                               - Thus, if the target is currently 10 and
+#                                 5 of them have already been sent, setting
+#                                 "+10" raises the target to 20 (so 10 more
+#                                 will be sent).
 #                               - If you set a quantity without this
-#                                 symbol, the value in the counter will
-#                                 be overwritten. Thus, the value will
-#                                 be 10 in the above case.
+#                                 symbol, the target itself is overwritten
+#                                 with the number you set, regardless of
+#                                 how many bytes/lines have already been
+#                                 sent. Thus, setting "10" always means
+#                                 "10 in total," so setting the same "10"
+#                                 again has no further effect once 10 have
+#                                 already been sent (this operation is
+#                                 idempotent, unlike the "+" one above).
 #                               - However, this symbol has no meaning
 #                                 when you directly specify the quantity
 #                                 in the argument because you cannot
@@ -128,9 +136,9 @@
 #                           use this option.
 # Retuen  : Return 0 only when finished successfully
 #
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -pthread
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -pthread
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-03-13
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-09-24
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -151,6 +159,22 @@
 /*=== Initial Setting ==============================================*/
 
 /*--- headers ------------------------------------------------------*/
+/* Solaris 11.3's <sys/feature_tests.h> only recognizes the exact
+ * values _XOPEN_SOURCE==600 / _POSIX_C_SOURCE==200112L for its UNIX 03
+ * detection and has no notion of POSIX.1-2008/SUSv4 at all; requesting
+ * 700/200809L there trips its strict conformance-level check and
+ * aborts the build, so __EXTENSIONS__ (which sidesteps that check
+ * entirely and exposes every POSIX/XSI/BSD interface regardless of C
+ * standard level) is used there instead. Everywhere else, we ask for
+ * _XOPEN_SOURCE 700 rather than _POSIX_C_SOURCE 200809L alone: on
+ * FreeBSD, _POSIX_C_SOURCE alone leaves __XSI_VISIBLE unset, hiding
+ * XSI interfaces (e.g. SA_SIGINFO/sa_sigaction, S_IFMT/S_IFREG) that
+ * some of these commands need; _XOPEN_SOURCE 700 enables both.       */
+#if defined(__sun) || defined(__SVR4)
+  #define __EXTENSIONS__
+#else
+  #define _XOPEN_SOURCE 700 /* for setenv()/strnlen() */
+#endif
 #include <limits.h>
 #include <errno.h>
 #include <stdio.h>
@@ -188,7 +212,14 @@ typedef struct _thrcom_t {
   pthread_t       tMainth_id;       /* main thread ID                         */
   pthread_mutex_t mu;               /* The mutex variable                     */
   pthread_cond_t  co;               /* The condition variable                 */
-  size_t          sizQty;           /* The quantity counter                   */
+  size_t          sizTarget;        /* The total quantity to be sent through
+                                      * (updated by an absolute or additive
+                                      * quantity command)                     */
+  size_t          sizConsumed;      /* The quantity already sent through so far
+                                      * (relative to the current "sizTarget"
+                                      * cycle; reset to 0, together with
+                                      * "sizTarget," once it catches up with
+                                      * "sizTarget")                          */
   int             iTerm_req;        /* Request flag to terminate this command */
 } thcominfo_t;
 typedef struct _thrmain_t {
@@ -233,24 +264,32 @@ void print_usage_and_exit(void) {
     "USAGE   : %s [-c|-l] [-t] quantity [file [...]]\n"
     "          %s [-c|-l] [-t] controlfile [file [...]]\n"
 #endif
-    "Args    : quantity ...  * Quantity this command allows to pass through.\n"
+    "Args    : quantity ...  * Quantity this command allows to pass through\n"
+    "                          in total.\n"
     "                        * The quantity is the number of bytes (for the\n"
     "                          -c option) or lines (for the -l option).\n"
     "                        * You can specify it by the following format.\n"
     "                          + [+]number[prefix]\n"
     "                            \"+\":\n"
     "                              - If you attach the plus symbol \"+,\"\n"
-    "                                this command adds the quantity to the\n"
-    "                                current value of the internal counter,\n"
-    "                                which means how many bytes/lines should\n"
-    "                                be passed through.\n"
-    "                              - Thus, if you set 10 when the 5 bytes/\n"
-    "                                lines still remain to be outputted, the\n"
-    "                                value in the counter will be set to 15.\n"
+    "                                this command adds the number to the\n"
+    "                                current target amount (the total number\n"
+    "                                of bytes/lines this command is supposed\n"
+    "                                to send through), regardless of how many\n"
+    "                                of them have already been sent so far.\n"
+    "                              - Thus, if the target is currently 10 and\n"
+    "                                5 of them have already been sent, setting\n"
+    "                                \"+10\" raises the target to 20 (so 10\n"
+    "                                more will be sent).\n"
     "                              - If you set a quantity without this\n"
-    "                                symbol, the value in the counter will\n"
-    "                                be overwritten. Thus, the value will\n"
-    "                                be 10 in the above case.\n"
+    "                                symbol, the target itself is overwritten\n"
+    "                                with the number you set, regardless of\n"
+    "                                how many bytes/lines have already been\n"
+    "                                sent. Thus, setting \"10\" always means\n"
+    "                                \"10 in total,\" so setting the same \"10\"\n"
+    "                                again has no further effect once 10 have\n"
+    "                                already been sent (this operation is\n"
+    "                                idempotent, unlike the \"+\" one above).\n"
     "                              - However, this symbol has no meaning\n"
     "                                when you directly specify the quantity\n"
     "                                in the argument because you cannot\n"
@@ -358,7 +397,7 @@ void print_usage_and_exit(void) {
     "                          use this option.\n"
 #endif
     "Retuen  : Return 0 only when finished successfully\n"
-    "Version : 2025-03-13 21:55:01 JST\n"
+    "Version : 2026-09-24 01:09:03 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -461,7 +500,8 @@ pthread_cleanup_push(mainth_destructor, &stMainth);
 i = parse_quantity(argv[0], &siz);
 if (i <= 0) {
   /* Set the initial parameter, the Quantity is zero. */
-  gstThCom.sizQty=0;
+  gstThCom.sizTarget  =0;
+  gstThCom.sizConsumed=0;
   /* If the argument might be a control file, start the subthread */
   if (stat(argv[0],&gstCtrlfile) < 0) {
     error_exit(errno,"%s: %s\n",argv[0],strerror(errno));
@@ -511,7 +551,8 @@ if (i <= 0) {
     error_exit(errno,"sigaction() in main(): %s\n",strerror(errno));
   }
 } else {
-  gstThCom.sizQty = siz;
+  gstThCom.sizTarget   = siz;
+  gstThCom.sizConsumed = 0;
 }
 argc--;
 argv++;
@@ -579,14 +620,24 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                              "pthread_mutex_lock() in main() #1: %s\n",
                              strerror(j)                               );
                 }
-                while (gstThCom.sizQty==0 && gstThCom.iTerm_req==0) {
+                while (gstThCom.sizTarget<=gstThCom.sizConsumed
+                       && gstThCom.iTerm_req==0                ) {
+                  /* NOTE: Do NOT reset "sizTarget"/"sizConsumed" to 0 here
+                     even though the current target has been fully consumed.
+                     Doing so would make the very next absolute quantity
+                     command look "new" again (0 -> N), which breaks the
+                     idempotency an absolute quantity command is supposed
+                     to have. "sizConsumed" never exceeds "sizTarget," so
+                     it is safely bounded by whatever value "sizTarget" has
+                     been set to; practically, size_t's range is large
+                     enough that overflow is not a real-world concern.     */
                   if ((j=pthread_cond_wait(&gstThCom.co, &gstThCom.mu)) != 0) {
                     error_exit(j,
                                "pthread_cond_wait() in main() #1: %s\n",
                                strerror(j)                              );
                   }
                 }
-                gstThCom.sizQty--;
+                gstThCom.sizConsumed++;
                 if ((j=pthread_mutex_unlock(&gstThCom.mu))              != 0) {
                   error_exit(j,
                              "pthread_mutex_unlock() in main() #1: %s\n",
@@ -613,14 +664,24 @@ while ((pszPath = argv[iFileno]) != NULL || iFileno == 0) {
                              "pthread_mutex_lock() in main() #2: %s\n",
                              strerror(j)                               );
                 }
-                while (gstThCom.sizQty==0 && gstThCom.iTerm_req==0) {
+                while (gstThCom.sizTarget<=gstThCom.sizConsumed
+                       && gstThCom.iTerm_req==0                ) {
+                  /* NOTE: Do NOT reset "sizTarget"/"sizConsumed" to 0 here
+                     even though the current target has been fully consumed.
+                     Doing so would make the very next absolute quantity
+                     command look "new" again (0 -> N), which breaks the
+                     idempotency an absolute quantity command is supposed
+                     to have. "sizConsumed" never exceeds "sizTarget," so
+                     it is safely bounded by whatever value "sizTarget" has
+                     been set to; practically, size_t's range is large
+                     enough that overflow is not a real-world concern.     */
                   if ((j=pthread_cond_wait(&gstThCom.co, &gstThCom.mu)) != 0) {
                     error_exit(j,
                                "pthread_cond_wait() in main() #2: %s\n",
                                strerror(j)                              );
                   }
                 }
-                gstThCom.sizQty--;
+                gstThCom.sizConsumed++;
                 if ((j=pthread_mutex_unlock(&gstThCom.mu))              != 0) {
                   error_exit(j,
                              "pthread_mutex_unlock() in main() #2: %s\n",
@@ -715,7 +776,7 @@ return NULL;}
  *                        : The main thread ID
  *       gstThCom.mu      : Mutex object to lock
  *       gstThCom.co      : Condition variable to send a signal to the sub-th
- * [out] gstThCom.sizQty  : the new Quantity                        */
+ * [out] gstThCom.sizTarget: the new target quantity                */
 void update_periodic_time_type_r(char* pszCtrlfile) {
 
   /*--- Variables --------------------------------------------------*/
@@ -777,10 +838,10 @@ void update_periodic_time_type_r(char* pszCtrlfile) {
       error_exit(k,"pthread_mutex_lock() in type_r(): %s\n"  , strerror(k));
     }
     if (j==1) {
-      gstThCom.sizQty = siz;
+      gstThCom.sizTarget = siz;
     } else {
-      gstThCom.sizQty = (UINT_MAX-gstThCom.sizQty < siz) ? UINT_MAX
-                                                         : gstThCom.sizQty+siz;
+      gstThCom.sizTarget = (SIZE_MAX-gstThCom.sizTarget < siz) ? SIZE_MAX
+                                                         : gstThCom.sizTarget+siz;
     }
     if ((k=pthread_cond_signal( &gstThCom.co)) != 0) {
       error_exit(k,"pthread_cond_signal() in type_r(): %s\n" , strerror(k));
@@ -809,10 +870,7 @@ pause:
  *                        : The main thread ID
  *       gstThCom.mu      : Mutex object to lock
  *       gstThCom.co      : Condition variable to send a signal to the sub-th
- * [out] gstThCom.i8Param1: The new parameter
- *       gstThCom.iReceived
- *                        : Set to 0 after confirming that the main thread
- *                          receivedi the request                      */
+ * [out] gstThCom.sizTarget: the new target quantity                  */
 void update_periodic_time_type_c(char* pszCtrlfile) {
 
   /*--- Variables --------------------------------------------------*/
@@ -851,6 +909,9 @@ void update_periodic_time_type_c(char* pszCtrlfile) {
     iBuf0Lst=(iBuf0Lst+1)%3;
     iBuf0DatSiz[iBuf0Lst]=read(iFd_ctrlfile,cBuf0[iBuf0Lst],CTRL_FILE_BUF);
     if (iBuf0DatSiz[iBuf0Lst]==0) {iBuf0Lst=(iBuf0Lst+2)%3; i=0; break;}
+    if (iBuf0DatSiz[iBuf0Lst]< 0) {
+      error_exit(errno,"read() in type_c(): %s\n",strerror(errno));
+    }
     iBuf0ReadTimes++;
   } while ((i=poll(fdsPoll,1,0)) > 0);
   if (i==0 && iBuf0ReadTimes==0) {
@@ -900,7 +961,22 @@ void update_periodic_time_type_c(char* pszCtrlfile) {
    *        the new parameter and has pressed the enter key. So,    *
    *        this command tries to notify the main thread of it.     */
   if (szBuf1[i-1]=='\n') {
+    /* GCC's static analyzer cannot prove that "i" is always >= 1 here,
+     * because it doesn't track per-element bounds through an array
+     * indexed by a variable ("iBuf0DatSiz[iBuf0Lst]"). It provably IS,
+     * though: every read() that could leave a negative value in
+     * iBuf0DatSiz[] is checked immediately above (see the do-while
+     * loop that fills it), and a read() returning 0 always stops that
+     * loop before reaching this point. So the warning below is a
+     * false positive; suppress it right where it fires.              */
+#if defined(__GNUC__)
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wstringop-overflow="
+#endif
     szBuf1[i-1]='\0';
+#if defined(__GNUC__)
+    #pragma GCC diagnostic pop
+#endif
     for (j=i-2; j>=0; j--) {if(szBuf1[j]=='\n'){break;}}
     j++;
     /* "j>0" means the Buf1 has 2 or more lines. So, this routine *
@@ -922,10 +998,10 @@ void update_periodic_time_type_c(char* pszCtrlfile) {
       error_exit(j,"pthread_mutex_lock() in type_c(): %s\n"  , strerror(j));
     }
     if (i==1) {
-      gstThCom.sizQty = siz;
+      gstThCom.sizTarget = siz;
     } else {
-      gstThCom.sizQty = (UINT_MAX-gstThCom.sizQty < siz) ? UINT_MAX
-                                                         : gstThCom.sizQty+siz;
+      gstThCom.sizTarget = (SIZE_MAX-gstThCom.sizTarget < siz) ? SIZE_MAX
+                                                         : gstThCom.sizTarget+siz;
     }
     if ((j=pthread_cond_signal( &gstThCom.co)) != 0) {
       error_exit(j,"pthread_cond_signal() in type_c(): %s\n" , strerror(j));

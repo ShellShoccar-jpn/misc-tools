@@ -10,7 +10,7 @@
 #                         The unit of the periodic time is second
 #                         defaultly. You can also specify the unit
 #                         like '100ms'. Available units are 's', 'ms',
-#                         'us', 'ns'.
+#                         'us', 'ns', 'm', 'h', 'd'.
 #                         You can also specify it by the units/words.
 #                         * rate   : '[kMG]bps' (regards as 1chr= 8bit)
 #                                    'cps' (regards as 1chr=10bit)
@@ -87,9 +87,9 @@
 #                         use this option.
 # Retuen  : Return 0 only when finished successfully
 #
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -pthread -lrt
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -pthread -lrt
 #                  (if it doesn't work)
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__ -pthread
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -pthread
 #
 # Note    : [What's "#ifndef NOTTY" for?]
 #             That is to avoid any unknown side effects by supporting
@@ -98,7 +98,7 @@
 #             follows.
 #               $ gcc -DNOTTY -o valve valve.c
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2025-01-28
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-09-24
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -119,6 +119,22 @@
 /*=== Initial Setting ==============================================*/
 
 /*--- headers ------------------------------------------------------*/
+/* Solaris 11.3's <sys/feature_tests.h> only recognizes the exact
+ * values _XOPEN_SOURCE==600 / _POSIX_C_SOURCE==200112L for its UNIX 03
+ * detection and has no notion of POSIX.1-2008/SUSv4 at all; requesting
+ * 700/200809L there trips its strict conformance-level check and
+ * aborts the build, so __EXTENSIONS__ (which sidesteps that check
+ * entirely and exposes every POSIX/XSI/BSD interface regardless of C
+ * standard level) is used there instead. Everywhere else, we ask for
+ * _XOPEN_SOURCE 700 rather than _POSIX_C_SOURCE 200809L alone: on
+ * FreeBSD, _POSIX_C_SOURCE alone leaves __XSI_VISIBLE unset, hiding
+ * XSI interfaces (e.g. SA_SIGINFO/sa_sigaction, S_IFMT/S_IFREG) that
+ * some of these commands need; _XOPEN_SOURCE 700 enables both.       */
+#if defined(__sun) || defined(__SVR4)
+  #define __EXTENSIONS__
+#else
+  #define _XOPEN_SOURCE 700 /* for setenv()/strnlen() */
+#endif
 #include <limits.h>
 #include <errno.h>
 #include <stdio.h>
@@ -153,9 +169,6 @@
 #define RECOVMAX_MULTIPLIER 2
 #if !defined(CLOCK_MONOTONIC)
   #define CLOCK_FOR_ME CLOCK_REALTIME /* for HP-UX */
-#elif defined(__sun) || defined(__SunOS)
-  /* CLOCK_MONOTONIC on Solaris requires privillege */
-  #define CLOCK_FOR_ME CLOCK_REALTIME
 #else
   #define CLOCK_FOR_ME CLOCK_MONOTONIC
 #endif
@@ -225,7 +238,7 @@ void print_usage_and_exit(void) {
     "                        The unit of the periodic time is second\n"
     "                        defaultly. You can also specify the unit\n"
     "                        like '100ms'. Available units are 's', 'ms',\n"
-    "                        'us', 'ns'.\n"
+    "                        'us', 'ns', 'm', 'h', 'd'.\n"
     "                        You can also specify it by the units/words.\n"
     "                        * rate   : '[kMG]bps' (regards as 1chr= 8bit)\n"
     "                                   'cps' (regards as 1chr=10bit)\n"
@@ -305,7 +318,7 @@ void print_usage_and_exit(void) {
     "                        An administrative privilege might be required to\n"
     "                        use this option.\n"
 #endif
-    "Version : 2025-01-28 16:47:55 JST\n"
+    "Version : 2026-09-24 01:09:03 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -773,6 +786,9 @@ void update_periodic_time_type_c(char* pszCtrlfile) {
     iBuf0Lst=(iBuf0Lst+1)%3;
     iBuf0DatSiz[iBuf0Lst]=read(iFd_ctrlfile,cBuf0[iBuf0Lst],CTRL_FILE_BUF);
     if (iBuf0DatSiz[iBuf0Lst]==0) {iBuf0Lst=(iBuf0Lst+2)%3; i=0; break;}
+    if (iBuf0DatSiz[iBuf0Lst]< 0) {
+      error_exit(errno,"read() in type_c(): %s\n",strerror(errno));
+    }
     iBuf0ReadTimes++;
   } while ((i=poll(fdsPoll,1,0)) > 0);
   if (i==0 && iBuf0ReadTimes==0) {
@@ -938,6 +954,24 @@ int64_t parse_periodictime(char *pszArg) {
   if (strcmp(szUnit, "ns")==0) {
     if (dNum > ((double)INT_MAX * 1000000000)) {return -2;}
     return       (int64_t)(dNum *          1);
+  }
+
+  /* as a minute value */
+  if (strcmp(szUnit, "m" )==0) {
+    if (dNum > ((double)INT_MAX /         60)) {return -2;}
+    return       (int64_t)(dNum *   60000000000LL);
+  }
+
+  /* as an hour value */
+  if (strcmp(szUnit, "h" )==0) {
+    if (dNum > ((double)INT_MAX /       3600)) {return -2;}
+    return       (int64_t)(dNum * 3600000000000LL);
+  }
+
+  /* as a day value */
+  if (strcmp(szUnit, "d" )==0) {
+    if (dNum > ((double)INT_MAX /      86400)) {return -2;}
+    return       (int64_t)(dNum * 86400000000000LL);
   }
 
   /* as a bps value (1charater=8bit) */

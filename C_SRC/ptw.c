@@ -12,9 +12,9 @@
 #           when PTY wrapping has succeed. However, return a non-zero
 #           number by this wrapper when failed.
 #
-# How to compile : cc -O3 -o __CMDNAME__ __SRCNAME__
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2024-06-23
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-09-24
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -37,8 +37,18 @@
 #define BUFSIZE 8192
 /*#define RAWMODE_FOR_MASTER*//*set raw mode for master (probably unnecessary)*/
 /*--- headers ------------------------------------------------------*/
-#ifdef __linux__
-  #define _XOPEN_SOURCE 600
+/* Solaris 11.3's <sys/feature_tests.h> only recognizes the exact
+ * values _XOPEN_SOURCE==600 / _POSIX_C_SOURCE==200112L for its UNIX 03
+ * detection and has no notion of POSIX.1-2008/SUSv4 at all; requesting
+ * 700 there trips its strict conformance-level check and aborts the
+ * build, so __EXTENSIONS__ (which sidesteps that check entirely and
+ * exposes every POSIX/XSI/BSD interface regardless of C standard
+ * level) is used there instead. Everywhere else, _XOPEN_SOURCE 700 is
+ * used directly, for posix_openpt()/grantpt()/unlockpt()/ptsname().  */
+#if defined(__sun) || defined(__SVR4)
+  #define __EXTENSIONS__
+#else
+  #define _XOPEN_SOURCE 700
 #endif
 #include <errno.h>
 #include <stdio.h>
@@ -60,7 +70,13 @@
   #include <sys/ioctl.h> /* include file for ioctl() on *BSD and Linux */
 #endif
 #if !defined(TABDLY) && defined(OXTABS)
-  #define TABDLY OXTABS /* for classiic BSD */
+  #define TABDLY OXTABS /* for classic BSD */
+#endif
+#if !defined(TABDLY)
+  /* TABDLY is a __BSD_VISIBLE-only extension on some OSes (e.g.
+   * FreeBSD), so it is hidden here by the _XOPEN_SOURCE 700 request
+   * above; fall back to a no-op mask in that case.                  */
+  #define TABDLY 0
 #endif
 /*--- prototype functions ------------------------------------------*/
 #ifdef RAWMODE_FOR_MASTER
@@ -86,7 +102,7 @@ void print_usage_and_exit(void) {
     "Retuen  : The return value will be decided by the wrapped command\n"
     "          when PTY wrapping has succeed. However, return a non-zero\n"
     "          number by this wrapper when failed.\n"
-    "Version : 2024-06-23 13:28:01 JST\n"
+    "Version : 2026-09-24 01:21:10 JST\n"
     "          (POSIX C language with \"POSIX centric\" programming)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
