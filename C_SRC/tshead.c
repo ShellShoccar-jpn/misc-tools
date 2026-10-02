@@ -17,8 +17,8 @@
 #           The lines that can pass through this command will be chosen
 #           by making sure the timestamp at the first field of each line
 #           is in one of the following ranges.
-#             (a) [ <top>, <command start time>+<duration> ]
-#             (b) [ <top>, <command start time>+<duration> )
+#             (a) [ <top>, <1st line's time>   +<duration> ]
+#             (b) [ <top>, <1st line's time>   +<duration> )
 #             (c) [ <top>, <last line's time>  -<duration> ]
 #             (d) [ <top>, <last line's time>  -<duration> )
 #             (e) [ <top>, <date-and-time>                 ]
@@ -47,9 +47,9 @@
 #                                  Ext. ISO 8601 formatted time in your
 #                                  timezone (".n" is the same as -c)
 #                           -z ... "n[.n]"
-#                                  The number of seconds since this
-#                                  command has startrd (".n" is the same
-#                                  as -c)
+#                                  The number of seconds elapsed since the
+#                                  timestamped data started being produced
+#                                  (".n" is the same as -c)
 #           -d duration . This is one of options to specify the timestamp
 #                         range. (See the pattern (a) to (d) above)
 #                         You can use the format "A[.B][u]" as the
@@ -69,7 +69,7 @@
 #                           "-e" ... "n[.n]" (UNIX time)
 #                           "-I" ... "YYYY-MM-DDThh:mm:ss[,n][{{+|-}hh:mm|Z}]"
 #                                    (ext. ISO 8601 time)
-#                           "-z" ... "n[.n]" (elapsed sec. since start)
+#                           "-z" ... "n[.n]" (elapsed sec. since data start)
 #           -q .......... Suppresses printing filenames when two or more
 #                         files are given.
 #           -u .......... Set the date in UTC when -c option is set
@@ -77,22 +77,23 @@
 #           -x .......... An additional option for -d and -t. It will
 #                         exclude the endpoint itself from the range.
 #                         (See the pattern (b), (d) and (f) above)
-#           -Z .......... Define the time when the first line came as 0.
-#                         For instance, imagine that the first field of
-#                         the first line is "20200229235959," and the
-#                         second line's one is "20200301000004." when
-#                         "-c" option is given. In this case, the first
-#                         line is sent to stdout immediately, and after
-#                         five seconds, the second line is sent.
-#                         This option is only meaningful for the pattern
-#                         (a) and (b) (i.e. "-d" without a leading "-").
+#           -Z .......... Only meaningful for pattern (a)/(b) (i.e. "-d"
+#                         without a leading "-"), where the border is
+#                         normally "the 1st line's time" + duration. With
+#                         this option, the border becomes "time zero" +
+#                         duration instead, where "time zero" means the
+#                         UNIX epoch (1970-01-01T00:00:00 UTC) for the
+#                         "-c"/"-e"/"-I" formats, or the data's own
+#                         reference point (see "-z" above) for the "-z"
+#                         format. For any other pattern, "-Z" is silently
+#                         ignored.
 # Retuen  : Return 0 only when finished successfully for all files
 #
 # How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -lrt
 #                  (if it doesn't work)
 # How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-09-24
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-10-02
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -111,7 +112,7 @@
 ####################################################################*/
 
 /*=== Initial Setting ==============================================*/
-#define MY_REV "2026-09-24 01:09:03 JST"
+#define MY_REV "2026-10-02 01:39:15 JST"
 
 /*--- headers ------------------------------------------------------*/
 /* Solaris 11.3's <sys/feature_tests.h> only recognizes the exact
@@ -183,8 +184,10 @@ void     print_header(const char *pszDispname, int iFirst);
 /*--- global variables ---------------------------------------------*/
 char* gpszCmdname; /* The name of this command                          */
 int   giVerbose;   /* speaks more verbosely by the greater number       */
-tmsp  gtsZero;      /* The time when this command started (also used as
-                       the epoch for "-z" formatted fields)             */
+tmsp  gtsZero;      /* The time when this command started; used as the
+                       reference point ("time zero") for "-z" formatted
+                       fields, and also as the "-Z" origin when "-z" is
+                       the active format                                */
 int   giTfmt;      /* 0:"-c"(calendar) 1:"-e"(UNIX) 2:"-z"(elapsed)
                       3:"-I"(ISO 8601)                                  */
 int   giTZoffs;    /* Offset in second of the local timezone from UTC,
@@ -211,8 +214,8 @@ void print_usage_and_exit(void) {
     "          The lines that can pass through this command will be chosen\n"
     "          by making sure the timestamp at the first field of each line\n"
     "          is in one of the following ranges.\n"
-    "            (a) [ <top>, <command start time>+<duration> ]\n"
-    "            (b) [ <top>, <command start time>+<duration> )\n"
+    "            (a) [ <top>, <1st line's time>   +<duration> ]\n"
+    "            (b) [ <top>, <1st line's time>   +<duration> )\n"
     "            (c) [ <top>, <last line's time>  -<duration> ]\n"
     "            (d) [ <top>, <last line's time>  -<duration> )\n"
     "            (e) [ <top>, <date-and-time>                 ]\n"
@@ -241,9 +244,9 @@ void print_usage_and_exit(void) {
     "                                 Ext. ISO 8601 formatted time in your\n"
     "                                 timezone (\".n\" is the same as -c)\n"
     "                          -z ... \"n[.n]\"\n"
-    "                                 The number of seconds since this\n"
-    "                                 command has startrd (\".n\" is the same\n"
-    "                                 as -c)\n"
+    "                                 The number of seconds elapsed since\n"
+    "                                 the timestamped data started being\n"
+    "                                 produced (\".n\" is the same as -c)\n"
     "          -d duration . This is one of options to specify the timestamp\n"
     "                        range. (See the pattern (a) to (d) above)\n"
     "                        You can use the format \"A[.B][u]\" as the\n"
@@ -264,7 +267,7 @@ void print_usage_and_exit(void) {
     "                          \"-e\" ... \"n[.n]\" (UNIX time)\n"
     "                          \"-I\" ... \"YYYY-MM-DDThh:mm:ss[,n][{{+|-}hh:mm|Z}]\"\n"
     "                                   (ext. ISO 8601 time)\n"
-    "                          \"-z\" ... \"n[.n]\" (elapsed sec. since start)\n"
+    "                          \"-z\" ... \"n[.n]\" (elapsed sec. since data start)\n"
     "          -q .......... Suppresses printing filenames when two or more\n"
     "                        files are given.\n"
     "          -u .......... Set the date in UTC when -c option is set\n"
@@ -272,15 +275,17 @@ void print_usage_and_exit(void) {
     "          -x .......... An additional option for -d and -t. It will\n"
     "                        exclude the endpoint itself from the range.\n"
     "                        (See the pattern (b), (d) and (f) above)\n"
-    "          -Z .......... Define the time when the first line came as 0.\n"
-    "                        For instance, imagine that the first field of\n"
-    "                        the first line is \"20200229235959,\" and the\n"
-    "                        second line's one is \"20200301000004.\" when\n"
-    "                        \"-c\" option is given. In this case, the first\n"
-    "                        line is sent to stdout immediately, and after\n"
-    "                        five seconds, the second line is sent.\n"
-    "                        This option is only meaningful for the pattern\n"
-    "                        (a) and (b) (i.e. \"-d\" without a leading \"-\").\n"
+    "          -Z .......... Only meaningful for pattern (a)/(b) (i.e.\n"
+    "                        \"-d\" without a leading \"-\"), where the\n"
+    "                        border is normally \"the 1st line's time\"\n"
+    "                        + duration. With this option, the border\n"
+    "                        becomes \"time zero\" + duration instead,\n"
+    "                        where \"time zero\" means the UNIX epoch\n"
+    "                        (1970-01-01T00:00:00 UTC) for the\n"
+    "                        \"-c\"/\"-e\"/\"-I\" formats, or the data's own\n"
+    "                        reference point (see \"-z\" above) for the\n"
+    "                        \"-z\" format. For any other pattern, \"-Z\"\n"
+    "                        is silently ignored.\n"
     "Version : " MY_REV "\n"
     "          (POSIX C language)\n"
     "\n"
@@ -323,10 +328,12 @@ int main(int argc, char *argv[]) {
 
 /*--- Variables ----------------------------------------------------*/
 int      iMode;           /* 1:"-d"  2:"-t"  0:(undefined)                */
-int      iL1zero;         /* 1:"-Z" (border origin is the 1st line's time)*/
 int      iFromtop;        /* The time range start from the (1:top 0:end)  */
 int      iPrnhdr;         /* 1:Print 2 or more filenames 0:none           */
-int      iZpending;       /* 1:gtsBorder is not fixed yet ("-Z" pending)  */
+int      iZopt;           /* 1:"-Z" (pattern (a)/(b) origin is time zero,
+                              instead of the 1st line's time)             */
+int      iZpending;       /* 1:gtsBorder is not fixed yet (pending until
+                              the 1st line is read)                      */
 int      iHdrdone;        /* 1:at least one filename header was printed   */
 char     szOptbuf[OPT_PARM_BUF];
 int64_t  i8Delta = 0;     /* delta-T in nanoseconds (defined by "-d")     */
@@ -361,12 +368,11 @@ setlocale(LC_CTYPE, "");
 /*--- Set default parameters of the arguments ----------------------*/
 giTfmt    = 0; /* 0:"-c"(default) 1:"-e" 2:"-z" 3:"-I" */
 iMode     = 0; /* 1:duration(-d) 2:time(-t)     */
-iL1zero   = 0; /* 0:The 0-time is based on the time the command begins
-                  1:The 0-time is based on the time 1st line comes     */
 giEndp    = 1; /* 0:Exclude the time range endpoint
                   1:Include the time range endpoint (default)          */
 iFromtop  = 1; /* 1:The time range start from the top 0:from the end   */
 iPrnhdr   = 1; /* 1:Print 2 or more filenames 0:none                   */
+iZopt     = 0; /* 1:"-Z" was given                                     */
 giVerbose = 0;
 
 /*--- Parse and validate options -----------------------------------*/
@@ -378,7 +384,7 @@ while ((i=getopt(argc, argv, "cd:ehIqt:uvxzZ")) != -1) {
     case 'e': giTfmt   = 1;                  break;
     case 'I': giTfmt   = 3;                  break;
     case 'z': giTfmt   = 2;                  break;
-    case 'Z': iL1zero = 1;                   break;
+    case 'Z': iZopt    = 1;                  break;
     case 'x': giEndp   = 0;                  break;
     case 'd': if (*optarg=='-') {iFromtop = 0; optarg++;}
               else              {iFromtop = 1;          }
@@ -425,12 +431,14 @@ iLastBuffered = 0;
 switch (iMode) {
   case 1: /* "-d" */
           if (iFromtop) {
-            /* --- pattern (a)/(b): border = origin + duration ------*/
-            if (iL1zero) {
-              iZpending = 1; /* fixed later, once the 1st line is read */
-            } else {
-              gtsBorder = gtsZero;
+            /* --- pattern (a)/(b): border = 1st line's time + duration,
+             *     or (with "-Z") time zero + duration                 */
+            if (iZopt) {
+              if (giTfmt==2) {gtsBorder = gtsZero;}
+              else           {gtsBorder.tv_sec=0; gtsBorder.tv_nsec=0;}
               tsadd(gtsBorder, i8Delta);
+            } else {
+              iZpending = 1; /* fixed later, once the 1st line is read */
             }
           } else {
             /* --- pattern (c)/(d): border = last line's time - duration */
@@ -490,7 +498,7 @@ switch (iMode) {
                          "is wrong. See usage.\n", szOptbuf);
                      }
                      break;
-            default: /* "-z": elapsed seconds since the command started */
+            default: /* "-z": elapsed seconds since the data started being produced */
                      if (! parse_unixtime(szOptbuf, &tsTmp)) {
                        error_exit(1,
                          "%s: Timestamp format is the number of seconds "
@@ -543,7 +551,7 @@ for (i=0; i<iNfiles; i++) {
         char*  pNl = memchr(pMap, '\n', sizMap);
         sizFirstline = pNl ? (size_t)(pNl-pMap) : sizMap;
         if (sizMap==0 || ! extract_timestamp_field(pMap, sizFirstline, &tsFirst)) {
-          error_exit(1,"%s: Cannot read the 1st line to fix \"-Z\"\n",pszDisp);
+          error_exit(1,"%s: Cannot read the 1st line to fix the border\n",pszDisp);
         }
         gtsBorder = tsFirst;
         tsadd(gtsBorder, i8Delta);
@@ -996,7 +1004,7 @@ int extract_timestamp_field(char *pszLine, size_t sizLine, tmsp *ptsTime) {
     case 0 : return parse_calendartime(szField, ptsTime);
     case 1 : return parse_unixtime(    szField, ptsTime);
     case 3 : return parse_iso8601time( szField, ptsTime);
-    default: /* "-z": elapsed seconds since the command started */
+    default: /* "-z": elapsed seconds since the data started being produced */
              if (! parse_unixtime(szField, &tsElapsed)) {return 0;}
              *ptsTime = gtsZero;
              tsadd((*ptsTime), ( (int64_t)tsElapsed.tv_sec*1000000000

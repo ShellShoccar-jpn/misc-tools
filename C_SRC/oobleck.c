@@ -106,7 +106,10 @@
 #                           that has a numerical filename, you have to
 #                           add "./" before the name, like "./3."
 #                         * When you set another type of string, this
-#                           command regards it as a filename.
+#                           command regards it as a filename. If the
+#                           file already exists, this command opens it
+#                           for appending; the existing content is kept
+#                           and the dropped lines are added after it.
 #           [Only some operating systems support the following option]
 #           -p n ........ Process priority setting [0-3] (if possible)
 #                          0: Normal process
@@ -122,7 +125,7 @@
 #
 # How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -pthread
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-09-24
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-10-02
 #
 # The latest version is distributed at the following page.
 # https://github.com/ShellShoccar-jpn/tokideli
@@ -369,7 +372,10 @@ void print_usage_and_exit(void) {
     "                          that has a numerical filename, you have to\n"
     "                          add \"./\" before the name, like \"./3.\"\n"
     "                        * When you set another type of string, this\n"
-    "                          command regards it as a filename.\n"
+    "                          command regards it as a filename. If the\n"
+    "                          file already exists, this command opens it\n"
+    "                          for appending; the existing content is kept\n"
+    "                          and the dropped lines are added after it.\n"
 #if defined(_POSIX_PRIORITY_SCHEDULING) && !defined(__OpenBSD__) && !defined(__APPLE__)
     "          -p n ........ Process priority setting [0-3] (if possible)\n"
     "                         0: Normal process\n"
@@ -382,7 +388,7 @@ void print_usage_and_exit(void) {
     "                        An administrative privilege might be required to\n"
     "                        use this option.\n"
 #endif
-    "Version : 2026-09-24 01:09:03 JST\n"
+    "Version : 2026-10-02 13:03:08 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -577,7 +583,7 @@ if (iFd == STDIN_FILENO) {
 }
 /*--- Open the drain file if specified -----------------------------*/
 if (pszDrainname != NULL) {
-  while ((iDrainFd=open(pszDrainname,O_WRONLY|O_CREAT,0644))<0) {
+  while ((iDrainFd=open(pszDrainname,O_WRONLY|O_CREAT|O_APPEND,0644))<0) {
     if (errno == EINTR) {continue;}
     error_exit(errno, "%s: %s\n", pszDrainname   ,
                                   strerror(errno) );

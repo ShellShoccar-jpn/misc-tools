@@ -17,8 +17,8 @@
 #           The lines that can pass through this command will be chosen
 #           by making sure the timestamp at the first field of each line
 #           is in one of the following ranges.
-#             (a) [ <command start time>-<duration>, <bottom> ]
-#             (b) ( <command start time>-<duration>, <bottom> ]
+#             (a) [ <last line's time>-<duration>,  <bottom> ]
+#             (b) ( <last line's time>-<duration>,  <bottom> ]
 #             (c) [ <1st line's time>  +<duration>,  <bottom> ]
 #             (d) ( <1st line's time>  +<duration>,  <bottom> ]
 #             (e) [ date-and-time,                   <bottom> ]
@@ -26,15 +26,14 @@
 #           When two or more files are given, they are treated as if
 #           they were a single concatenated stream (like "cat"), so
 #           <1st line's time> means the first line of the FIRST file,
-#           and <bottom> means the last line of the LAST file.
+#           and <bottom>/<last line's time> mean the last line of the
+#           LAST file.
 #
 #           NOTE: Since <bottom> is always the last line of the input,
 #           this command cannot produce any output until it reaches the
-#           end of the input (EOF), no matter which pattern is used --
-#           even pattern (a)/(b), whose border time itself is already
-#           fixed the moment this command starts. Therefore, this
-#           command is NOT suitable for an unbounded, never-ending
-#           stream such as one from "tail -f".
+#           end of the input (EOF), no matter which pattern is used.
+#           Therefore, this command is NOT suitable for an unbounded,
+#           never-ending stream such as one from "tail -f".
 #
 # Args    : file ........ Filepath to be send ("-" means STDIN)
 #                         The file MUST be a textfile and MUST have
@@ -56,9 +55,9 @@
 #                                  Ext. ISO 8601 formatted time in your
 #                                  timezone (".n" is the same as -c)
 #                           -z ... "n[.n]"
-#                                  The number of seconds since this
-#                                  command has startrd (".n" is the same
-#                                  as -c)
+#                                  The number of seconds elapsed since the
+#                                  timestamped data started being produced
+#                                  (".n" is the same as -c)
 #           -d duration . This is one of options to specify the timestamp
 #                         range. (See the pattern (a) to (d) above)
 #                         You can use the format "A[.B][u]" as the
@@ -78,7 +77,7 @@
 #                           "-e" ... "n[.n]" (UNIX time)
 #                           "-I" ... "YYYY-MM-DDThh:mm:ss[,n][{{+|-}hh:mm|Z}]"
 #                                    (ext. ISO 8601 time)
-#                           "-z" ... "n[.n]" (elapsed sec. since start)
+#                           "-z" ... "n[.n]" (elapsed sec. since data start)
 #           -q .......... Suppresses printing filenames when two or more
 #                         files are given.
 #           -u .......... Set the date in UTC when -c option is set
@@ -87,23 +86,26 @@
 #                         exclude the border endpoint itself (the start
 #                         of the range) from the output.
 #                         (See the pattern (b), (d) and (f) above)
-#           -Z .......... Define the time when the LAST line came as
-#                         the origin, instead of the time this command
-#                         started. This option is only meaningful for
-#                         the pattern (a) and (b) (i.e. "-d" without a
-#                         leading "-"). Without this option, the origin
-#                         for pattern (a)/(b) is the moment this command
-#                         started, which is not reproducible from run to
-#                         run; with this option, the origin instead
-#                         becomes the timestamp of the very last line of
-#                         the input, which makes the result reproducible.
+#           -Z .......... Only meaningful for pattern (c)/(d) (i.e. "-d"
+#                         with a leading "-"), where the border is
+#                         normally "the 1st line's time" + duration. With
+#                         this option, the border becomes "time zero" +
+#                         duration instead, where "time zero" means the
+#                         UNIX epoch (1970-01-01T00:00:00 UTC) for the
+#                         "-c"/"-e"/"-I" formats, or the data's own
+#                         reference point (see "-z" above) for the "-z"
+#                         format. For any other pattern, "-Z" is silently
+#                         ignored. This option also lets this command
+#                         skip opening the 1st file just to read its
+#                         first line, since the border no longer depends
+#                         on it.
 # Retuen  : Return 0 only when finished successfully for all files
 #
 # How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -lrt
 #                  (if it doesn't work)
 # How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-09-24
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-10-02
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -122,7 +124,7 @@
 ####################################################################*/
 
 /*=== Initial Setting ==============================================*/
-#define MY_REV "2026-09-24 01:09:03 JST"
+#define MY_REV "2026-10-02 01:39:15 JST"
 
 /*--- headers ------------------------------------------------------*/
 /* Solaris 11.3's <sys/feature_tests.h> only recognizes the exact
@@ -223,8 +225,10 @@ void         print_header(const char *pszDispname, int iFirst);
 /*--- global variables ---------------------------------------------*/
 char* gpszCmdname; /* The name of this command                          */
 int   giVerbose;   /* speaks more verbosely by the greater number       */
-tmsp  gtsZero;      /* The time when this command started (also used as
-                       the epoch for "-z" formatted fields)             */
+tmsp  gtsZero;      /* The time when this command started; used as the
+                       reference point ("time zero") for "-z" formatted
+                       fields, and also as the "-Z" origin when "-z" is
+                       the active format                                */
 int   giTfmt;      /* 0:"-c"(calendar) 1:"-e"(UNIX) 2:"-z"(elapsed)
                       3:"-I"(ISO 8601)                                  */
 int   giTZoffs;    /* Offset in second of the local timezone from UTC,
@@ -251,8 +255,8 @@ void print_usage_and_exit(void) {
     "          The lines that can pass through this command will be chosen\n"
     "          by making sure the timestamp at the first field of each line\n"
     "          is in one of the following ranges.\n"
-    "            (a) [ <command start time>-<duration>, <bottom> ]\n"
-    "            (b) ( <command start time>-<duration>, <bottom> ]\n"
+    "            (a) [ <last line's time>-<duration>,  <bottom> ]\n"
+    "            (b) ( <last line's time>-<duration>,  <bottom> ]\n"
     "            (c) [ <1st line's time>  +<duration>,  <bottom> ]\n"
     "            (d) ( <1st line's time>  +<duration>,  <bottom> ]\n"
     "            (e) [ date-and-time,                   <bottom> ]\n"
@@ -260,15 +264,14 @@ void print_usage_and_exit(void) {
     "          When two or more files are given, they are treated as if\n"
     "          they were a single concatenated stream (like \"cat\"), so\n"
     "          <1st line's time> means the first line of the FIRST file,\n"
-    "          and <bottom> means the last line of the LAST file.\n"
+    "          and <bottom>/<last line's time> mean the last line of the\n"
+    "          LAST file.\n"
     "\n"
     "          NOTE: Since <bottom> is always the last line of the input,\n"
     "          this command cannot produce any output until it reaches\n"
     "          the end of the input (EOF), no matter which pattern is\n"
-    "          used -- even pattern (a)/(b), whose border time itself is\n"
-    "          already fixed the moment this command starts. Therefore,\n"
-    "          this command is NOT suitable for an unbounded, never-\n"
-    "          ending stream such as one from \"tail -f\".\n"
+    "          used. Therefore, this command is NOT suitable for an\n"
+    "          unbounded, never-ending stream such as one from \"tail -f\".\n"
     "\n"
     "Args    : file ........ Filepath to be send (\"-\" means STDIN)\n"
     "                        The file MUST be a textfile and MUST have\n"
@@ -290,9 +293,9 @@ void print_usage_and_exit(void) {
     "                                 Ext. ISO 8601 formatted time in your\n"
     "                                 timezone (\".n\" is the same as -c)\n"
     "                          -z ... \"n[.n]\"\n"
-    "                                 The number of seconds since this\n"
-    "                                 command has startrd (\".n\" is the same\n"
-    "                                 as -c)\n"
+    "                                 The number of seconds elapsed since\n"
+    "                                 the timestamped data started being\n"
+    "                                 produced (\".n\" is the same as -c)\n"
     "          -d duration . This is one of options to specify the timestamp\n"
     "                        range. (See the pattern (a) to (d) above)\n"
     "                        You can use the format \"A[.B][u]\" as the\n"
@@ -313,7 +316,7 @@ void print_usage_and_exit(void) {
     "                          \"-e\" ... \"n[.n]\" (UNIX time)\n"
     "                          \"-I\" ... \"YYYY-MM-DDThh:mm:ss[,n][{{+|-}hh:mm|Z}]\"\n"
     "                                   (ext. ISO 8601 time)\n"
-    "                          \"-z\" ... \"n[.n]\" (elapsed sec. since start)\n"
+    "                          \"-z\" ... \"n[.n]\" (elapsed sec. since data start)\n"
     "          -q .......... Suppresses printing filenames when two or more\n"
     "                        files are given.\n"
     "          -u .......... Set the date in UTC when -c option is set\n"
@@ -322,17 +325,20 @@ void print_usage_and_exit(void) {
     "                        exclude the border endpoint itself (the start\n"
     "                        of the range) from the output.\n"
     "                        (See the pattern (b), (d) and (f) above)\n"
-    "          -Z .......... Define the time when the LAST line came as\n"
-    "                        the origin, instead of the time this command\n"
-    "                        started. This option is only meaningful for\n"
-    "                        the pattern (a) and (b) (i.e. \"-d\" without a\n"
-    "                        leading \"-\"). Without this option, the origin\n"
-    "                        for pattern (a)/(b) is the moment this command\n"
-    "                        started, which is not reproducible from run\n"
-    "                        to run; with this option, the origin instead\n"
-    "                        becomes the timestamp of the very last line\n"
-    "                        of the input, which makes the result\n"
-    "                        reproducible.\n"
+    "          -Z .......... Only meaningful for pattern (c)/(d) (i.e.\n"
+    "                        \"-d\" with a leading \"-\"), where the\n"
+    "                        border is normally \"the 1st line's time\"\n"
+    "                        + duration. With this option, the border\n"
+    "                        becomes \"time zero\" + duration instead,\n"
+    "                        where \"time zero\" means the UNIX epoch\n"
+    "                        (1970-01-01T00:00:00 UTC) for the\n"
+    "                        \"-c\"/\"-e\"/\"-I\" formats, or the data's own\n"
+    "                        reference point (see \"-z\" above) for the\n"
+    "                        \"-z\" format. For any other pattern, \"-Z\"\n"
+    "                        is silently ignored. This option also lets\n"
+    "                        this command skip opening the 1st file just\n"
+    "                        to read its first line, since the border no\n"
+    "                        longer depends on it.\n"
     "Version : " MY_REV "\n"
     "          (POSIX C language)\n"
     "\n"
@@ -375,9 +381,6 @@ int main(int argc, char *argv[]) {
 
 /*--- Variables ----------------------------------------------------*/
 int          iMode;           /* 1:"-d"  2:"-t"  0:(undefined)               */
-int          iLLzero;         /* 1:"-Z" (border origin is the LAST line's
-                                  time, instead of the command start time;
-                                  only meaningful for pattern (a)/(b))       */
 int          iOriginIsFirst;  /* The sign of "-d"'s argument determines
                                   which pattern is used.
                                     1: the argument had a leading "-"
@@ -385,14 +388,17 @@ int          iOriginIsFirst;  /* The sign of "-d"'s argument determines
                                           1st line's time
                                     0: no leading "-"
                                        -> pattern (a)/(b), origin is the
-                                          command start time
+                                          last line's time
                                   NOTE: this is the OPPOSITE of tshead.c's
                                   "iFromtop" (which meant "no leading
                                   dash was given"). Here it means "a
                                   leading dash WAS given," i.e. exactly
                                   reversed in meaning.                       */
 int          iPrnhdr;         /* 1:Print 2 or more filenames 0:none          */
-int          iZpending;       /* 1:gtsBorder is not fixed yet ("-Z" pending) */
+int          iZopt;           /* 1:"-Z" (pattern (c)/(d) origin is time
+                                  zero, instead of the 1st line's time)     */
+int          iZpending;       /* 1:gtsBorder is not fixed yet (pending until
+                                  the last line is read)                    */
 char         szOptbuf[OPT_PARM_BUF];
 int64_t      i8Delta = 0;     /* delta-T in nanoseconds (defined by "-d")    */
 int          iRet;            /* return code                                 */
@@ -436,13 +442,12 @@ setlocale(LC_CTYPE, "");
 /*--- Set default parameters of the arguments ----------------------*/
 giTfmt         = 0; /* 0:"-c"(default) 1:"-e" 2:"-z" 3:"-I" */
 iMode          = 0; /* 1:duration(-d) 2:time(-t)     */
-iLLzero        = 0; /* 0:The origin for (a)/(b) is the time the command
-                        begins  1:...is the time the last line came     */
 giEndp         = 1; /* 0:Exclude the time range endpoint
                         1:Include the time range endpoint (default)     */
 iOriginIsFirst = 0; /* 0:"-d" had no leading "-" (pattern a/b)
                         1:"-d" had a leading "-"  (pattern c/d)         */
 iPrnhdr        = 1; /* 1:Print 2 or more filenames 0:none               */
+iZopt          = 0; /* 1:"-Z" was given                                 */
 giVerbose      = 0;
 
 /*--- Parse and validate options -----------------------------------*/
@@ -454,7 +459,7 @@ while ((i=getopt(argc, argv, "cd:ehIqt:uvxzZ")) != -1) {
     case 'e': giTfmt   = 1;                  break;
     case 'I': giTfmt   = 3;                  break;
     case 'z': giTfmt   = 2;                  break;
-    case 'Z': iLLzero  = 1;                  break;
+    case 'Z': iZopt    = 1;                  break;
     case 'x': giEndp   = 0;                  break;
     case 'd': if (*optarg=='-') {iOriginIsFirst = 1; optarg++;}
               else              {iOriginIsFirst = 0;          }
@@ -500,15 +505,15 @@ iZpending      = 0;
 switch (iMode) {
   case 1: /* "-d" */
           if (! iOriginIsFirst) {
-            /* --- pattern (a)/(b): border = command start - duration -*/
-            if (iLLzero) {
-              iZpending = 1; /* fixed later, at the last file (the 1st
-                                 iteration of the backward loop below) */
-            } else {
-              gtsBorder = gtsZero;
-              tssub(gtsBorder, i8Delta);
-              if (gtsBorder.tv_sec<0) {gtsBorder.tv_sec=0; gtsBorder.tv_nsec=0;}
-            }
+            /* --- pattern (a)/(b): border = last line's time - duration */
+            iZpending = 1; /* fixed later, at the last file (the 1st
+                               iteration of the backward loop below) */
+          } else if (iZopt) {
+            /* --- pattern (c)/(d) with "-Z": border = time zero +
+             *     duration. No file needs to be opened for this. */
+            if (giTfmt==2) {gtsBorder = gtsZero;}
+            else           {gtsBorder.tv_sec=0; gtsBorder.tv_nsec=0;}
+            tsadd(gtsBorder, i8Delta);
           } else {
             /* --- pattern (c)/(d): border = 1st line's time + duration */
             iFd = (strcmp(ppszFiles[0],"-")==0)
@@ -587,7 +592,7 @@ switch (iMode) {
                          "is wrong. See usage.\n", szOptbuf);
                      }
                      break;
-            default: /* "-z": elapsed seconds since the command started */
+            default: /* "-z": elapsed seconds since the data started being produced */
                      if (! parse_unixtime(szOptbuf, &tsTmp)) {
                        error_exit(1,
                          "%s: Timestamp format is the number of seconds "
@@ -666,9 +671,9 @@ for (i=iNfiles-1; i>=0; i--) {
     if (iFd != STDIN_FILENO) {close(iFd);}
 
     if (i==iNfiles-1 && iZpending) {
-      /* "-Z": fix the border using the LAST line of the LAST file     */
+      /* fix the border using the LAST line of the LAST file           */
       if (! get_lastline_time(pMap, sizMap, &tsTmp)) {
-        error_exit(1,"%s: Cannot read the last line to fix \"-Z\"\n",pszDisp);
+        error_exit(1,"%s: Cannot read the last line to fix the border\n",pszDisp);
       }
       gtsBorder = tsTmp;
       tssub(gtsBorder, i8Delta);
@@ -693,14 +698,14 @@ for (i=iNfiles-1; i>=0; i--) {
     FILE* fp = (iFd==STDIN_FILENO) ? stdin : fdopen(iFd,"r");
 
     if (i==iNfiles-1 && iZpending) {
-      /* "-Z": the border depends on the LAST line, which is not known
-         until EOF; keep every line for now, and fix the border and
-         trim the list afterward.                                     */
+      /* the border depends on the LAST line, which is not known until
+         EOF; keep every line for now, and fix the border and trim the
+         list afterward.                                               */
       tmsp tsLastline;
       pLineHead = scan_stream_lines(fp, 1, &iHit, &tsLastline);
       if (fp!=stdin) {fclose(fp);}
       if (pLineHead == NULL) {
-        error_exit(1,"%s: Cannot read the last line to fix \"-Z\"\n",pszDisp);
+        error_exit(1,"%s: Cannot read the last line to fix the border\n",pszDisp);
       }
       gtsBorder = tsLastline;
       tssub(gtsBorder, i8Delta);
@@ -1160,7 +1165,7 @@ int extract_timestamp_field(char *pszLine, size_t sizLine, tmsp *ptsTime) {
     case 0 : return parse_calendartime(szField, ptsTime);
     case 1 : return parse_unixtime(    szField, ptsTime);
     case 3 : return parse_iso8601time( szField, ptsTime);
-    default: /* "-z": elapsed seconds since the command started */
+    default: /* "-z": elapsed seconds since the data started being produced */
              if (! parse_unixtime(szField, &tsElapsed)) {return 0;}
              *ptsTime = gtsZero;
              tsadd((*ptsTime), ( (int64_t)tsElapsed.tv_sec*1000000000
@@ -1317,7 +1322,7 @@ int read_one_line(FILE *fp, char **ppLine, size_t *psizBuf, size_t *psizLine) {
       that are within the border ====================================
  * [in]  fp         : the stream to read to its EOF
  *       iZpending  : 1 if the border is not fixed yet (only possible
- *                    for the LAST file, when "-Z" was given). While
+ *                    for the LAST file, in pattern (a)/(b)). While
  *                    this is set, every line is kept regardless of
  *                    the border, because the border itself cannot be
  *                    determined until the last line (i.e. EOF) is

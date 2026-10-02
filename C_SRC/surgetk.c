@@ -2,7 +2,7 @@
 #
 # SURGETK - Surge Tank: Absorb a Burst of STDIN and Output It Smoothly
 #
-# USAGE   : surgetk [-s|-o|-d] [-v] size
+# USAGE   : surgetk [-s|-o|-d] [-v] [-m fd|file] size
 #           surgetk -i
 # Args    : size ........ Capacity (in bytes) of the ring buffer which
 #                         absorbs the bytes that have arrived at the
@@ -30,6 +30,34 @@
 #                         internal behavior to the standard error.
 #                         Giving this option two or more times raises
 #                         the verbosity level.
+#           -m fd|file .. Report the current fill level of the ring
+#                         buffer on demand. Give either a file
+#                         descriptor number (which must already be
+#                         open for writing, e.g. inherited from the
+#                         shell) or a file path (which will be opened
+#                         for appending, creating it if necessary;
+#                         an existing file's content is kept and the
+#                         new lines are added after it, since this is
+#                         timestamped log data).
+#                         Whenever this process receives a SIGUSR1,
+#                         it writes one line formatted as
+#                         "<UNIX time> <PID> <bytes used> <capacity>"
+#                         (space-separated, capacity in bytes; the UNIX
+#                         time has millisecond precision, printed with
+#                         exactly 3 digits after the decimal point,
+#                         e.g. "1759381200.123") to that destination
+#                         and flushes it. No report
+#                         is produced unless this option is given,
+#                         and nothing is written spontaneously; it is
+#                         purely on-demand. (If you want periodic
+#                         reports, send SIGUSR1 periodically yourself,
+#                         e.g. "while sleep 1; do kill -USR1 $PID;
+#                         done".)
+#                         The 2nd field is this process's own PID, so
+#                         multiple surgetk processes can safely share
+#                         the same destination file (opened with
+#                         O_APPEND; see above) and still be told apart
+#                         in the merged output.
 #           -i .......... Investigation mode. Instead of doing the
 #                         surge-tank operation, investigate the sizes
 #                         of the various OS/libc buffers that a byte
@@ -50,9 +78,11 @@
 #           Return 1 when this command was forced to disconnect by
 #           the "-d" option.
 #
+# How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -pthread -lrt
+#                  (if it doesn't work)
 # How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -pthread
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-09-25
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-10-02
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -89,6 +119,12 @@
   #define _GNU_SOURCE
 #elif defined(__sun) || defined(__SVR4)
   #define __EXTENSIONS__
+  /* Solaris's <signal.h> has two incompatible sigwait() signatures:
+   * the legacy SVR4 one-argument form (returns the signal number)
+   * and the POSIX two-argument form this file actually calls. Which
+   * one gets declared is selected by _POSIX_PTHREAD_SEMANTICS (not by
+   * __EXTENSIONS__ above), so it must be requested explicitly here.  */
+  #define _POSIX_PTHREAD_SEMANTICS
 #else
   #define _XOPEN_SOURCE 700 /* for setenv() */
 #endif
@@ -110,6 +146,7 @@
 #include <pthread.h>
 #include <locale.h>
 #include <signal.h>
+#include <time.h>
 #ifdef __APPLE__
   #include <sys/types.h>  /* sys/sysctl.h needs this for u_int etc. */
   #include <sys/sysctl.h> /* for sysctlbyname("hw.memsize", ...) */
@@ -150,6 +187,7 @@ int     create_ring_buf(ringbuf_t* pstRing, int64_t i8Capacity);
 void    destroy_ring_buf(ringbuf_t* pstRing);
 void*   thread_reader(void* pvArgs);
 void*   thread_writer(void* pvArgs);
+void*   thread_monitor(void* pvArgs);
 void    unlock_mutex(void* pvMu);
 void    investigate_and_exit(void);
 #ifdef __ANDROID__
@@ -164,6 +202,11 @@ int64_t     gi8Buffersize;   /* buffer size in bytes == gstRing.i8Capacity   */
 ringbuf_t   gstRing = {0};   /* Ring buffer shared by threads A and B        */
 pthread_t   gtThreadA_id;    /* the reader thread's ID                       */
 pthread_t   gtThreadB_id;    /* the writer thread's ID                       */
+pthread_t   gtThreadC_id;    /* the monitor thread's ID (only if "-m")       */
+int         giMopt;          /* 1:"-m" was given                             */
+char*       gpszMonitorname; /* Monitor stream name (for the "-m" option)    */
+int         giMonitorFd;     /* Monitor filedesc. (for the "-m" option)      */
+FILE*       gfpMonitor;      /* Where "-m" reports are written to            */
 int         giRingMu_isready;  /* Set 1 when gstRing.mu has been initialized */
 int         giRingCoNE_isready;/* Set 1 when gstRing.coNotEmpty is ready     */
 int         giRingCoNF_isready;/* Set 1 when gstRing.coNotFull is ready      */
@@ -178,7 +221,7 @@ int         giAborted;       /* 1: "-d" forced a disconnect (set only by
 /*--- exit with usage ----------------------------------------------*/
 void print_usage_and_exit(void) {
   fprintf(stderr,
-    "USAGE   : %s [-s|-o|-d] [-v] size\n"
+    "USAGE   : %s [-s|-o|-d] [-v] [-m fd|file] size\n"
     "          %s -i\n"
     "Args    : size ........ Capacity (in bytes) of the ring buffer which\n"
     "                        absorbs the bytes that have arrived at the\n"
@@ -206,6 +249,34 @@ void print_usage_and_exit(void) {
     "                        internal behavior to the standard error.\n"
     "                        Giving this option two or more times raises\n"
     "                        the verbosity level.\n"
+    "          -m fd|file .. Report the current fill level of the ring\n"
+    "                        buffer on demand. Give either a file\n"
+    "                        descriptor number (which must already be\n"
+    "                        open for writing, e.g. inherited from the\n"
+    "                        shell) or a file path (which will be opened\n"
+    "                        for appending, creating it if necessary;\n"
+    "                        an existing file's content is kept and the\n"
+    "                        new lines are added after it, since this is\n"
+    "                        timestamped log data).\n"
+    "                        Whenever this process receives a SIGUSR1,\n"
+    "                        it writes one line formatted as\n"
+    "                        \"<UNIX time> <PID> <bytes used> <capacity>\"\n"
+    "                        (space-separated, capacity in bytes; the UNIX\n"
+    "                        time has millisecond precision, printed with\n"
+    "                        exactly 3 digits after the decimal point,\n"
+    "                        e.g. \"1759381200.123\") to that destination\n"
+    "                        and flushes it. No report\n"
+    "                        is produced unless this option is given,\n"
+    "                        and nothing is written spontaneously; it is\n"
+    "                        purely on-demand. (If you want periodic\n"
+    "                        reports, send SIGUSR1 periodically yourself,\n"
+    "                        e.g. \"while sleep 1; do kill -USR1 $PID;\n"
+    "                        done\".)\n"
+    "                        The 2nd field is this process's own PID, so\n"
+    "                        multiple surgetk processes can safely share\n"
+    "                        the same destination file (opened with\n"
+    "                        O_APPEND; see above) and still be told apart\n"
+    "                        in the merged output.\n"
     "          -i .......... Investigation mode. Instead of doing the\n"
     "                        surge-tank operation, investigate the sizes\n"
     "                        of the various OS/libc buffers that a byte\n"
@@ -226,7 +297,7 @@ void print_usage_and_exit(void) {
     "          Return 1 when this command was forced to disconnect by\n"
     "          the \"-d\" option.\n"
     "\n"
-    "Version : 2026-09-25 18:52:30 JST\n"
+    "Version : 2026-10-02 13:54:19 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -269,6 +340,8 @@ int main(int argc, char *argv[]) {
 /*--- Variables ----------------------------------------------------*/
 int      i;               /* all-purpose int                        */
 int      iInvestigate;    /* -i option (0:normal 1:investigate&exit) */
+char     szDummy[2];      /* Dummy string for sscanf() (for "-m")   */
+sigset_t ssMask;          /* signal set used for "-m"'s thread C    */
 #ifdef __ANDROID__
 struct sigaction sa;      /* for signal handler definition (action) */
 #endif
@@ -289,14 +362,23 @@ setlocale(LC_CTYPE, "");
 giVerbose      = 0;
 giOverflow     = OVERFLOW_STOP;
 iInvestigate   = 0;
+giMopt         = 0;
+gpszMonitorname= NULL;
+giMonitorFd    = -1;
 
 /*--- Parse options which start with "-" ---------------------------*/
-while ((i=getopt(argc, argv, "sodvih")) != -1) {
+while ((i=getopt(argc, argv, "sodvihm:")) != -1) {
   switch (i) {
     case 's': giOverflow   = OVERFLOW_STOP;      break;
     case 'o': giOverflow   = OVERFLOW_OVERWRITE; break;
     case 'd': giOverflow   = OVERFLOW_DIE;       break;
     case 'v': giVerbose++;                       break;
+    case 'm': giMopt = 1;
+              if (sscanf(optarg,"%d%1s",&giMonitorFd,szDummy) != 1) {
+                giMonitorFd = -1;
+              }
+              if (giMonitorFd<0) {gpszMonitorname=optarg;}
+                                             break;
     case 'i': iInvestigate = 1;                  break;
     case 'h': print_usage_and_exit();
     default : print_usage_and_exit();
@@ -324,6 +406,20 @@ giRingMu_isready   = 1;
 giRingCoNE_isready = 1;
 giRingCoNF_isready = 1;
 
+/*--- Open the "-m" destination, if specified ------------------------*/
+if (giMopt) {
+  if (gpszMonitorname != NULL) {
+    while ((giMonitorFd=open(gpszMonitorname,O_WRONLY|O_CREAT|O_APPEND,0644))<0) {
+      if (errno == EINTR) {continue;}
+      error_exit(errno,"%s: %s\n",gpszMonitorname,strerror(errno));
+    }
+  }
+  gfpMonitor = fdopen(giMonitorFd, "w");
+  if (gfpMonitor == NULL) {
+    error_exit(errno,"fdopen() for \"-m\": %s\n",strerror(errno));
+  }
+}
+
 /*=== Switch buffer mode and start the worker threads ==============*/
 if (setvbuf(stdout,NULL,_IONBF,0)!=0) {
   error_exit(255,"Failed to switch to unbuffered mode\n");
@@ -344,16 +440,43 @@ if (sigaction(SIGTERM,&sa,NULL) != 0) {
 }
 #endif
 
+if (giMopt) {
+  /*=== Block SIGUSR1 before creating any thread, so every thread  *
+   *     (including threads A/B below) inherits it blocked; only   *
+   *     thread_monitor() ever consumes it, via sigwait().         */
+  sigemptyset(&ssMask);
+  sigaddset(&ssMask, SIGUSR1);
+  if ((i=pthread_sigmask(SIG_BLOCK,&ssMask,NULL)) != 0) {
+    error_exit(i,"pthread_sigmask() in main(): %s\n",strerror(i));
+  }
+}
+
 i = pthread_create(&gtThreadB_id, NULL, thread_writer, NULL);
 if (i) {error_exit(i,"pthread_create() thread_writer: %s\n",strerror(i));}
 i = pthread_create(&gtThreadA_id, NULL, thread_reader, NULL);
 if (i) {error_exit(i,"pthread_create() thread_reader: %s\n",strerror(i));}
+if (giMopt) {
+  i = pthread_create(&gtThreadC_id, NULL, thread_monitor, NULL);
+  if (i) {error_exit(i,"pthread_create() thread_monitor: %s\n",strerror(i));}
+}
 
 /*=== Wait for both threads to finish (normally or via "-d" abort) =*/
 i = pthread_join(gtThreadA_id, NULL);
 if (i) {error_exit(i,"pthread_join() thread_reader: %s\n",strerror(i));}
 i = pthread_join(gtThreadB_id, NULL);
 if (i) {error_exit(i,"pthread_join() thread_writer: %s\n",strerror(i));}
+if (giMopt) {
+  /* thread_monitor() is blocked in sigwait(); SIGTERM is in its own
+     wait set (see thread_monitor()), so this wakes it up promptly. */
+  if (pthread_kill(gtThreadC_id, SIGTERM) != 0) {
+    error_exit(errno,"pthread_kill() in main(): %s\n",strerror(errno));
+  }
+  i = pthread_join(gtThreadC_id, NULL);
+  if (i) {error_exit(i,"pthread_join() thread_monitor: %s\n",strerror(i));}
+  if (fclose(gfpMonitor) == EOF && giVerbose>0) {
+    warning("fclose() for \"-m\": %s\n",strerror(errno));
+  }
+}
 
 /*=== Finish =========================================================*/
 if (giRingMu_isready)   {pthread_mutex_destroy(&gstRing.mu        );}
@@ -500,6 +623,71 @@ void* thread_writer(void* pvArgs) {
   }
 
   pthread_cleanup_pop(1); /* unlocks gstRing.mu */
+
+  return NULL;
+}
+
+
+
+/*####################################################################
+# Thread C (Monitor, only created when "-m" was given)
+####################################################################*/
+
+/*=== Report the ring buffer's fill level whenever asked to ==========
+ * SIGUSR1 (report now) and SIGTERM (time to exit, sent by main() once
+ * threads A/B have both finished) are handled here synchronously via
+ * sigwait(), never via a signal handler: a signal handler is not
+ * allowed to call pthread_mutex_lock() (not async-signal-safe), but
+ * once sigwait() returns, this thread is in perfectly ordinary
+ * execution context and can lock gstRing.mu just like threads A/B.
+ * This also reacts immediately even while threads A/B are blocked
+ * waiting for I/O, unlike a flag checked only inside their loops.  */
+void* thread_monitor(void* pvArgs) {
+
+  /*--- Variables --------------------------------------------------*/
+  sigset_t        ssWait;
+  int             iSig;
+  int64_t         i8Count;
+  struct timespec tsNow;
+
+  /* Block SIGTERM for this thread only (threads A/B must keep it
+     unblocked, since Android's term_this_thread handler relies on
+     it being delivered to them directly; see thread_reader()).    */
+  sigemptyset(&ssWait);
+  sigaddset(&ssWait, SIGTERM);
+  if (pthread_sigmask(SIG_BLOCK,&ssWait,NULL) != 0) {
+    error_exit(errno,"pthread_sigmask() in thread_monitor(): %s\n",
+               strerror(errno));
+  }
+
+  sigemptyset(&ssWait);
+  sigaddset(&ssWait, SIGUSR1);
+  sigaddset(&ssWait, SIGTERM);
+  while (1) {
+    if (sigwait(&ssWait,&iSig) != 0) {continue;} /* retry on spurious error */
+    if (iSig == SIGTERM) {break;}
+
+    /*--- iSig == SIGUSR1: report the current fill level now -------*/
+    if (pthread_mutex_lock(&gstRing.mu) != 0) {
+      error_exit(errno,"pthread_mutex_lock() in thread_monitor(): %s\n",
+                 strerror(errno));
+    }
+    i8Count = gstRing.i8Count;
+    if (pthread_mutex_unlock(&gstRing.mu) != 0) {
+      error_exit(errno,"pthread_mutex_unlock() in thread_monitor(): %s\n",
+                 strerror(errno));
+    }
+    if (clock_gettime(CLOCK_REALTIME,&tsNow) != 0) {
+      error_exit(errno,"clock_gettime() in thread_monitor(): %s\n",
+                 strerror(errno));
+    }
+    fprintf(gfpMonitor,"%ld.%03ld %ld %lld %lld\n",
+            (long)tsNow.tv_sec,(long)(tsNow.tv_nsec/1000000),(long)getpid(),
+            (long long)i8Count,(long long)gi8Buffersize);
+    if (fflush(gfpMonitor) == EOF && giVerbose>0) {
+      warning("fflush() in thread_monitor(): %s\n",strerror(errno));
+    }
+  }
 
   return NULL;
 }
