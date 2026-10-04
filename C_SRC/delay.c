@@ -80,7 +80,7 @@
 #                  (if it doesn't work)
 # How to compile : cc -O3 -std=c99 -o __CMDNAME__ __SRCNAME__ -pthread
 #
-# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-09-25
+# Written by Shell-Shoccar Japan (@shellshoccarjpn) on 2026-10-04
 #
 # This is a public-domain software (CC0). It means that all of the
 # people can use this for any purposes with no restrictions at all.
@@ -176,11 +176,21 @@
 
 /*--- data type definitions ----------------------------------------*/
 typedef struct timespec tmsp;
+/* NOTE: the arrival time is kept as two plain fields (u4Nsec, i8Sec)
+ * rather than a "struct timespec", and deliberately ordered small-to-
+ * large (char, then uint32_t, then time_t) so the compiler's ordinary
+ * alignment rules pack this struct into 16 bytes on a 64-bit ABI,
+ * instead of the 24 bytes a char+"struct timespec" pair would cost
+ * (tv_nsec never needs more than 30 bits, yet "long" reserves 64).
+ * Every access is a plain per-field assignment/comparison -- never a
+ * union or raw byte reinterpretation -- so this is endianness-safe.  */
 typedef struct _ringelem_t {
   unsigned char ucData;      /* the received byte                       */
-  tmsp          tsArrival;   /* the time it arrived (tv_nsec==-1 marks
-                                 an unused slot; not used for validity
+  uint32_t      u4Nsec;      /* fractional-second part of the arrival
+                                 time (0-999,999,999); 0xFFFFFFFF marks
+                                 an unused slot (not used for validity
                                  judgement, kept only for hygiene)       */
+  time_t        i8Sec;       /* integer-second part of the arrival time */
 } ringelem_t;
 typedef struct _ringbuf_t {
   ringelem_t*     pElem;       /* malloc'ed array (i8Capacity elements) */
@@ -334,7 +344,7 @@ void print_usage_and_exit(void) {
     "          Return 1 when this command was forced to disconnect by\n"
     "          the \"-d\" option.\n"
     "\n"
-    "Version : 2026-09-25 18:52:30 JST\n"
+    "Version : 2026-10-04 14:25:32 JST\n"
     "          (POSIX C language)\n"
     "\n"
     "Shell-Shoccar Japan (@shellshoccarjpn), No rights reserved.\n"
@@ -619,8 +629,9 @@ void* thread_reader(void* pvArgs) {
         /* a slot is free now: fall through to the normal push below */
       } else if (giOverflow == OVERFLOW_OVERWRITE) {
         i8Idx = gstRing.i8Head;
-        gstRing.pElem[i8Idx].ucData    = (unsigned char)iChar;
-        gstRing.pElem[i8Idx].tsArrival = tsNow;
+        gstRing.pElem[i8Idx].ucData = (unsigned char)iChar;
+        gstRing.pElem[i8Idx].u4Nsec = (uint32_t)tsNow.tv_nsec;
+        gstRing.pElem[i8Idx].i8Sec  = tsNow.tv_sec;
         gstRing.i8Head = (i8Idx+1) % gstRing.i8Capacity;
         if ((i=pthread_cond_broadcast(&gstRing.coNotEmpty)) != 0) {
           error_exit(i,"pthread_cond_broadcast() in thread_reader() overwrite: %s\n",strerror(i));
@@ -643,8 +654,9 @@ void* thread_reader(void* pvArgs) {
 
     /*--- Normal push ------------------------------------------------*/
     i8Idx = (gstRing.i8Head + gstRing.i8Count) % gstRing.i8Capacity;
-    gstRing.pElem[i8Idx].ucData    = (unsigned char)iChar;
-    gstRing.pElem[i8Idx].tsArrival = tsNow;
+    gstRing.pElem[i8Idx].ucData = (unsigned char)iChar;
+    gstRing.pElem[i8Idx].u4Nsec = (uint32_t)tsNow.tv_nsec;
+    gstRing.pElem[i8Idx].i8Sec  = tsNow.tv_sec;
     gstRing.i8Count++;
     if ((i=pthread_cond_signal(&gstRing.coNotEmpty)) != 0) {
       error_exit(i,"pthread_cond_signal() in thread_reader(): %s\n",strerror(i));
@@ -687,7 +699,8 @@ void* thread_writer(void* pvArgs) {
     }
 
     i8Idx = gstRing.i8Head;
-    tsTo  = gstRing.pElem[i8Idx].tsArrival;
+    tsTo.tv_sec  = gstRing.pElem[i8Idx].i8Sec;
+    tsTo.tv_nsec = (long)gstRing.pElem[i8Idx].u4Nsec;
     tsadd(tsTo, gi8Delaytime);
 
     if (clock_gettime(CLOCK_FOR_ME,&tsNow) != 0) {
@@ -1345,9 +1358,9 @@ int resize_ring_buf(ringbuf_t *pstRing, int64_t i8NewCap) {
     if (pNew == NULL) {return errno;}
     pstRing->pElem = pNew;
     for (k=i8OldCap; k<i8NewCap; k++) {           /* 1) init the new region */
-      pstRing->pElem[k].ucData        = 0;
-      pstRing->pElem[k].tsArrival.tv_sec  = 0;
-      pstRing->pElem[k].tsArrival.tv_nsec = -1;
+      pstRing->pElem[k].ucData = 0;
+      pstRing->pElem[k].i8Sec  = 0;
+      pstRing->pElem[k].u4Nsec = 0xFFFFFFFFu;
     }
     if (pstRing->i8Head + pstRing->i8Count > i8OldCap) {
       /* 2) the data physically wraps around: restore contiguity      */
@@ -1380,9 +1393,9 @@ int resize_ring_buf(ringbuf_t *pstRing, int64_t i8NewCap) {
     if (pNew == NULL) {return errno;}
     pstRing->pElem = pNew;
     for (k=0; k<i8NewCap; k++) {
-      pstRing->pElem[k].ucData        = 0;
-      pstRing->pElem[k].tsArrival.tv_sec  = 0;
-      pstRing->pElem[k].tsArrival.tv_nsec = -1;
+      pstRing->pElem[k].ucData = 0;
+      pstRing->pElem[k].i8Sec  = 0;
+      pstRing->pElem[k].u4Nsec = 0xFFFFFFFFu;
     }
     pstRing->i8Capacity = i8NewCap;
     pstRing->i8Head     = 0;
@@ -1407,7 +1420,8 @@ int64_t flush_due_elements(ringbuf_t *pstRing, int64_t i8Delaytime) {
 
   while (pstRing->i8Count > 0) {
     i8Idx = pstRing->i8Head;
-    tsDue = pstRing->pElem[i8Idx].tsArrival;
+    tsDue.tv_sec  = pstRing->pElem[i8Idx].i8Sec;
+    tsDue.tv_nsec = (long)pstRing->pElem[i8Idx].u4Nsec;
     tsadd(tsDue, i8Delaytime);
     if (tsDue.tv_sec>tsNow.tv_sec ||
         (tsDue.tv_sec==tsNow.tv_sec && tsDue.tv_nsec>tsNow.tv_nsec)) {
